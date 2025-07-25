@@ -76,6 +76,70 @@ get_venv_python_path() {
     fi
 }
 
+# Function to run the Python script with proper environment
+run_python_script() {
+    print_header "=== RUNNING IPTABLE.LOGGIN.PY ==="
+    
+    # Check if virtual environment exists
+    if ! check_venv_exists; then
+        print_error "Virtual environment does not exist"
+        print_info "Use option 1 to install it first"
+        return 1
+    fi
+    
+    # Check if script file exists
+    if [[ ! -f "$PYTHON_SCRIPT" ]]; then
+        print_error "$PYTHON_SCRIPT not found in current directory"
+        return 1
+    fi
+    
+    # Check if .env file exists
+    if [[ ! -f ".env" ]]; then
+        print_warning ".env file not found"
+        print_info "The script may not work properly without configuration"
+        echo -n "Do you want to continue anyway? (y/N): "
+        read -r response
+        if [[ ! "$response" =~ ^[Yy]$ ]]; then
+            print_info "Execution cancelled"
+            return 0
+        fi
+    fi
+    
+    local python_path=$(get_venv_python_path)
+    local full_python_path="$(pwd)/$python_path"
+    local os_type=$(detect_os)
+    
+    print_info "Preparing to run $PYTHON_SCRIPT..."
+    echo ""
+    
+    # Different execution based on OS
+    if [[ "$os_type" == "windows" ]]; then
+        print_info "Windows detected - Running without sudo:"
+        print_success "Command: $full_python_path $PYTHON_SCRIPT --env-file .env"
+        echo ""
+        "$full_python_path" "$PYTHON_SCRIPT" --env-file .env
+    else
+        print_info "Linux/Unix detected - Root privileges required for log access"
+        print_success "Command: sudo $full_python_path $PYTHON_SCRIPT --env-file .env"
+        echo ""
+        print_warning "You may be prompted for your sudo password..."
+        echo ""
+        sudo "$full_python_path" "$PYTHON_SCRIPT" --env-file .env
+    fi
+    
+    local exit_code=$?
+    echo ""
+    
+    if [[ $exit_code -eq 0 ]]; then
+        print_success "Script executed successfully"
+    else
+        print_error "Script execution failed (exit code: $exit_code)"
+        print_info "Check the error messages above for troubleshooting"
+    fi
+    
+    return $exit_code
+}
+
 # Function to check if we are in the virtual environment
 check_venv_active() {
     if [[ "$VIRTUAL_ENV" != "" ]]; then
@@ -258,7 +322,8 @@ activate_venv() {
         echo ""
         print_header "=== INTERACTIVE SHELL ACTIVE ==="
         print_info "Virtual environment active. Available commands:"
-        echo "  • python $PYTHON_SCRIPT --env-file .env"
+        echo "  • python $PYTHON_SCRIPT --env-file .env  (direct execution)"
+        echo "  • Use option 6 from menu to run with proper sudo handling"
         echo "  • python test_environment.py"
         echo "  • deactivate (to exit the environment)"
         echo "  • exit (to close the shell)"
@@ -411,8 +476,9 @@ show_help() {
     echo "  3. Deactivate environment       - Deactivates current venv"
     echo "  4. Check status                 - Shows complete environment information"
     echo "  5. Reinstall dependencies       - Forces library reinstallation"
-    echo "  6. Help                         - Shows this information"
-    echo "  7. Exit                         - Closes the script"
+    echo "  6. Run iptable.loggin.py script - Executes the main script with proper environment"
+    echo "  7. Help                         - Shows this information"
+    echo "  8. Exit                         - Closes the script"
     echo ""
     echo "Required dependencies:"
     echo "  • pandas >= 1.3.0          - Data analysis"
@@ -424,7 +490,15 @@ show_help() {
     echo "  • requirements.txt          - Dependencies list (optional)"
     echo ""
     echo "Main script usage:"
-    echo "  sudo python iptable.loggin.py --env-file .env"
+    echo "  Use option 6 to run the script with proper environment handling"
+    echo ""
+    echo "Manual execution:"
+    echo "  Linux/Debian: sudo /full/path/to/venv/bin/python iptable.loggin.py --env-file .env"
+    echo ""
+    echo "Why sudo is needed (Linux only):"
+    echo "  • iptable.loggin.py requires root access to read system logs"
+    echo "  • rsyslog configuration requires root privileges"
+    echo "  • Log files in /var/log/ need root access"
     echo ""
 }
 
@@ -472,10 +546,11 @@ show_menu() {
     echo "  3. ⏹️  Deactivate virtual environment"
     echo "  4. 📊 Check environment status"
     echo "  5. 🔄 Reinstall dependencies"
-    echo "  6. ❓ Help"
-    echo "  7. 🚪 Exit"
+    echo "  6. 🐍 Run iptable.loggin.py script"
+    echo "  7. ❓ Help"
+    echo "  8. 🚪 Exit"
     echo ""
-    echo -n "Select an option [1-7]: "
+    echo -n "Select an option [1-8]: "
 }
 
 # Main function
@@ -527,12 +602,19 @@ main() {
                 ;;
             6)
                 echo ""
-                show_help
+                run_python_script
                 echo ""
                 echo -n "Press Enter to continue..."
                 read -r
                 ;;
             7)
+                echo ""
+                show_help
+                echo ""
+                echo -n "Press Enter to continue..."
+                read -r
+                ;;
+            8)
                 echo ""
                 print_info "Exiting virtual environment manager..."
                 if check_venv_active; then
@@ -544,7 +626,7 @@ main() {
                 ;;
             *)
                 echo ""
-                print_error "Invalid option. Select a number from 1 to 7."
+                print_error "Invalid option. Select a number from 1 to 8."
                 echo ""
                 echo -n "Press Enter to continue..."
                 read -r

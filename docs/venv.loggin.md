@@ -112,10 +112,11 @@ Available options:
   3. ⏹️  Deactivate virtual environment
   4. 📊 Check environment status
   5. 🔄 Reinstall dependencies
-  6. ❓ Help
-  7. 🚪 Exit
+  6. 🐍 Run iptable.loggin.py script
+  7. ❓ Help
+  8. 🚪 Exit
 
-Select an option [1-7]:
+Select an option [1-8]:
 ```
 
 ### Flujo de Trabajo Típico
@@ -257,7 +258,46 @@ Python 3.9.2
 3. Verificación de instalación
 4. Desactivación si no estaba previamente activo
 
-### 6. ❓ **Help**
+### 6. 🐍 **Run iptable.loggin.py Script**
+
+**Función**: `run_python_script()`
+
+**Características principales**:
+- **Detección automática del OS**: Ejecuta con o sin sudo según el sistema
+- **Verificación de dependencias**: Confirma que el entorno virtual existe
+- **Manejo de archivos de configuración**: Verifica la existencia de .env
+- **Gestión de permisos**: Manejo automático de sudo en Linux/Unix
+
+**Proceso automático**:
+1. **Verificación del entorno**: Confirma que el venv existe
+2. **Verificación del script**: Confirma que iptable.loggin.py existe
+3. **Verificación de configuración**: Chequea el archivo .env
+4. **Detección de OS**: Determina el método de ejecución apropiado
+5. **Ejecución**: Lanza el script con los parámetros correctos
+
+**Ejecución por sistema**:
+
+#### Windows
+```bash
+ℹ️  Windows detected - Running without sudo:
+✅ Command: C:/GitHub/L4D2-Iptable-Suite/venv/Scripts/python.exe iptable.loggin.py --env-file .env
+```
+
+#### Linux/Unix
+```bash
+ℹ️  Linux/Unix detected - Root privileges required for log access
+✅ Command: sudo /home/user/L4D2-Iptable-Suite/venv/bin/python iptable.loggin.py --env-file .env
+⚠️  You may be prompted for your sudo password...
+```
+
+**Ventajas de esta opción**:
+- **Ruta completa**: Usa la ruta completa del Python del venv
+- **Sudo automático**: Maneja sudo solo cuando es necesario (Linux)
+- **Verificaciones previas**: Confirma que todo está listo antes de ejecutar
+- **Manejo de errores**: Proporciona códigos de salida y mensajes informativos
+- **Sin activación manual**: No requiere activar el entorno manualmente
+
+### 7. ❓ **Help**
 
 **Función**: `show_help()`
 
@@ -268,7 +308,7 @@ Proporciona información completa sobre:
 - Comandos de uso
 - Ejemplos prácticos
 
-### 7. 🚪 **Exit**
+### 8. 🚪 **Exit**
 
 Salida controlada del script con:
 - Verificación de estado del entorno
@@ -286,10 +326,47 @@ Salida controlada del script con:
 ./venv.loggin.sh
 # Opción 1: Install
 
-# Uso en producción
+# Uso en producción - MÉTODO RECOMENDADO
+./venv.loggin.sh
+# Opción 6: Run iptable.loggin.py script
+# (Maneja sudo automáticamente en Linux)
+
+# Uso alternativo manual
 ./venv.loggin.sh
 # Opción 2: Activate
 sudo python iptable.loggin.py --env-file .env
+```
+
+### 🖥️ **Uso Multiplataforma**
+
+**Escenario**: Desarrollo en Windows, producción en Linux
+
+```bash
+# En Windows (desarrollo)
+./venv.loggin.sh
+# Opción 1: Install (instala sin sudo)
+# Opción 6: Run script (ejecuta sin sudo)
+
+# En Linux (producción)  
+./venv.loggin.sh
+# Opción 1: Install (instala dependencias)
+# Opción 6: Run script (ejecuta con sudo automático)
+```
+
+### 🚀 **Ejecución Rápida**
+
+**Escenario**: Necesitas ejecutar el script rápidamente
+
+```bash
+# Método más rápido - Una sola acción
+./venv.loggin.sh
+# Opción 6: Ejecuta directamente el script
+
+# Ventajas:
+# ✅ No necesitas activar/desactivar manualmente  
+# ✅ Manejo automático de sudo en Linux
+# ✅ Verificación automática de dependencias
+# ✅ Uso de la ruta completa del Python del venv
 ```
 
 ### 📦 **Múltiples Versiones de Python**

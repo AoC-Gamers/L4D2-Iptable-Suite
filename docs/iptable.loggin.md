@@ -180,7 +180,30 @@ id | grep adm
 
 ## Uso del Script
 
-### Ejecución Básica
+### Métodos de Ejecución
+
+#### Método 1: Con Entorno Virtual (Recomendado)
+
+```bash
+# Usar el gestor de entorno virtual para ejecución automática
+./venv.loggin.sh
+
+# Seleccionar opción 6: 🐍 Run iptable.loggin.py script
+# El script maneja automáticamente:
+# - Detección de OS (Windows/Linux)
+# - Uso de sudo solo cuando es necesario (Linux)
+# - Verificación de dependencias
+# - Ruta completa del Python del entorno virtual
+```
+
+**Ventajas del método de entorno virtual:**
+- ✅ **Multiplataforma**: Funciona en Windows, Linux y macOS
+- ✅ **Manejo automático de sudo**: Solo en Linux cuando es necesario
+- ✅ **Dependencias aisladas**: No afecta el sistema global
+- ✅ **Verificación automática**: Confirma que todo esté listo antes de ejecutar
+- ✅ **Sin configuración manual**: El script maneja todo automáticamente
+
+#### Método 2: Ejecución Directa (Tradicional)
 
 ```bash
 # Ejecutar con archivo .env en el directorio actual
@@ -191,6 +214,20 @@ sudo python3 iptable.loggin.py --env-file /ruta/al/archivo/.env
 
 # Ejecutar desde cualquier directorio
 sudo python3 /ruta/completa/iptable.loggin.py --env-file /ruta/al/.env
+```
+
+#### Método 3: Con Entorno Virtual Activado Manualmente
+
+```bash
+# Activar el entorno virtual
+./venv.loggin.sh
+# Opción 2: Activate virtual environment
+
+# En el shell interactivo del entorno virtual:
+sudo python iptable.loggin.py --env-file .env
+
+# Salir del entorno
+deactivate
 ```
 
 ### Menú Interactivo
