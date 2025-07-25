@@ -49,7 +49,17 @@ sudo ./iptables.rules.sh
 # 4. Hacer reglas persistentes
 sudo ./ipp.sh
 
-# 5. Configurar sistema de logging
+# 5. Configurar entorno Python (Opcional - Recomendado)
+chmod +x venv.loggin.sh
+./venv.loggin.sh
+# Seleccionar opción 1: Instalar entorno virtual
+
+# 6. Configurar sistema de logging
+# Método A: Con entorno virtual (recomendado)
+./venv.loggin.sh
+# Seleccionar opción 6: Run iptable.loggin.py script
+
+# Método B: Ejecución directa
 sudo python3 iptable.loggin.py
 ```
 
@@ -103,6 +113,36 @@ Herramienta avanzada de logging y análisis que configura automáticamente rsysl
 Incluye detección de 12 tipos específicos de ataques contra servidores L4D2 con categorización por severidad y recomendaciones de mitigación.
 
 **📖 [Documentación Completa](docs/iptable.loggin.md)**
+
+---
+
+### 4. `venv.loggin.sh` - Gestor de Entorno Virtual
+
+Sistema avanzado de gestión de entorno virtual Python con interfaz interactiva de 8 opciones. Facilita la instalación, configuración y uso de `iptable.loggin.py` mediante aislamiento de dependencias y compatibilidad multiplataforma.
+
+**Características principales:**
+- 🖥️ **Compatibilidad multiplataforma**: Windows, Linux, macOS
+- 🔧 **Instalación automática**: Crea y configura el entorno virtual automáticamente
+- 🐍 **Ejecución inteligente**: Maneja sudo automáticamente en Linux, sin sudo en Windows
+- 📊 **Verificación completa**: Confirma dependencias y archivos antes de ejecutar
+- 🎯 **Uso directo**: Opción 6 ejecuta el script sin activación manual del entorno
+
+**Menú interactivo:**
+```
+Available options:
+  1. 🔧 Install virtual environment
+  2. ▶️  Activate virtual environment  
+  3. ⏹️  Deactivate virtual environment
+  4. 📊 Check environment status
+  5. 🔄 Reinstall dependencies
+  6. 🐍 Run iptable.loggin.py script
+  7. ❓ Help
+  8. 🚪 Exit
+```
+
+**📖 [Documentación Completa](docs/venv.loggin.md)**
+
+---
 
 ## 🎮 Casos de Uso Específicos
 
@@ -172,13 +212,19 @@ sudo ./iptables.rules.sh
 # Hacer persistentes
 sudo ./ipp.sh  # Opción 1: Install, Opción 5: Save
 
-# Configurar logging
+# Configurar logging con entorno virtual (recomendado)
+./venv.loggin.sh  # Opción 1: Install, Opción 6: Run script
+
+# O configurar logging directamente
 sudo python3 iptable.loggin.py  # Opción 1: Install rsyslog
 ```
 
 ### 2. Monitoreo Regular
 ```bash
-# Generar reportes semanales
+# Generar reportes semanales con entorno virtual
+./venv.loggin.sh  # Opción 6: Run script, Opción 4: Analyze logs
+
+# O generar reportes directamente
 sudo python3 iptable.loggin.py  # Opción 4: Analyze logs
 
 # Verificar estado de reglas
@@ -201,7 +247,8 @@ sudo logrotate -f /etc/logrotate.d/l4d2-iptables
 - **[📖 iptables.rules.sh](docs/iptables.rules.md)** - Documentación técnica del motor de protección
 - **[📖 ipp.sh](docs/ipp.md)** - Guía del gestor de persistencia
 - **[📖 iptable.loggin.py](docs/iptable.loggin.md)** - Manual del sistema de análisis
-- **[📋 example.env](example.env)** - Archivo de configuración de ejemplo
+- **[� venv.loggin.sh](docs/venv.loggin.md)** - Guía del gestor de entorno virtual
+- **[�📋 example.env](example.env)** - Archivo de configuración de ejemplo  
 - **[📊 summary_example/](summary_example/)** - Ejemplos de reportes JSON
 
 ## 🤝 Créditos y Reconocimientos
