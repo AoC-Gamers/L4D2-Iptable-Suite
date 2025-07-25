@@ -1,0 +1,55 @@
+{
+  "summary_by_port": [
+    {
+      "port": 27015,
+      "port_type": "GameServer",
+      "total_events": 10,
+      "events_breakdown": {
+        "INVALID_SIZE": 3,
+        "A2S_INFO_FLOOD": 2,
+        "L4D2_CONNECT_FLOOD": 1,
+        "UDP_NEW_LIMIT": 1,
+        "TCP_RCON_BLOCK": 1,
+        "A2S_PLAYERS_FLOOD": 1,
+        "STEAM_GROUP_FLOOD": 1
+      },
+      "time_span": {
+        "first": "2025-07-24T14:23:12",
+        "last": "2025-07-24T14:23:58",
+        "duration": "0 hours, 0 minutes"
+      },
+      "attackers": [
+        {
+          "attack_ip": "172.58.200.91",
+          "attack_total_events": 2,
+          "attack_events_breakdown": {
+            "TCP_RCON_BLOCK": 1,
+            "INVALID_SIZE": 1
+          },
+          "attack_time_sample": {
+            "first": "2025-07-24T14:23:35",
+            "last": "2025-07-24T14:23:55",
+            "count_per_day": {
+              "2025-07-24": 2
+            }
+          }
+        },
+        {
+          "attack_ip": "198.51.100.123",
+          "attack_total_events": 2,
+          "attack_events_breakdown": {
+            "L4D2_CONNECT_FLOOD": 1,
+            "STEAM_GROUP_FLOOD": 1
+          },
+          "attack_time_sample": {
+            "first": "2025-07-24T14:23:20",
+            "last": "2025-07-24T14:23:45",
+            "count_per_day": {
+              "2025-07-24": 2
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

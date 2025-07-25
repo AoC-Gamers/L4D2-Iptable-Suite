@@ -1,0 +1,28 @@
+[
+  {
+    "IP": "1.2.3.4",
+    "Activity_By_Date": {
+      "2025-07-24": {
+        "Timeline": {
+          "First_Attack": "14:23:58",
+          "Last_Attack": "14:23:58",
+          "Attack_Duration": "0 seconds"
+        },
+        "Events": 1,
+        "Types": [
+          "A2S_INFO_FLOOD"
+        ]
+      }
+    },
+    "Total_Statistics": {
+      "Total_Events": 1,
+      "A2S_INFO_FLOOD": 1
+    },
+    "Affected_Ports": {
+      "GameServer": [
+        "27015"
+      ],
+      "SourceTV": []
+    }
+  }
+]

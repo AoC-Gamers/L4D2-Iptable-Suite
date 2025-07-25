@@ -1,0 +1,104 @@
+{
+  "summary_by_attack_type": [
+    {
+      "attack_type": "A2S_INFO_FLOOD",
+      "total_events": 5,
+      "percentage_of_total": 19.2,
+      "port_distribution": {
+        "GameServer": 5
+      },
+      "days_with_events": 1
+    },
+    {
+      "attack_type": "MALFORMED",
+      "total_events": 4,
+      "percentage_of_total": 15.4,
+      "port_distribution": {
+        "GameServer": 4
+      },
+      "days_with_events": 1
+    },
+    {
+      "attack_type": "INVALID_SIZE",
+      "total_events": 3,
+      "percentage_of_total": 11.5,
+      "port_distribution": {
+        "GameServer": 3
+      },
+      "days_with_events": 1
+    },
+    {
+      "attack_type": "L4D2_CONNECT_FLOOD",
+      "total_events": 3,
+      "percentage_of_total": 11.5,
+      "port_distribution": {
+        "GameServer": 3
+      },
+      "days_with_events": 1
+    },
+    {
+      "attack_type": "TCP_RCON_BLOCK",
+      "total_events": 3,
+      "percentage_of_total": 11.5,
+      "port_distribution": {
+        "GameServer": 3
+      },
+      "days_with_events": 1
+    },
+    {
+      "attack_type": "UDP_EST_LIMIT",
+      "total_events": 2,
+      "percentage_of_total": 7.7,
+      "port_distribution": {
+        "SourceTV": 2
+      },
+      "days_with_events": 1
+    },
+    {
+      "attack_type": "UDP_NEW_LIMIT",
+      "total_events": 2,
+      "percentage_of_total": 7.7,
+      "port_distribution": {
+        "GameServer": 1,
+        "SourceTV": 1
+      },
+      "days_with_events": 1
+    },
+    {
+      "attack_type": "A2S_PLAYERS_FLOOD",
+      "total_events": 1,
+      "percentage_of_total": 3.8,
+      "port_distribution": {
+        "GameServer": 1
+      },
+      "days_with_events": 1
+    },
+    {
+      "attack_type": "A2S_RULES_FLOOD",
+      "total_events": 1,
+      "percentage_of_total": 3.8,
+      "port_distribution": {
+        "GameServer": 1
+      },
+      "days_with_events": 1
+    },
+    {
+      "attack_type": "L4D2_RESERVE_FLOOD",
+      "total_events": 1,
+      "percentage_of_total": 3.8,
+      "port_distribution": {
+        "GameServer": 1
+      },
+      "days_with_events": 1
+    },
+    {
+      "attack_type": "STEAM_GROUP_FLOOD",
+      "total_events": 1,
+      "percentage_of_total": 3.8,
+      "port_distribution": {
+        "GameServer": 1
+      },
+      "days_with_events": 1
+    }
+  ]
+}

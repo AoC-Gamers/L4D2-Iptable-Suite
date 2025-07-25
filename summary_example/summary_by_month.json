@@ -1,0 +1,52 @@
+{
+  "summary_by_month": [
+    {
+      "month": "2025-07",
+      "total_events": 26,
+      "attack_breakdown": {
+        "A2S_INFO_FLOOD": 5,
+        "MALFORMED": 4,
+        "INVALID_SIZE": 3,
+        "L4D2_CONNECT_FLOOD": 3,
+        "TCP_RCON_BLOCK": 3,
+        "UDP_NEW_LIMIT": 2,
+        "UDP_EST_LIMIT": 2,
+        "L4D2_RESERVE_FLOOD": 1,
+        "A2S_PLAYERS_FLOOD": 1,
+        "A2S_RULES_FLOOD": 1,
+        "STEAM_GROUP_FLOOD": 1
+      },
+      "attack_breakdown_percent": {
+        "A2S_INFO_FLOOD": 19.2,
+        "MALFORMED": 15.4,
+        "INVALID_SIZE": 11.5,
+        "L4D2_CONNECT_FLOOD": 11.5,
+        "TCP_RCON_BLOCK": 11.5,
+        "UDP_NEW_LIMIT": 7.7,
+        "UDP_EST_LIMIT": 7.7,
+        "L4D2_RESERVE_FLOOD": 3.8,
+        "A2S_PLAYERS_FLOOD": 3.8,
+        "A2S_RULES_FLOOD": 3.8,
+        "STEAM_GROUP_FLOOD": 3.8
+      },
+      "attacked_ports": {
+        "27015": 10,
+        "27012": 6,
+        "27009": 5,
+        "27010": 2,
+        "27109": 1,
+        "27110": 1,
+        "27111": 1
+      },
+      "attacked_ports_percent": {
+        "27015": 38.5,
+        "27012": 23.1,
+        "27009": 19.2,
+        "27010": 7.7,
+        "27109": 3.8,
+        "27110": 3.8,
+        "27111": 3.8
+      }
+    }
+  ]
+}
