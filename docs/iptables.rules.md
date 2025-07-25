@@ -134,6 +134,31 @@ graph TD
 
 ## Detección y Mitigación de Ataques
 
+### Mecanismo de Detección de Paquetes a Nivel Kernel
+
+Antes de aplicar cualquier filtro específico (longitud, patrón o rate limit), Netfilter intercepta los paquetes en distintos hook points del kernel:
+
+#### **Hook Points del Sistema**
+1. **Hook Point**: Los paquetes entrantes activan `NF_INET_PRE_ROUTING` (para NAT) y luego `NF_INET_LOCAL_IN` (para reglas de filter/INPUT)
+
+2. **Selección de Tabla y Cadena**: Se usa la tabla `filter`, cadena `INPUT` (o `DOCKER` según `TYPECHAIN`)
+
+3. **Iteración de Reglas**: Netfilter recorre cada regla en orden secuencial:
+   - **Carga**: `struct ipt_entry` para cada regla
+   - **Match Length** (`xt_length`): Verifica `skb->len` contra el rango configurado
+   - **Match String** (`xt_string`): Ejecuta algoritmo Boyer–Moore sobre `skb->data`, buscando firmas hexadecimales (ej: `0xFF 0xFF 0xFF 0xFF 0x54`)
+   - **Match Hashlimit** (`xt_hashlimit`): Hash lookup basado en clave (modo `srcip/dstport`), verifica tokens en token bucket, actualiza contadores
+
+4. **Decisión**: Si match falla → siguiente regla; si coincide → aplica acción (`ACCEPT/DROP`)
+
+5. **DROP por Defecto**: Política `-P INPUT DROP` descarta paquetes no coincidentes
+
+#### **Optimización del Flujo**
+- **Reglas rápidas primero**: Whitelist y validación de longitud (`O(1)` checks)
+- **Pattern matching**: `O(M)` por longitud de patrón, donde M=5 bytes para A2S
+- **Hashlimit**: `O(1)` lookup + gestión de tokens
+- **Implementación en C**: Módulos kernel (`xt_length`, `xt_string`, `xt_hashlimit`) minimizan sobrecarga
+
 ### 1. Ataques de Validación de Paquetes {#ataques-validacion-paquetes}
 
 Los ataques de validación de paquetes explotan debilidades en el procesamiento de paquetes UDP con tamaños específicos o estructuras malformadas. Estos ataques pueden causar desde consumo excesivo de CPU hasta crashes del servidor mediante buffer overflows o saturación de recursos.
@@ -190,6 +215,50 @@ iptables -A INPUT -p udp --dports $GAMESERVERPORTS \
 ### 2. Ataques de Consulta A2S (Server Query Protocol) {#ataques-consulta-a2s}
 
 Los ataques A2S explotan el protocolo de consulta de servidores Source Engine para saturar el ancho de banda y CPU del servidor. Cada tipo de consulta A2S tiene un impacto diferente según el tamaño de la respuesta que genera el servidor, siendo A2S_RULES el más peligroso por sus respuestas masivas.
+
+#### **Mecanismo de Detección de Consultas A2S a Nivel Kernel**
+
+Antes de las reglas específicas de cada tipo de consulta, Netfilter realiza un proceso de detección optimizado:
+
+##### **1. Encaminamiento a Cadena A2S**
+```bash
+iptables -A INPUT -p udp --dports $GAMESERVERPORTS \
+    -m string --algo bm --hex-string '|FFFFFFFF..|' -j <Cadena_A2S>
+```
+- Cualquier paquete UDP al puerto de juego que contenga el prefijo `0xFF FF FF FF` se redirige a la cadena correspondiente (`A2S_LIMITS`, `A2S_PLAYERS_LIMITS`, etc.)
+
+##### **2. Match de Firma con Boyer–Moore (`xt_string`)**
+- **Algoritmo**: Boyer–Moore para búsqueda en `skb->data`
+- **Patrón**: 4 bytes header (`0xFF 0xFF 0xFF 0xFF`) + 1 byte comando (`0x54`, `0x55`, `0x56`, `0x00`)
+- **Complejidad**: `O(M+N)` en tiempo de kernel:
+  - `M` = longitud del patrón (5 bytes)
+  - `N` = tamaño del payload examinado (limitado al inicio del paquete)
+- **Decisión**: Si coincide → entra en cadena A2S; si no → continúa evaluación en INPUT/DOCKER
+
+##### **3. Rate Limiting por Consulta (`xt_hashlimit`)**
+```bash
+iptables -A <Cadena_A2S> \
+    -m hashlimit --hashlimit-upto X/sec \
+    --hashlimit-burst Y \
+    --hashlimit-mode <modo> \
+    --hashlimit-name <Name> \
+    --hashlimit-htable-expire Z \
+    -j ACCEPT
+iptables -A <Cadena_A2S> -j DROP
+```
+
+**Proceso interno**:
+- **Hash Lookup**: Calcula hash de la clave (modo `srcip`, `dstport` o `srcip,dstport`) para indexar `/proc/net/ipt_hashlimit/<Name>`
+- **Token Bucket**: Cada entrada almacena tokens (inicial = `burst`):
+  - Por cada paquete: intenta consumir 1 token
+  - Si hay tokens: `ACCEPT` + recarga a ritmo `X/sec` (máximo = `burst`)
+  - Si bucket vacío: `DROP` (flood detectado)
+- **Expire**: Entradas eliminadas tras `Z ms` sin actividad (control de memoria)
+
+##### **4. Garantías del Sistema**
+- Solo paquetes con firma exacta de cada consulta A2S son sometidos a limitación
+- Exceso de frecuencia bloqueado automáticamente antes de afectar al servidor
+- Tráfico legítimo preservado dentro de los límites configurados
 
 #### 2.1. Detección de Consultas A2S (Server Query Protocol)
 
@@ -513,7 +582,50 @@ done
 
 ### hashlimit: Fundamentos Técnicos
 
-El script utiliza extensivamente el módulo `hashlimit` de iptables, que implementa algoritmos de rate limiting basados en token bucket:
+El script utiliza extensivamente el módulo `hashlimit` de iptables, que implementa algoritmos de rate limiting basados en token bucket con optimizaciones a nivel kernel:
+
+#### **Implementación a Nivel Kernel**
+
+El módulo `xt_hashlimit` opera directamente en el espacio del kernel para máxima eficiencia:
+
+##### **Gestión de Tablas Hash**
+```c
+// Estructura interna del kernel (simplificada)
+struct xt_hashlimit_htable {
+    struct hlist_head hash[hash_size];  // Tabla hash
+    spinlock_t lock;                    // Lock para concurrencia
+    u_int32_t rnd;                      // Semilla para hash
+    u_int32_t max;                      // Máximo entradas
+    u_int32_t size;                     // Tamaño actual
+    u_int32_t expire;                   // Tiempo expire (ms)
+};
+```
+
+##### **Proceso de Hash Lookup**
+1. **Cálculo de Clave**: Basado en `--hashlimit-mode`:
+   - `srcip`: `hash = jhash_1word(saddr, rnd)`
+   - `srcip,dstport`: `hash = jhash_2words(saddr, dport, rnd)`
+   - `srcip,srcport,dstport`: `hash = jhash_3words(saddr, sport, dport, rnd)`
+
+2. **Búsqueda en Tabla**: `O(1)` average case usando `hlist_head`
+
+3. **Token Bucket Update**:
+```c
+// Pseudocódigo del algoritmo kernel
+if (entry_exists) {
+    tokens = min(burst, current_tokens + 
+                 (now - last_update) * rate / HZ);
+    if (tokens >= cost) {
+        tokens -= cost;
+        return ACCEPT;
+    } else {
+        return DROP;  // Rate limit exceeded
+    }
+} else {
+    create_new_entry(burst - cost);
+    return ACCEPT;
+}
+```
 
 #### Parámetros Principales
 
@@ -577,11 +689,66 @@ El script utiliza extensivamente el módulo `hashlimit` de iptables, que impleme
 
 #### Jerarquía de Filtros
 
-**Orden de Procesamiento Optimizado**:
-1. **Whitelist** (mínimo costo, máxima prioridad)
-2. **Validación de tamaño** (filtro rápido)
-3. **Pattern matching** (más CPU-intensivo)
-4. **Rate limiting** (requiere hash lookups)
+**Orden de Procesamiento Optimizado** (basado en complejidad computacional):
+1. **Whitelist** (`O(1)` - mínimo costo, máxima prioridad)
+2. **Loopback** (`O(1)` - tráfico local frecuente)
+3. **Length validation** (`O(1)` - filtro rápido, verifica `skb->len`)
+4. **Established connections** (`O(1)` - flujo principal, lookup en conntrack)
+5. **Pattern matching** (`O(M+N)` - Boyer–Moore sobre `skb->data`)
+6. **Rate limiting** (`O(1)` average - hash lookup + token bucket)
+
+#### **Análisis de Complejidad por Módulo**
+
+##### **Length Match (`xt_length`)**
+```c
+// Implementación kernel simplificada
+static bool length_mt(const struct sk_buff *skb, 
+                     struct xt_action_param *par) {
+    u_int16_t pktlen = skb->len;
+    const struct xt_length_info *info = par->matchinfo;
+    return (pktlen >= info->min && pktlen <= info->max);
+}
+```
+- **Complejidad**: `O(1)` - Simple comparación aritmética
+- **Costo**: ~5-10 CPU cycles por paquete
+
+##### **String Match (`xt_string`) - Boyer–Moore**
+```c
+// Búsqueda optimizada en payload
+static bool string_mt(const struct sk_buff *skb,
+                     struct xt_action_param *par) {
+    return skb_find_text(skb, info->from_offset, 
+                        info->to_offset, info->config);
+}
+```
+- **Complejidad**: `O(M+N)` donde M=patrón, N=payload examinado
+- **Optimización**: Búsqueda limitada a primeros bytes del paquete
+- **Costo**: ~200-500 CPU cycles (depende de longitud)
+
+##### **Hashlimit (`xt_hashlimit`) - Token Bucket**
+- **Hash Calculation**: `jhash_*words()` - `O(1)`
+- **Table Lookup**: Hash table con chaining - `O(1)` average
+- **Token Update**: Aritmética simple - `O(1)`
+- **Costo Total**: ~50-100 CPU cycles por paquete
+
+#### **Optimizaciones de Memoria**
+
+##### **Tabla Hash Dinámica**
+```bash
+# Configuración típica optimizada
+--hashlimit-htable-max 1048576    # 1M entradas máximo
+--hashlimit-htable-expire 5000    # 5 segundos de vida
+```
+
+**Gestión de Memoria**:
+- **Por entrada**: ~64-128 bytes (estructura + overhead)
+- **Garbage Collection**: Automático por `expire` timer
+- **Memory Pressure**: Kernel puede forzar cleanup anticipado
+
+##### **Spinlock Contention**
+- **Un spinlock por tabla hash** para thread safety
+- **Granularidad**: Por tabla, no por entrada
+- **Optimización**: Tablas separadas por tipo de ataque (`A2SFilter`, `L4D2_NEW_HASHLIMIT`, etc.)
 
 ## Configuración Avanzada
 
@@ -685,24 +852,62 @@ iptables -L -n -v -x | awk '
 
 #### Recursos CPU
 
-**Operaciones por Paquete**:
-1. **Hash lookup** (hashlimit): ~50-100 CPU cycles
-2. **String matching**: ~200-500 CPU cycles (depende de longitud)
-3. **Length check**: ~10-20 CPU cycles
-4. **Rule traversal**: ~5-10 cycles por regla
+**Operaciones por Paquete** (análisis detallado basado en implementación kernel):
 
-**Estimación Total**: ~300-1000 CPU cycles por paquete filtrado
+1. **Length Check** (`xt_length`): ~5-10 CPU cycles
+   - Simple comparación: `skb->len >= min && skb->len <= max`
+   
+2. **Hash Lookup** (`xt_hashlimit`): ~50-100 CPU cycles
+   - Cálculo hash: `jhash_*words()` (~20-30 cycles)
+   - Table lookup: Hash table traversal (~20-40 cycles)
+   - Token bucket update: Aritmética simple (~10-30 cycles)
+
+3. **String Matching** (`xt_string`, Boyer–Moore): ~200-500 CPU cycles
+   - Depende de longitud del patrón (M=5 bytes para A2S)
+   - Payload examinado limitado (primeros N bytes del paquete)
+   - Optimización: Skip automático si header no coincide
+
+4. **Rule Traversal**: ~5-10 cycles por regla
+   - Carga de `struct ipt_entry`
+   - Evaluación de condiciones básicas (protocolo, puerto)
+
+**Estimación Total**: 
+- **Paquete aceptado por whitelist**: ~15-25 CPU cycles
+- **Paquete bloqueado por length**: ~25-50 CPU cycles  
+- **Paquete con string match + hashlimit**: ~300-700 CPU cycles
+- **Paquete bloqueado por política**: ~500-1000 CPU cycles (recorre todas las reglas)
 
 #### Uso de Memoria
 
-**Tablas Hash Activas**:
+**Tablas Hash Activas** (gestión detallada del kernel):
 ```bash
-# Estimar memoria usada
-grep -r "hashlimit" /proc/net/ipt_hashlimit/ | wc -l
-# Multiplicar por ~100 bytes por entrada
+# Monitoreo de memoria por tabla
+for table in /proc/net/ipt_hashlimit/*; do
+    echo "Tabla: $(basename $table)"
+    echo "  - Entradas activas: $(wc -l < $table)"
+    echo "  - Memoria estimada: $(($(wc -l < $table) * 128)) bytes"
+done
 ```
 
-**Memoria Típica**: 10-50MB para servidor moderadamente atacado
+**Estructuras de Datos del Kernel**:
+- **Por entrada hashlimit**: ~64-128 bytes
+  - `struct dsthash_ent`: ~48 bytes (clave + timestamps + tokens)
+  - Hash table overhead: ~16-32 bytes
+  - Lock contention data: ~16-32 bytes adicionales
+
+- **Por tabla hash**: ~4-16KB (estructura + índices)
+  - `struct xt_hashlimit_htable`: ~256 bytes
+  - Hash buckets: `hash_size * sizeof(struct hlist_head)` 
+  - Spinlocks y metadata: ~1-4KB
+
+- **String match patterns**: ~32-64 bytes por patrón
+  - Boyer–Moore skip tables precalculadas
+  - Pattern buffer + algoritmo state
+
+**Memoria Típica Total**: 
+- **Servidor sin ataques**: 1-5MB (estructuras base + pocas entradas)
+- **Bajo ataque moderado**: 10-50MB (muchas entradas hashlimit activas)
+- **Bajo ataque severo**: 50-200MB (tablas saturadas, cleanup agresivo)
 
 #### Throughput
 
