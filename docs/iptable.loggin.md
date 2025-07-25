@@ -7,20 +7,10 @@
 - [Configuración Inicial](#configuración-inicial)
 - [Uso del Script](#uso-del-script)
 - [Tipos de Análisis](#tipos-de-análisis)
-- [Estructura de Reportes JSON](##### L4D2_CONNECT_FLOOD
-- **Descripción**: Flood de paquetes con string "connect"
-- **Propósito**: Saturar el proceso de conexión de jugadores
-- **Impacto**: Puede prevenir conexiones legítimas
-- **Mitigación**: Rate limiting específico por IP
-- **Detalles técnicos**: Ver [Ataques Específicos de L4D2](iptables.rules.md#ataques-especificos-l4d2)
-
-#### L4D2_RESERVE_FLOOD
-- **Descripción**: Flood de paquetes con string "connect"
-- **Detalles técnicos**: Ver [Ataques Específicos de L4D2](iptables.rules.md#ataques-especificos-l4d2)
-
-#### L4D2_RESERVE_FLOOD
-- **Descripción**: Flood de paquetes con string "reserve"
-- **Detalles técnicos**: Ver [Ataques Específicos de L4D2](iptables.rules.md#ataques-especificos-l4d2)de-reportes-json)
+- [Estructura de Reportes JSON](#estructura-de-reportes-json)
+- [Patrones de Ataque Detectados](#patrones-de-ataque-detectados)
+- [Interpretación de Resultados](#interpretación-de-resultados)
+- [Troubleshooting](#troubleshooting)
 
 ## Descripción General
 
@@ -279,55 +269,27 @@ Categorización por patrón de ataque:
 
 ## Estructura de Reportes JSON
 
-### Ejemplo: Summary by IP
+Todos los reportes generados siguen una estructura JSON bien definida que facilita su procesamiento automatizado y análisis posterior. Los archivos se generan en la carpeta `summary_example/` del repositorio.
 
-```json
-[
-  {
-    \"IP\": \"192.168.1.100\",
-    \"Activity_By_Date\": {
-      \"2025-07-24\": {
-        \"Timeline\": {
-          \"First_Attack\": \"14:23:58\",
-          \"Last_Attack\": \"16:45:12\",
-          \"Attack_Duration\": \"2 hours, 21 minutes, 14 seconds\"
-        },
-        \"Events\": 15,
-        \"Types\": [\"A2S_INFO_FLOOD\", \"UDP_NEW_LIMIT\", \"INVALID_SIZE\"]
-      }
-    },
-    \"Total_Statistics\": {
-      \"Total_Events\": 15,
-      \"A2S_INFO_FLOOD\": 8,
-      \"UDP_NEW_LIMIT\": 4,
-      \"INVALID_SIZE\": 3
-    },
-    \"Affected_Ports\": {
-      \"GameServer\": [\"27015\", \"27016\"],
-      \"SourceTV\": [\"27020\"]
-    }
-  }
-]
-```
+### Ejemplos de Estructura
 
-### Ejemplo: Summary by Attack Type
+Para ver ejemplos detallados de cada tipo de reporte, consulta los archivos de ejemplo:
 
-```json
-{
-  \"summary_by_attack_type\": [
-    {
-      \"attack_type\": \"A2S_INFO_FLOOD\",
-      \"total_events\": 245,
-      \"percentage_of_total\": 32.5,
-      \"port_distribution\": {
-        \"GameServer\": 245,
-        \"SourceTV\": 0
-      },
-      \"days_with_events\": 5
-    }
-  ]
-}
-```
+- **Análisis por IP**: Ver [summary_by_ip.json](../summary_example/summary_by_ip.json)
+- **Análisis por Puerto**: Ver [summary_by_port.json](../summary_example/summary_by_port.json)  
+- **Análisis por Día**: Ver [summary_by_day.json](../summary_example/summary_by_day.json)
+- **Análisis por Semana**: Ver [summary_by_week.json](../summary_example/summary_by_week.json)
+- **Análisis por Mes**: Ver [summary_by_month.json](../summary_example/summary_by_month.json)
+- **Análisis por Tipo de Ataque**: Ver [summary_by_attack_type.json](../summary_example/summary_by_attack_type.json)
+
+### Características Comunes de los Reportes
+
+Todos los reportes JSON incluyen:
+- **Timestamps**: Fechas y horas en formato ISO para fácil parsing
+- **Contadores**: Números exactos de eventos por categoría
+- **Porcentajes**: Distribución relativa para análisis estadístico
+- **Metadatos**: Información contextual sobre puertos, IPs y duraciones
+- **Estructura jerárquica**: Organización lógica para navegación eficiente
 
 ## Patrones de Ataque Detectados
 
@@ -361,16 +323,18 @@ Categorización por patrón de ataque:
 ### Ataques Específicos de L4D2
 
 #### L4D2_CONNECT_FLOOD
-- **Descripción**: Flood de paquetes con string \"connect\"
+- **Descripción**: Flood de paquetes con string "connect"
 - **Propósito**: Saturar el proceso de conexión de jugadores
 - **Impacto**: Puede prevenir conexiones legítimas
 - **Mitigación**: Rate limiting específico por IP
+- **Detalles técnicos**: Ver [Ataques Específicos de L4D2](iptables.rules.md#ataques-especificos-l4d2)
 
 #### L4D2_RESERVE_FLOOD
-- **Descripción**: Flood de paquetes con string \"reserve\"
+- **Descripción**: Flood de paquetes con string "reserve"
 - **Propósito**: Atacar el sistema de reserva de slots
 - **Impacto**: Puede causar inestabilidad en lobby management
 - **Mitigación**: Rate limiting estricto
+- **Detalles técnicos**: Ver [Ataques Específicos de L4D2](iptables.rules.md#ataques-especificos-l4d2)
 
 ### Ataques de Limitación UDP
 
