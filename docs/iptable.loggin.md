@@ -49,14 +49,47 @@ sudo yum install python3 python3-pip
 sudo dnf install python3 python3-pip
 ```
 
-#### 2. Instalar Dependencias de Python
+### Instalación de Dependencias
+
+#### Método 1: Instalación Directa en el Servidor
 
 ```bash
-# Instalar paquetes requeridos
+# Ubuntu/Debian
+sudo apt update
+sudo apt install python3 python3-pip python3-pandas python3-dotenv
+
+# CentOS/RHEL 8+
+sudo dnf install python3 python3-pip python3-pandas python3-python-dotenv
+
+# CentOS/RHEL 7
+sudo yum install python3 python3-pip
 sudo pip3 install pandas python-dotenv
 
 # Verificar instalación
-python3 -c "import pandas, dotenv; print('Dependencias instaladas correctamente')"
+python3 -c "import pandas, dotenv; print('✅ Dependencias instaladas correctamente')"
+```
+
+#### Método 2: Instalación con pip
+
+```bash
+# Instalar paquetes requeridos con pip
+sudo pip3 install pandas>=1.3.0 python-dotenv>=0.19.0
+
+# Verificar instalación
+python3 -c "import pandas, dotenv; print('✅ Dependencias instaladas correctamente')"
+```
+
+#### Método 3: Entorno Virtual
+
+Para desarrollo, testing o si prefieres mantener las dependencias aisladas del sistema, puedes usar el gestor de entorno virtual incluido. Ver documentación detallada: [Gestor de Entorno Virtual](venv.loggin.md)
+
+```bash
+# Ejecutar el gestor de entorno virtual
+./venv.loggin.sh
+
+# Seguir las opciones del menú interactivo
+# Opción 1: Instalar entorno virtual
+# Opción 2: Activar y usar el script
 ```
 
 #### 3. Descargar el Script
@@ -71,7 +104,36 @@ wget https://raw.githubusercontent.com/AoC-Gamers/L4D2-Iptable-Suite/main/iptabl
 chmod +x iptable.loggin.py
 ```
 
-## Configuración Inicial
+## Gestor de Entorno Virtual
+
+Para facilitar la gestión de dependencias y el desarrollo en diferentes entornos, el proyecto incluye un gestor de entorno virtual automático (`venv.loggin.sh`). Este script proporciona una interfaz interactiva para:
+
+- **Instalación automática** de entorno virtual Python
+- **Gestión de dependencias** aisladas del sistema
+- **Compatibilidad multiplataforma** (Linux, Windows, macOS)
+- **Verificación automática** de dependencias
+- **Activación/desactivación** simplificada
+
+### Uso Rápido
+
+```bash
+# Ejecutar el gestor
+./venv.loggin.sh
+
+# Seleccionar opciones del menú:
+# 1. Instalar entorno virtual
+# 2. Activar y usar el script
+```
+
+**Documentación completa**: [Gestor de Entorno Virtual - venv.loggin.md](venv.loggin.md)
+
+**Cuándo usar el entorno virtual:**
+- 🧪 **Desarrollo y testing**
+- 🔒 **Ambientes con restricciones de instalación global**
+- 🖥️ **Sistemas Windows con bash**
+- 📦 **Múltiples versiones de Python en el sistema**
+
+---
 
 ### 1. Archivo de Configuración (.env)
 
@@ -571,6 +633,7 @@ EOF
 ## Enlaces Relacionados
 
 - [README Principal](../README.md)
+- [Gestor de Entorno Virtual - venv.loggin.sh](venv.loggin.md)
 - [Documentación iptables.rules.sh](iptables.rules.md)
 - [Documentación ipp.sh](ipp.md)
 - [Archivo de Configuración example.env](../example.env)
