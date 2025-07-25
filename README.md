@@ -204,22 +204,13 @@ sudo logrotate -f /etc/logrotate.d/l4d2-iptables
 
 ## 🤝 Créditos y Reconocimientos
 
-Este proyecto está basado en el trabajo original de **[SirPlease](https://github.com/SirPlease)** y su repositorio [IPTables](https://github.com/SirPlease/IPTables). La suite L4D2 IPTables incluye modificaciones significativas, nuevas funcionalidades y herramientas complementarias desarrolladas por la comunidad **AoC-Gamers**.
-
-### Autor Original
-- **SirPlease** - Creador del script base de iptables para L4D2
-- Repositorio original: https://github.com/SirPlease/IPTables/blob/master/iptables.rules.sh
+Este proyecto está basado en el trabajo original de **SirPlease** y su repositorio [IPTables](https://github.com/SirPlease/IPTables). La suite L4D2 IPTables incluye modificaciones significativas, nuevas funcionalidades y herramientas complementarias desarrolladas por la comunidad **AoC-Gamers**.
 
 ### Contribuidores de la Suite
-- **AoC-Gamers** - Desarrollo de herramientas complementarias y mejoras
+- **[SirPlease](http://steamcommunity.com/profiles/76561198004878749)** - Creador del script base de iptables para L4D2
+- **[AoC-Gamers](https://steamcommunity.com/groups/aoc-gamer)** - Desarrollo de herramientas complementarias y mejoras
+- **[Sheo](http://steamcommunity.com/profiles/76561198034909367)** - Por sus aportes para el bloqueo de ataques A2S.
 - Comunidad L4D2 - Testing y feedback
-
-## 🔗 Enlaces Útiles
-
-- 🐛 **[Reportar Issues](https://github.com/AoC-Gamers/L4D2-Iptable-Suite/issues)**
-- 💡 **[Solicitar Features](https://github.com/AoC-Gamers/L4D2-Iptable-Suite/issues/new)**
-- 🌟 **[Contribuir al Proyecto](https://github.com/AoC-Gamers/L4D2-Iptable-Suite/pulls)**
-- 💬 **[Comunidad L4D2](https://steamcommunity.com/app/550)**
 
 ---
 
