@@ -76,10 +76,11 @@ TVSERVERPORTS="27020"
 # Used to calculate UDP limits: CMD_LIMIT+10 (burst), CMD_LIMIT+30 (maximum)
 CMD_LIMIT=100
 
-# Trusted IPs (complete whitelist)
-# These IPs bypass ALL rate-limits and TCP blocks
+# Trusted IPs (complete system whitelist)
+# These IPs bypass ALL iptables rules and have complete access to the entire machine
 # Format: "1.2.3.4" (single IP), "1.2.3.4 5.6.7.8" (multiple space-separated)
-# Use for: administrators, monitoring servers, absolutely trusted IPs
+# Use for: administrators, monitoring servers, absolutely trusted IPs only
+# WARNING: These IPs will have unrestricted access to ALL ports and services
 WHITELISTED_IPS=""
 
 # Log prefixes for different packet types and attack patterns
@@ -257,19 +258,17 @@ if [ $TYPECHAIN -eq 1 ] || [ $TYPECHAIN -eq 2 ]; then
     iptables -A DOCKER -i lo -j ACCEPT
 fi
 
-# Allow all traffic from whitelisted IPs (no restrictions)
-# Applies to GameServers (TCP/UDP) and SourceTV (UDP) for complete administration
+# Allow all traffic from whitelisted IPs (complete system access)
+# Applies to ALL ports and protocols for complete administration
 for ip in $WHITELISTED_IPS; do
 
     if [ $TYPECHAIN -eq 0 ] || [ $TYPECHAIN -eq 2 ]; then
-        iptables -A INPUT -p tcp -m multiport --dports $GAMESERVERPORTS -s $ip -j ACCEPT
-        iptables -A INPUT -p udp -m multiport --dports $GAMESERVERPORTS -s $ip -j ACCEPT
-        iptables -A INPUT -p udp -m multiport --dports $TVSERVERPORTS -s $ip -j ACCEPT
+        # Allow all TCP and UDP traffic from whitelisted IPs (entire machine)
+        iptables -A INPUT -s $ip -j ACCEPT
     fi
     if [ $TYPECHAIN -eq 1 ] || [ $TYPECHAIN -eq 2 ]; then
-        iptables -A DOCKER -p tcp -m multiport --dports $GAMESERVERPORTS -s $ip -j ACCEPT
-        iptables -A DOCKER -p udp -m multiport --dports $GAMESERVERPORTS -s $ip -j ACCEPT
-        iptables -A DOCKER -p udp -m multiport --dports $TVSERVERPORTS -s $ip -j ACCEPT
+        # Allow all TCP and UDP traffic from whitelisted IPs (Docker containers)
+        iptables -A DOCKER -s $ip -j ACCEPT
     fi
 done
 
@@ -380,11 +379,9 @@ fi
 if [ "$ENABLE_TCP_PROTECT" = "true" ]; then
     echo "TCP Protection ENABLED: blocking RCON spam"
 
-    # First, pre-accept SSH and whitelist for INPUT
+    # First, pre-accept SSH for INPUT
     iptables -A INPUT -p tcp -m multiport --dports $SSH_PORT -j ACCEPT
-    for ip in $WHITELISTED_IPS; do
-        iptables -A INPUT -p tcp -m multiport --dports $GAMESERVERPORTS -s "$ip" -j ACCEPT
-    done
+    # Note: WHITELISTED_IPS already have complete system access from above rules
 
     # Then, if TCP_PROTECTION is defined, only block those ports;
     # if not, block all TCP to game ports
@@ -396,9 +393,7 @@ if [ "$ENABLE_TCP_PROTECT" = "true" ]; then
     
     # Apply same rules for DOCKER if enabled
     if [ $TYPECHAIN -eq 1 ] || [ $TYPECHAIN -eq 2 ]; then
-        for ip in $WHITELISTED_IPS; do
-            iptables -A DOCKER -p tcp -m multiport --dports $GAMESERVERPORTS -s "$ip" -j ACCEPT
-        done
+        # Note: WHITELISTED_IPS already have complete system access from above rules
         if [ -n "$TCP_PROTECTION" ]; then
             iptables -A DOCKER -p tcp -m multiport --dports $TCP_PROTECTION -j DROP
         else

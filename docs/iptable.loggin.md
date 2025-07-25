@@ -402,7 +402,7 @@ TCP_PROTECTION=\"27015:27020\"
 
 #### Si hay ataques persistentes de una IP:
 ```bash
-# Agregar a whitelist si es legítima o bloquear permanentemente
+# Agregar a whitelist si es legítima (acceso completo al sistema)
 WHITELISTED_IPS=\"IP_CONFIABLE1 IP_CONFIABLE2\"
 ```
 

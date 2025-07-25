@@ -66,13 +66,36 @@ TCP_PROTECTION=""               # Puertos específicos (vacío = todos)
 
 # === ACCESO ADMINISTRATIVO ===
 SSH_PORT="22"                   # Puertos SSH del sistema
-WHITELISTED_IPS=""              # IPs completamente confiables
+WHITELISTED_IPS=""              # IPs con acceso completo al sistema (⚠️ TODOS los puertos)
 
 # === LOGGING DETALLADO ===
 LOG_PREFIX_INVALID_SIZE="INVALID_SIZE: "
 LOG_PREFIX_MALFORMED="MALFORMED: "
 LOG_PREFIX_A2S_INFO="A2S_INFO_FLOOD: "
 # ... [12 prefijos más para categorización]
+```
+
+#### ⚠️ Importante: WHITELISTED_IPS - Acceso Completo al Sistema
+
+```bash
+# Configuración: IPs con acceso irrestricto
+WHITELISTED_IPS="192.168.1.100 10.0.0.5"
+
+# Resultado: Reglas iptables generadas
+iptables -A INPUT -s 192.168.1.100 -j ACCEPT    # TODO el tráfico
+iptables -A INPUT -s 10.0.0.5 -j ACCEPT         # TODOS los puertos
+```
+
+**Las IPs en esta lista tendrán**:
+- ✅ **Acceso completo**: SSH, Web, Bases de datos, APIs
+- ✅ **Sin restricciones**: TCP, UDP, ICMP a cualquier puerto
+- ✅ **Bypass total**: Evitan todas las reglas de protección
+- ⚠️ **Máximo riesgo**: Una IP comprometida = acceso total al servidor
+
+**Usar solo para**:
+- Administradores con IPs fijas
+- Servidores de monitoreo confiables
+- IPs corporativas verificadas
 ```
 
 ### Ejecución
@@ -116,8 +139,8 @@ DOCKER                      # Cadena para contenedores (cuando aplica)
 
 ```mermaid
 graph TD
-    A[Paquete Entrante] --> B{¿IP Whitelisted?}
-    B -->|Sí| C[ACCEPT]
+    A[Paquete Entrante] --> B{¿IP con Acceso Completo?}
+    B -->|Sí| C[ACCEPT - Todos los puertos]
     B -->|No| D{¿Validación Tamaño?}
     D -->|Falla| E[LOG + DROP]
     D -->|Pasa| F{¿Patrón A2S?}
@@ -154,7 +177,7 @@ Antes de aplicar cualquier filtro específico (longitud, patrón o rate limit), 
 5. **DROP por Defecto**: Política `-P INPUT DROP` descarta paquetes no coincidentes
 
 #### **Optimización del Flujo**
-- **Reglas rápidas primero**: Whitelist y validación de longitud (`O(1)` checks)
+- **Reglas rápidas primero**: IPs con acceso completo y validación de longitud (`O(1)` checks)
 - **Pattern matching**: `O(M)` por longitud de patrón, donde M=5 bytes para A2S
 - **Hashlimit**: `O(1)` lookup + gestión de tokens
 - **Implementación en C**: Módulos kernel (`xt_length`, `xt_string`, `xt_hashlimit`) minimizan sobrecarga
@@ -484,11 +507,9 @@ Los ataques TCP/RCON se dirigen a los puertos de administración remota (RCON) d
 
 **Cuando `ENABLE_TCP_PROTECT=true`**:
 ```bash
-# 1. Permitir SSH y IPs confiables primero
+# 1. Permitir SSH para administración
 iptables -A INPUT -p tcp --dports $SSH_PORT -j ACCEPT
-for ip in $WHITELISTED_IPS; do
-    iptables -A INPUT -p tcp --dports $GAMESERVERPORTS -s "$ip" -j ACCEPT
-done
+# Nota: WHITELISTED_IPS ya tienen acceso completo a TODO el sistema
 
 # 2. Bloquear todo TCP a puertos de juego
 if [ -n "$TCP_PROTECTION" ]; then
@@ -501,9 +522,9 @@ fi
 ```
 
 **Filosofía de Seguridad**:
-- **Deny by Default**: Todo TCP bloqueado excepto whitelist
+- **Deny by Default**: Todo TCP bloqueado excepto IPs con acceso completo
 - **Zero Tolerance**: No rate limiting, bloqueo completo
-- **Admin Access**: Preserva acceso SSH y IPs confiables
+- **Admin Access**: Preserva acceso SSH y IPs con acceso completo al sistema
 
 #### Modo Rate Limiting
 
@@ -552,11 +573,11 @@ iptables -A INPUT -p icmp \
 
 ### 7. Ataques a Steam Master Server {#ataques-steam-master-server}
 
-Aunque menos comunes, algunos ataques pueden intentar interrumpir la comunicación entre el servidor y los Steam Master Servers, afectando la visibilidad pública del servidor. La whitelist dinámico asegura que esta comunicación crítica no sea bloqueada por las reglas de protección.
+Aunque menos comunes, algunos ataques pueden intentar interrumpir la comunicación entre el servidor y los Steam Master Servers, afectando la visibilidad pública del servidor. El acceso dinámico asegura que esta comunicación crítica no sea bloqueada por las reglas de protección.
 
 #### 7.1. Steam Master Server Integration
 
-**Whitelist Dinámico**:
+**Acceso Dinámico**:
 ```bash
 # Resolución DNS automática
 STEAM_MASTER_IPS=$(dig +short hl2master.steampowered.com A || true)
@@ -690,7 +711,7 @@ if (entry_exists) {
 #### Jerarquía de Filtros
 
 **Orden de Procesamiento Optimizado** (basado en complejidad computacional):
-1. **Whitelist** (`O(1)` - mínimo costo, máxima prioridad)
+1. **IPs con Acceso Completo** (`O(1)` - mínimo costo, máxima prioridad)
 2. **Loopback** (`O(1)` - tráfico local frecuente)
 3. **Length validation** (`O(1)` - filtro rápido, verifica `skb->len`)
 4. **Established connections** (`O(1)` - flujo principal, lookup en conntrack)
@@ -872,7 +893,7 @@ iptables -L -n -v -x | awk '
    - Evaluación de condiciones básicas (protocolo, puerto)
 
 **Estimación Total**: 
-- **Paquete aceptado por whitelist**: ~15-25 CPU cycles
+- **Paquete aceptado por IP con acceso completo**: ~15-25 CPU cycles
 - **Paquete bloqueado por length**: ~25-50 CPU cycles  
 - **Paquete con string match + hashlimit**: ~300-700 CPU cycles
 - **Paquete bloqueado por política**: ~500-1000 CPU cycles (recorre todas las reglas)
@@ -923,7 +944,7 @@ done
 **Principio**: Reglas más específicas y frecuentes primero
 ```bash
 # Orden optimizado:
-1. Whitelist (más rápido, mayor prioridad)
+1. IPs con acceso completo (más rápido, mayor prioridad)
 2. Loopback (tráfico local frecuente)
 3. Length validation (filtro rápido)
 4. Established connections (flujo principal)
@@ -969,7 +990,7 @@ grep "IP_PROBLEMA" /var/log/l4d2-iptables.log
 
 **Soluciones**:
 ```bash
-# Temporal: Agregar IP a whitelist
+# Temporal: Agregar IP a whitelist (acceso completo al sistema)
 WHITELISTED_IPS="$WHITELISTED_IPS IP_PROBLEMA"
 sudo ./iptables.rules.sh
 

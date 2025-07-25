@@ -68,9 +68,11 @@ TVSERVERPORTS="27020"
 # Protección TCP RCON
 ENABLE_TCP_PROTECT=true
 
-# IPs de confianza (opcional)
+# IPs de confianza (acceso completo al sistema - ⚠️ TODOS los puertos)
 WHITELISTED_IPS="192.168.1.100 10.0.0.5"
 ```
+
+> ⚠️ **ADVERTENCIA**: Las IPs en `WHITELISTED_IPS` tendrán acceso **completo e irrestricto** a toda la máquina (SSH, Web, Bases de datos, APIs, etc.). Usar solo para administradores e IPs absolutamente confiables.
 
 ## 🛠️ Herramientas Incluidas
 
