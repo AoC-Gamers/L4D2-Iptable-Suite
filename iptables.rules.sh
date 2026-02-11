@@ -161,6 +161,10 @@ VPN_LAN_SUBNET=${VPN_LAN_SUBNET:-"192.168.1.0/24"}
 VPN_LAN_INTERFACE=${VPN_LAN_INTERFACE:-""}
 VPN_ENABLE_NAT=${VPN_ENABLE_NAT:-false}
 
+# Optional router alias (DNAT) to avoid client-side subnet conflicts
+VPN_ROUTER_REAL_IP=${VPN_ROUTER_REAL_IP:-""}
+VPN_ROUTER_ALIAS_IP=${VPN_ROUTER_ALIAS_IP:-""}
+
 # Log prefixes for different packet types and attack patterns
 # Used to categorize iptables logs for detailed analysis
 LOG_PREFIX_INVALID_SIZE=${LOG_PREFIX_INVALID_SIZE:-"INVALID_SIZE: "}
@@ -353,6 +357,15 @@ if [ "$VPN_ENABLED" = "true" ]; then
         add_rule_first INPUT -i "$VPN_DOCKER_INTERFACE" -s "$VPN_SUBNET" -j ACCEPT
     fi
 
+    # Optional: map a conflict-free alias IP (e.g. 10.99.1.1) to the real router IP (e.g. 192.168.1.1)
+    # This helps when the VPN client is on a network that also uses 192.168.1.0/24.
+    if [ -n "$VPN_ROUTER_REAL_IP" ] && [ -n "$VPN_ROUTER_ALIAS_IP" ]; then
+        add_rule_table nat PREROUTING -i "$VPN_INTERFACE" -d "$VPN_ROUTER_ALIAS_IP" -j DNAT --to-destination "$VPN_ROUTER_REAL_IP"
+        if [ -n "$VPN_DOCKER_INTERFACE" ]; then
+            add_rule_table nat PREROUTING -i "$VPN_DOCKER_INTERFACE" -d "$VPN_ROUTER_ALIAS_IP" -j DNAT --to-destination "$VPN_ROUTER_REAL_IP"
+        fi
+    fi
+
     # Forward VPN clients to LAN and allow return traffic
     if [ -n "$VPN_LAN_SUBNET" ]; then
         add_rule_first FORWARD -i "$VPN_INTERFACE" -s "$VPN_SUBNET" -d "$VPN_LAN_SUBNET" -j ACCEPT
@@ -376,6 +389,10 @@ if [ "$VPN_ENABLED" = "true" ]; then
     # Optional NAT for VPN subnet (useful when LAN router has no static route)
     if [ "$VPN_ENABLE_NAT" = "true" ]; then
         if [ -n "$VPN_LAN_INTERFACE" ]; then
+            # If NAT is enabled, also allow VPN clients to reach the internet through the LAN/WAN interface
+            # (not just the LAN subnet). This is required when clients receive a default-route via VPN.
+            add_rule_first FORWARD -i "$VPN_INTERFACE" -s "$VPN_SUBNET" -o "$VPN_LAN_INTERFACE" -j ACCEPT
+            add_rule_first FORWARD -o "$VPN_INTERFACE" -d "$VPN_SUBNET" -i "$VPN_LAN_INTERFACE" -m state --state ESTABLISHED,RELATED -j ACCEPT
             add_rule_table nat POSTROUTING -s "$VPN_SUBNET" -o "$VPN_LAN_INTERFACE" -j MASQUERADE
         else
             echo "⚠️  VPN_ENABLE_NAT is true but VPN_LAN_INTERFACE is empty; skipping NAT"
