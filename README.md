@@ -19,6 +19,7 @@
 
 - 🛡️ **Protección Avanzada DDoS**: Mitigación específica contra ataques comunes a servidores L4D2
 - 🐳 **Soporte Docker**: Compatibilidad completa con servidores nativos y contenedores
+- 🔐 **Soporte OpenVPN**: Acceso remoto seguro (host o Docker) sin afectar reglas de juego
 - 📊 **Sistema de Logging**: Análisis detallado de ataques con reportes JSON comprehensivos
 - ⚙️ **Gestión Simplificada**: Herramientas intuitivas para administrar reglas persistentes
 - 🎯 **Detección Inteligente**: Identificación de patrones específicos de ataques Source Engine
@@ -80,6 +81,17 @@ ENABLE_TCP_PROTECT=true
 
 # IPs de confianza (acceso completo al sistema - ⚠️ TODOS los puertos)
 WHITELISTED_IPS="192.168.1.100 10.0.0.5"
+
+# OpenVPN (host o Docker)
+VPN_ENABLED=false
+VPN_PORT=1194
+VPN_PROTO="udp"
+VPN_SUBNET="10.8.0.0/24"
+VPN_INTERFACE="tun0"  # o "tun+" para múltiples
+VPN_DOCKER_INTERFACE="docker0"  # opcional para OpenVPN en Docker
+VPN_LAN_SUBNET="192.168.1.0/24"
+VPN_LAN_INTERFACE="enp3s0"  # requerido si VPN_ENABLE_NAT=true
+VPN_ENABLE_NAT=false
 ```
 
 > ⚠️ **ADVERTENCIA**: Las IPs en `WHITELISTED_IPS` tendrán acceso **completo e irrestricto** a toda la máquina (SSH, Web, Bases de datos, APIs, etc.). Usar solo para administradores e IPs absolutamente confiables.

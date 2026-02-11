@@ -61,6 +61,30 @@ SSH_PORT="22"
 # Empty: disabled. Only applies when TYPECHAIN includes DOCKER (1 or 2)
 SSH_DOCKER=""
 
+# OpenVPN support (host or Docker)
+# Enable/disable OpenVPN rules
+VPN_ENABLED=false
+
+# OpenVPN protocol and port
+VPN_PROTO="udp"
+VPN_PORT=1194
+
+# VPN subnet (OpenVPN server subnet)
+VPN_SUBNET="10.8.0.0/24"
+
+# VPN interface name or pattern (tun0 or tun+)
+VPN_INTERFACE="tun0"
+
+# Optional Docker bridge interface for OpenVPN-in-Docker (docker0 or br+)
+VPN_DOCKER_INTERFACE=""
+
+# LAN subnet and interface for forwarding/NAT
+VPN_LAN_SUBNET="192.168.1.0/24"
+VPN_LAN_INTERFACE=""
+
+# Optional NAT for VPN clients (MASQUERADE)
+VPN_ENABLE_NAT=false
+
 # Source Engine game server ports (GameServer)
 # These ports handle: player connections, A2S queries, Steam communication
 # Standard format: "27001:27016" (16 servers), "27015" (single server)
@@ -126,6 +150,17 @@ TVSERVERPORTS=${TVSERVERPORTS:-"27020"}
 CMD_LIMIT=${CMD_LIMIT:-100}
 WHITELISTED_IPS=${WHITELISTED_IPS:-""}
 
+# OpenVPN defaults
+VPN_ENABLED=${VPN_ENABLED:-false}
+VPN_PROTO=${VPN_PROTO:-"udp"}
+VPN_PORT=${VPN_PORT:-1194}
+VPN_SUBNET=${VPN_SUBNET:-"10.8.0.0/24"}
+VPN_INTERFACE=${VPN_INTERFACE:-"tun0"}
+VPN_DOCKER_INTERFACE=${VPN_DOCKER_INTERFACE:-""}
+VPN_LAN_SUBNET=${VPN_LAN_SUBNET:-"192.168.1.0/24"}
+VPN_LAN_INTERFACE=${VPN_LAN_INTERFACE:-""}
+VPN_ENABLE_NAT=${VPN_ENABLE_NAT:-false}
+
 # Log prefixes for different packet types and attack patterns
 # Used to categorize iptables logs for detailed analysis
 LOG_PREFIX_INVALID_SIZE=${LOG_PREFIX_INVALID_SIZE:-"INVALID_SIZE: "}
@@ -146,6 +181,21 @@ LOG_PREFIX_ICMP_FLOOD=${LOG_PREFIX_ICMP_FLOOD:-"ICMP_FLOOD: "}
 ####################################################
 CMD_LIMIT_LEEWAY=$((CMD_LIMIT + 10))
 CMD_LIMIT_UPPER=$((CMD_LIMIT + 30))
+
+# Helper functions for idempotent rule insertion
+add_rule() {
+    local chain="$1"
+    shift
+    iptables -C "$chain" "$@" 2>/dev/null || iptables -A "$chain" "$@"
+}
+
+add_rule_table() {
+    local table="$1"
+    shift
+    local chain="$1"
+    shift
+    iptables -t "$table" -C "$chain" "$@" 2>/dev/null || iptables -t "$table" -A "$chain" "$@"
+}
 
 ###################################################################################################################
 # _|___|___|___|___|___|___|___|___|___|___|___|___|                                                             ##
@@ -271,6 +321,47 @@ for ip in $WHITELISTED_IPS; do
         iptables -A DOCKER -s $ip -j ACCEPT
     fi
 done
+
+# ---------------------------------------
+# OpenVPN support (host or Docker)
+# ---------------------------------------
+if [ "$VPN_ENABLED" = "true" ]; then
+    VPN_PROTO=$(echo "$VPN_PROTO" | tr 'A-Z' 'a-z')
+
+    # Allow OpenVPN handshake traffic
+    add_rule INPUT -p "$VPN_PROTO" --dport "$VPN_PORT" -j ACCEPT
+    if [ $TYPECHAIN -eq 1 ] || [ $TYPECHAIN -eq 2 ]; then
+        add_rule DOCKER -p "$VPN_PROTO" --dport "$VPN_PORT" -j ACCEPT
+    fi
+
+    # Allow VPN clients to reach host services
+    add_rule INPUT -i "$VPN_INTERFACE" -s "$VPN_SUBNET" -j ACCEPT
+    if [ -n "$VPN_DOCKER_INTERFACE" ]; then
+        add_rule INPUT -i "$VPN_DOCKER_INTERFACE" -s "$VPN_SUBNET" -j ACCEPT
+    fi
+
+    # Forward VPN clients to LAN and allow return traffic
+    if [ -n "$VPN_LAN_SUBNET" ]; then
+        add_rule FORWARD -i "$VPN_INTERFACE" -s "$VPN_SUBNET" -d "$VPN_LAN_SUBNET" -j ACCEPT
+        add_rule FORWARD -o "$VPN_INTERFACE" -s "$VPN_LAN_SUBNET" -d "$VPN_SUBNET" -m state --state ESTABLISHED,RELATED -j ACCEPT
+
+        if [ -n "$VPN_DOCKER_INTERFACE" ]; then
+            add_rule FORWARD -i "$VPN_DOCKER_INTERFACE" -s "$VPN_SUBNET" -d "$VPN_LAN_SUBNET" -j ACCEPT
+            add_rule FORWARD -o "$VPN_DOCKER_INTERFACE" -s "$VPN_LAN_SUBNET" -d "$VPN_SUBNET" -m state --state ESTABLISHED,RELATED -j ACCEPT
+        fi
+    else
+        echo "⚠️  VPN_LAN_SUBNET is empty; skipping VPN forwarding rules"
+    fi
+
+    # Optional NAT for VPN subnet (useful when LAN router has no static route)
+    if [ "$VPN_ENABLE_NAT" = "true" ]; then
+        if [ -n "$VPN_LAN_INTERFACE" ]; then
+            add_rule_table nat POSTROUTING -s "$VPN_SUBNET" -o "$VPN_LAN_INTERFACE" -j MASQUERADE
+        else
+            echo "⚠️  VPN_ENABLE_NAT is true but VPN_LAN_INTERFACE is empty; skipping NAT"
+        fi
+    fi
+fi
 
 # UDP packet length validation for GameServers
 # Blocks malformed packets that would never be valid in Source Engine

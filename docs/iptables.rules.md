@@ -75,6 +75,32 @@ LOG_PREFIX_A2S_INFO="A2S_INFO_FLOOD: "
 # ... [12 prefijos más para categorización]
 ```
 
+### Soporte OpenVPN (host o Docker)
+
+El script puede abrir el puerto de OpenVPN, permitir acceso desde el tun hacia el host y habilitar forwarding controlado hacia la LAN. Esto evita que el tráfico VPN pase por las cadenas de rate limiting del juego.
+
+**Variables principales:**
+```bash
+VPN_ENABLED=true
+VPN_PROTO="udp"
+VPN_PORT=1194
+VPN_SUBNET="10.8.0.0/24"
+VPN_INTERFACE="tun0"          # o "tun+" para varios
+VPN_DOCKER_INTERFACE="docker0" # opcional (OpenVPN en Docker)
+VPN_LAN_SUBNET="192.168.1.0/24"
+VPN_LAN_INTERFACE="enp3s0"     # requerido si VPN_ENABLE_NAT=true
+VPN_ENABLE_NAT=false
+```
+
+**Reglas generadas (resumen):**
+- INPUT: permite handshake OpenVPN en `VPN_PORT` y acceso desde `VPN_SUBNET` por la interfaz VPN.
+- FORWARD: permite `VPN_SUBNET -> VPN_LAN_SUBNET` y retorno `ESTABLISHED,RELATED`.
+- NAT opcional: `MASQUERADE` para `VPN_SUBNET` cuando no existe ruta estática en el router.
+
+**Notas:**
+- Para OpenVPN en Docker con bridge, define `VPN_DOCKER_INTERFACE` (ej. `docker0` o `br+`).
+- Asegura `net.ipv4.ip_forward=1` si usas forwarding/NAT.
+
 #### ⚠️ Importante: WHITELISTED_IPS - Acceso Completo al Sistema
 
 ```bash
