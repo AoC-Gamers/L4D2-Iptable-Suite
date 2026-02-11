@@ -75,6 +75,9 @@ from dotenv import load_dotenv
 from datetime import datetime, timedelta
 from collections import defaultdict
 
+TIME_FORMAT = "%H:%M:%S"
+ISO_TIMESTAMP_FORMAT = "%Y-%m-%dT%H:%M:%S"
+
 # Default values - will be overridden by .env file
 LOGFILE = "/var/log/l4d2-iptables.log"
 RSYSLOG_CONF = "/etc/rsyslog.d/l4d2-iptables.conf"
@@ -194,6 +197,58 @@ def parse_log(log_path, game_ports, tv_ports):
 
     return pd.DataFrame(entries)
 
+def format_duration(seconds):
+    if seconds < 60:
+        return f"{int(seconds)} seconds"
+    if seconds < 3600:
+        minutes = int(seconds // 60)
+        remaining_seconds = int(seconds % 60)
+        if remaining_seconds > 0:
+            return f"{minutes} minutes {remaining_seconds} seconds"
+        return f"{minutes} minutes"
+    hours = int(seconds // 3600)
+    minutes = int((seconds % 3600) // 60)
+    if minutes > 0:
+        return f"{hours} hours {minutes} minutes"
+    return f"{hours} hours"
+
+def build_daily_timeline(timestamps):
+    timestamps = timestamps.sort_values()
+    first_attack = timestamps.iloc[0].strftime(TIME_FORMAT)
+    last_attack = timestamps.iloc[-1].strftime(TIME_FORMAT)
+    if len(timestamps) > 1:
+        duration_seconds = (timestamps.iloc[-1] - timestamps.iloc[0]).total_seconds()
+        duration = format_duration(duration_seconds)
+    else:
+        duration = "0 seconds"
+    return {
+        "First_Attack": first_attack,
+        "Last_Attack": last_attack,
+        "Attack_Duration": duration
+    }
+
+def get_port_type_map(group):
+    return group.groupby("Port")["PortType"].first()
+
+def get_time_distribution(group):
+    distribution = {
+        "00:00-06:00": 0,
+        "06:00-12:00": 0,
+        "12:00-18:00": 0,
+        "18:00-24:00": 0
+    }
+    for timestamp in group["Timestamp"]:
+        hour = timestamp.hour
+        if 0 <= hour < 6:
+            distribution["00:00-06:00"] += 1
+        elif 6 <= hour < 12:
+            distribution["06:00-12:00"] += 1
+        elif 12 <= hour < 18:
+            distribution["12:00-18:00"] += 1
+        else:
+            distribution["18:00-24:00"] += 1
+    return distribution
+
 def generate_summary_by_ip(df):
     """Generate IP-grouped summary with multiple dates structure"""
     if df.empty:
@@ -215,36 +270,11 @@ def generate_summary_by_ip(df):
         
         # Group by date for this IP
         for fecha, fecha_group in ip_group.groupby("Date"):
-            # Calculate timeline for this date
-            timestamps = fecha_group["Timestamp"].sort_values()
-            first_attack = timestamps.iloc[0].strftime("%H:%M:%S")
-            last_attack = timestamps.iloc[-1].strftime("%H:%M:%S")
-            
-            # Calculate duration
-            if len(timestamps) > 1:
-                duration_seconds = (timestamps.iloc[-1] - timestamps.iloc[0]).total_seconds()
-                if duration_seconds < 60:
-                    duration = f"{int(duration_seconds)} seconds"
-                elif duration_seconds < 3600:
-                    minutes = int(duration_seconds // 60)
-                    seconds = int(duration_seconds % 60)
-                    duration = f"{minutes} minutes {seconds} seconds" if seconds > 0 else f"{minutes} minutes"
-                else:
-                    hours = int(duration_seconds // 3600)
-                    minutes = int((duration_seconds % 3600) // 60)
-                    duration = f"{hours} hours {minutes} minutes" if minutes > 0 else f"{hours} hours"
-            else:
-                duration = "0 seconds"
-            
-            # Get unique attack types for this date
+            timeline = build_daily_timeline(fecha_group["Timestamp"])
             attack_types = sorted(fecha_group["Pattern"].unique())
-            
+
             ip_data["Activity_By_Date"][fecha] = {
-                "Timeline": {
-                    "First_Attack": first_attack,
-                    "Last_Attack": last_attack,
-                    "Attack_Duration": duration
-                },
+                "Timeline": timeline,
                 "Events": len(fecha_group),
                 "Types": attack_types
             }
@@ -255,11 +285,10 @@ def generate_summary_by_ip(df):
         ip_data["Total_Statistics"].update(attack_counts)
         
         # Get affected ports by type
-        gameserver_ports = sorted([p for p in ip_group["Port"].unique() 
-                                 if ip_group[ip_group["Port"] == p]["PortType"].iloc[0] == "GameServer"])
-        sourcetv_ports = sorted([p for p in ip_group["Port"].unique() 
-                               if ip_group[ip_group["Port"] == p]["PortType"].iloc[0] == "SourceTV"])
-        
+        port_type_map = get_port_type_map(ip_group)
+        gameserver_ports = sorted(port_type_map[port_type_map == "GameServer"].index.tolist())
+        sourcetv_ports = sorted(port_type_map[port_type_map == "SourceTV"].index.tolist())
+
         ip_data["Affected_Ports"]["GameServer"] = [str(p) for p in gameserver_ports]
         ip_data["Affected_Ports"]["SourceTV"] = [str(p) for p in sourcetv_ports]
         
@@ -280,8 +309,8 @@ def generate_summary_by_port(df):
         
         # Calculate time span
         timestamps = port_group["Timestamp"].sort_values()
-        first_attack = timestamps.iloc[0].strftime("%Y-%m-%dT%H:%M:%S")
-        last_attack = timestamps.iloc[-1].strftime("%Y-%m-%dT%H:%M:%S")
+        first_attack = timestamps.iloc[0].strftime(ISO_TIMESTAMP_FORMAT)
+        last_attack = timestamps.iloc[-1].strftime(ISO_TIMESTAMP_FORMAT)
         
         # Calculate duration
         duration_seconds = (timestamps.iloc[-1] - timestamps.iloc[0]).total_seconds()
@@ -312,8 +341,8 @@ def generate_summary_by_port(df):
                 "attack_total_events": len(ip_group),
                 "attack_events_breakdown": ip_group["Pattern"].value_counts().to_dict(),
                 "attack_time_sample": {
-                    "first": ip_timestamps.iloc[0].strftime("%Y-%m-%dT%H:%M:%S"),
-                    "last": ip_timestamps.iloc[-1].strftime("%Y-%m-%dT%H:%M:%S"),
+                    "first": ip_timestamps.iloc[0].strftime(ISO_TIMESTAMP_FORMAT),
+                    "last": ip_timestamps.iloc[-1].strftime(ISO_TIMESTAMP_FORMAT),
                     "count_per_day": count_per_day
                 }
             })
@@ -360,30 +389,11 @@ def generate_summary_by_day(df):
             # Attackers for this port on this date
             attackers = []
             for ip, ip_group in port_group.groupby("IP"):
-                # Time distribution in 6-hour buckets
-                time_distribution = {
-                    "00:00-06:00": 0,
-                    "06:00-12:00": 0,
-                    "12:00-18:00": 0,
-                    "18:00-24:00": 0
-                }
-                
-                for _, row in ip_group.iterrows():
-                    hour = row["Timestamp"].hour
-                    if 0 <= hour < 6:
-                        time_distribution["00:00-06:00"] += 1
-                    elif 6 <= hour < 12:
-                        time_distribution["06:00-12:00"] += 1
-                    elif 12 <= hour < 18:
-                        time_distribution["12:00-18:00"] += 1
-                    else:
-                        time_distribution["18:00-24:00"] += 1
-                
                 attackers.append({
                     "attack_ip": ip,
                     "events": len(ip_group),
                     "events_breakdown": ip_group["Pattern"].value_counts().to_dict(),
-                    "time_distribution": time_distribution
+                    "time_distribution": get_time_distribution(ip_group)
                 })
             
             # Sort attackers by events (descending)
@@ -680,7 +690,7 @@ def run_analysis(env_file):
         generated_files = generate_all_reports(df)
         
         if generated_files:
-            print(f"\n✅ All analysis reports generated successfully!")
+            print("\n✅ All analysis reports generated successfully!")
             print(f"📂 Location: {os.path.dirname(os.path.abspath(__file__))}")
             print(f"📊 Summary: {len(generated_files)} files generated")
             
@@ -698,23 +708,41 @@ def run_analysis(env_file):
         return
 
     print(f"🔄 Generating {analysis_type} analysis in JSON format...")
-    
+
+    generators = {
+        "by_ip": generate_summary_by_ip,
+        "by_port": generate_summary_by_port,
+        "by_day": generate_summary_by_day,
+        "by_week": generate_summary_by_week,
+        "by_month": generate_summary_by_month,
+        "by_attack_type": generate_summary_by_attack_type
+    }
+
+    summary_counts = {
+        "by_ip": lambda data: len(data),
+        "by_port": lambda data: len(data.get("summary_by_port", [])),
+        "by_day": lambda data: len(data.get("summary_by_day", [])),
+        "by_week": lambda data: len(data.get("summary_by_week", [])),
+        "by_month": lambda data: len(data.get("summary_by_month", [])),
+        "by_attack_type": lambda data: len(data.get("summary_by_attack_type", []))
+    }
+
+    label_map = {
+        "by_ip": "IPs",
+        "by_port": "ports",
+        "by_day": "days",
+        "by_week": "weeks",
+        "by_month": "months",
+        "by_attack_type": "attack types"
+    }
+
+    generator = generators.get(analysis_type)
+    if not generator:
+        print("❌ Unknown analysis type")
+        return
+
     try:
-        if analysis_type == "by_ip":
-            summary_data = generate_summary_by_ip(df)
-        elif analysis_type == "by_port":
-            summary_data = generate_summary_by_port(df)
-        elif analysis_type == "by_day":
-            summary_data = generate_summary_by_day(df)
-        elif analysis_type == "by_week":
-            summary_data = generate_summary_by_week(df)
-        elif analysis_type == "by_month":
-            summary_data = generate_summary_by_month(df)
-        elif analysis_type == "by_attack_type":
-            summary_data = generate_summary_by_attack_type(df)
-        else:
-            print("❌ Unknown analysis type")
-            return
+        summary_data = generator(df)
         
         # Export to JSON with proper formatting
         with open(output_path, 'w', encoding='utf-8') as f:
@@ -724,28 +752,8 @@ def run_analysis(env_file):
         print(f"📂 Location: {os.path.abspath(output_path)}")
         
         # Show quick summary based on analysis type
-        if analysis_type == "by_ip":
-            print(f"📈 Summary: {len(summary_data)} IPs analyzed")
-        elif analysis_type == "by_port":
-            port_count = len(summary_data.get('summary_by_port', []))
-            print(f"📈 Summary: {port_count} ports analyzed")
-        elif analysis_type == "by_day":
-            day_count = len(summary_data.get('summary_by_day', []))
-            print(f"📈 Summary: {day_count} days analyzed")
-        elif analysis_type == "by_week":
-            week_count = len(summary_data.get('summary_by_week', []))
-            print(f"📈 Summary: {week_count} weeks analyzed")
-        elif analysis_type == "by_month":
-            month_count = len(summary_data.get('summary_by_month', []))
-            print(f"📈 Summary: {month_count} months analyzed")
-        elif analysis_type == "by_attack_type":
-            attack_count = len(summary_data.get('summary_by_attack_type', []))
-            print(f"📈 Summary: {attack_count} attack types analyzed")
-        
-    except Exception as e:
-        print(f"❌ Error generating analysis: {e}")
-        return
-
+        count = summary_counts[analysis_type](summary_data)
+        print(f"📈 Summary: {count} {label_map[analysis_type]} analyzed")
 def main_menu(env_file):
     while True:
         print("\n===== L4D2 Logging Manager =====")
@@ -773,7 +781,7 @@ def main_menu(env_file):
             print("❌ Invalid option.")
 
 if __name__ == "__main__":
-    if os.geteuid() != 0:
+                summary_data = generator(df)
         print("❌ This script must be run as root or with sudo.")
         print(f"➡️  Use: sudo {__file__}")
         exit(1)
@@ -783,8 +791,13 @@ if __name__ == "__main__":
     parser.add_argument(
         "--env-file", 
         default=".env",
-        help="Path to .env file with configuration (default: .env)"
-    )
-    
-    args = parser.parse_args()
-    main_menu(args.env_file)
+                count = summary_counts[analysis_type](summary_data)
+                label_map = {
+                    "by_ip": "IPs",
+                    "by_port": "ports",
+                    "by_day": "days",
+                    "by_week": "weeks",
+                    "by_month": "months",
+                    "by_attack_type": "attack types"
+                }
+                print(f"📈 Summary: {count} {label_map[analysis_type]} analyzed")
