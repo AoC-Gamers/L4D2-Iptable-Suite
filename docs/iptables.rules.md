@@ -611,34 +611,6 @@ iptables -A INPUT -p icmp \
 - **modo dstip**: Por IP de destino (protege el servidor completo)
 - **expire 1s**: Ventana corta para respuesta rápida
 
-### 7. Ataques a Steam Master Server {#ataques-steam-master-server}
-
-Aunque menos comunes, algunos ataques pueden intentar interrumpir la comunicación entre el servidor y los Steam Master Servers, afectando la visibilidad pública del servidor. El acceso dinámico asegura que esta comunicación crítica no sea bloqueada por las reglas de protección.
-
-#### 7.1. Steam Master Server Integration
-
-**Acceso Dinámico**:
-```bash
-# Resolución DNS automática
-STEAM_MASTER_IPS=$(dig +short hl2master.steampowered.com A || true)
-
-for ip in $STEAM_MASTER_IPS; do
-    # GameServer ↔ Steam Master (puerto 27011)
-    iptables -A INPUT -p udp -s "$ip" --sport 27011 \
-        --dports $GAMESERVERPORTS -j ACCEPT
-    
-    # SourceTV ↔ Steam Master (puerto 27011)  
-    iptables -A INPUT -p udp -s "$ip" --sport 27011 \
-        --dports $TVSERVERPORTS -j ACCEPT
-done
-```
-
-**Funcionalidad Crítica**:
-- **Registro Público**: Permite que el servidor aparezca en listas públicas
-- **Heartbeats**: Comunicación de estado con Steam
-- **Resolución Dinámica**: Se adapta a cambios de IP de Steam
-- **Bidireccional**: Protege comunicación en ambas direcciones
-
 ## Algoritmos de Rate Limiting
 
 ### hashlimit: Fundamentos Técnicos

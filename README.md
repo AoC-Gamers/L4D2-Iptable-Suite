@@ -112,7 +112,7 @@ Nota Docker: esta suite usa una cadena `DOCKER` propia en `filter`. Si deseas en
 
 ### 1. `iptables.rules.sh` - Motor de Protección Principal
 
-Script principal que implementa reglas avanzadas de iptables específicamente diseñadas para mitigar ataques DDoS contra servidores L4D2. Incluye protección contra floods UDP, ataques challenge, validación de paquetes, consultas A2S maliciosas, spam TCP/RCON, consultas Steam y ping floods. 
+Script principal que implementa reglas avanzadas de iptables específicamente diseñadas para mitigar ataques DDoS contra servidores L4D2. Incluye protección contra floods UDP, ataques challenge, validación de paquetes, consultas A2S maliciosas, spam TCP/RCON, consultas Steam Group y ping floods. 
 
 Soporta configuración flexible para servidores nativos, contenedores Docker o configuraciones híbridas mediante variables de entorno.
 

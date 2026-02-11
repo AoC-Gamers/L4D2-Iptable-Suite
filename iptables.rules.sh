@@ -6,10 +6,7 @@ if [ "$(id -u)" -ne 0 ]; then
     exit 1
 fi
 
-if ! command -v dig >/dev/null 2>&1; then
-    echo "❌ Error: 'dig' command is not installed. Run 'apt install dnsutils'."
-    exit 1
-fi
+
 
 ####################################################
 ############# Customize Stuff HERE #################
@@ -223,7 +220,6 @@ add_rule_table() {
 # _|___|___|___|___|___|___|___|___|___|___|___|___|        ✓ Connection Flood (L4D2 connect/reserve strings)    ##
 # ___|___|___|___|___|___|___|___|___|___|___|___|__        ✓ Invalid Packet Sizes (malformed UDP packets)       ##
 # _|___|___|___|___|___|___|___|___|___|___|___|___|        ✓ ICMP Ping Flood (hashlimit rate-limiting)          ##
-# ___|___|___|___|___|___|___|___|___|___|___|___|__        ✓ Steam Master Server Whitelisting (port 27011)      ##
 # _|___|___|___|___|___|___|___|___|___|___|___|___|        ✓ GameServer vs SourceTV Port Separation             ##
 # ___|___|___|___|___|___|___|___|___|___|___|___|__        ✓ Docker Container Support (dual chain protection)   ##
 # _|___|___|___|___|___|___|___|___|___|___|___|___|        ✓ IP Whitelist for Trusted Sources                   ##
@@ -593,29 +589,6 @@ if [ $TYPECHAIN -eq 1 ] || [ $TYPECHAIN -eq 2 ]; then
     if [ -n "$SSH_DOCKER" ]; then
         iptables -I DOCKER -p tcp -m multiport --dports $SSH_DOCKER -j ACCEPT
     fi
-fi
-
-# ---------------------------------------
-# Steam Master Server: Dynamic Whitelist
-# ---------------------------------------
-# Allows communication with Steam's master server for:
-# - Server registration in public list
-# - Heartbeats and status communication
-# Dynamically resolves IPs for hl2master.steampowered.com
-# Nota: `dig +short` puede incluir CNAME/hostnames; filtramos solo IPv4.
-STEAM_MASTER_IPS=$(dig +short hl2master.steampowered.com A 2>/dev/null | grep -E '^[0-9]{1,3}(\.[0-9]{1,3}){3}$' || true)
-if [ -n "$STEAM_MASTER_IPS" ]; then
-    echo "Adding allowed IPs for hl2master.steampowered.com (port 27011/UDP)"
-    for ip in $STEAM_MASTER_IPS; do
-        # Allow GameServer ↔ Steam Master Server communication
-        iptables -C INPUT -p udp -s "$ip" --sport 27011 -m multiport --dports $GAMESERVERPORTS -j ACCEPT 2>/dev/null || \
-        iptables -A INPUT -p udp -s "$ip" --sport 27011 -m multiport --dports $GAMESERVERPORTS -j ACCEPT
-        # Allow SourceTV ↔ Steam Master Server communication
-        iptables -C INPUT -p udp -s "$ip" --sport 27011 -m multiport --dports $TVSERVERPORTS -j ACCEPT 2>/dev/null || \
-        iptables -A INPUT -p udp -s "$ip" --sport 27011 -m multiport --dports $TVSERVERPORTS -j ACCEPT
-    done
-else
-    echo "❌ Could not resolve hl2master.steampowered.com"
 fi
 
 # Final policies: Deny all unauthorized traffic
