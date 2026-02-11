@@ -140,6 +140,8 @@ TYPECHAIN=${TYPECHAIN:-0}
 ENABLE_TCP_PROTECT=${ENABLE_TCP_PROTECT:-true}
 TCP_PROTECTION=${TCP_PROTECTION:-""}
 TCP_DOCKER=${TCP_DOCKER:-""}
+UDP_ALLOW_PORTS=${UDP_ALLOW_PORTS:-""}
+TCP_ALLOW_PORTS=${TCP_ALLOW_PORTS:-""}
 SSH_PORT=${SSH_PORT:-"22"}
 SSH_DOCKER=${SSH_DOCKER:-""}
 GAMESERVERPORTS=${GAMESERVERPORTS:-"27015"}
@@ -327,6 +329,28 @@ for ip in $WHITELISTED_IPS; do
         iptables -A DOCKER -s $ip -j ACCEPT
     fi
 done
+
+# ---------------------------------------
+# Custom allowlist ports (simple ACCEPT)
+# ---------------------------------------
+# Útil para servicios no-Source (ej: KF2, webadmin, etc.) sin aplicar validaciones/strings de L4D2.
+if [ -n "$UDP_ALLOW_PORTS" ]; then
+    if [ $TYPECHAIN -eq 0 ] || [ $TYPECHAIN -eq 2 ]; then
+        add_rule_first INPUT -p udp -m multiport --dports "$UDP_ALLOW_PORTS" -j ACCEPT
+    fi
+    if [ $TYPECHAIN -eq 1 ] || [ $TYPECHAIN -eq 2 ]; then
+        add_rule_first DOCKER -p udp -m multiport --dports "$UDP_ALLOW_PORTS" -j ACCEPT
+    fi
+fi
+
+if [ -n "$TCP_ALLOW_PORTS" ]; then
+    if [ $TYPECHAIN -eq 0 ] || [ $TYPECHAIN -eq 2 ]; then
+        add_rule_first INPUT -p tcp -m multiport --dports "$TCP_ALLOW_PORTS" -j ACCEPT
+    fi
+    if [ $TYPECHAIN -eq 1 ] || [ $TYPECHAIN -eq 2 ]; then
+        add_rule_first DOCKER -p tcp -m multiport --dports "$TCP_ALLOW_PORTS" -j ACCEPT
+    fi
+fi
 
 # ---------------------------------------
 # OpenVPN support (host or Docker)

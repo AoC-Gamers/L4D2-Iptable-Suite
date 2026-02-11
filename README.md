@@ -103,6 +103,12 @@ VPN_ROUTER_ALIAS_IP=""
 VPN_LOG_ENABLED=false
 VPN_LOG_PREFIX="VPN_TRAFFIC: "
 
+# Puertos extra permitidos (servicios adicionales)
+# Formato: "puerto,puerto" o rangos "inicio:fin" (multiport)
+# Vacío = no agrega excepciones extras.
+UDP_ALLOW_PORTS=""
+TCP_ALLOW_PORTS=""
+
 Nota Docker: esta suite usa una cadena `DOCKER` propia en `filter`. Si deseas engancharte al flujo estandar de Docker, puedes adaptar las reglas a `DOCKER-USER`.
 ```
 
