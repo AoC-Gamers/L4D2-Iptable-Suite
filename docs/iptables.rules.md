@@ -90,16 +90,30 @@ VPN_DOCKER_INTERFACE="docker0" # opcional (OpenVPN en Docker)
 VPN_LAN_SUBNET="192.168.1.0/24"
 VPN_LAN_INTERFACE="enp3s0"     # requerido si VPN_ENABLE_NAT=true
 VPN_ENABLE_NAT=false
+VPN_LOG_ENABLED=false
+VPN_LOG_PREFIX="VPN_TRAFFIC: "
 ```
 
 **Reglas generadas (resumen):**
 - INPUT: permite handshake OpenVPN en `VPN_PORT` y acceso desde `VPN_SUBNET` por la interfaz VPN.
 - FORWARD: permite `VPN_SUBNET -> VPN_LAN_SUBNET` y retorno `ESTABLISHED,RELATED`.
 - NAT opcional: `MASQUERADE` para `VPN_SUBNET` cuando no existe ruta estática en el router.
+- Logging opcional: limitado por rate limit para evitar spam.
 
 **Notas:**
 - Para OpenVPN en Docker con bridge, define `VPN_DOCKER_INTERFACE` (ej. `docker0` o `br+`).
 - Asegura `net.ipv4.ip_forward=1` si usas forwarding/NAT.
+- `VPN_INTERFACE="tun+"` usa wildcard de iptables; en algunas distros puede requerir compatibilidad `iptables-legacy`/`iptables-nft`.
+
+**Modos Docker soportados (comportamiento esperado):**
+1. **OpenVPN host-native o container con `network_mode: host`**
+    - `tun0` aparece en el host y el forwarding funciona con las reglas actuales.
+2. **OpenVPN en Docker bridge (tun dentro del namespace del contenedor)**
+    - La suite puede abrir el puerto y permitir `docker0`, pero el forwarding real puede requerir reglas dentro del contenedor o routing/NAT adicional.
+
+**Cadena DOCKER en esta suite:**
+- La suite usa una cadena `DOCKER` propia en la tabla `filter` cuando `TYPECHAIN` incluye Docker.
+- Si prefieres engancharte al flujo estándar de Docker, puedes adaptar las reglas a `DOCKER-USER`.
 
 #### ⚠️ Importante: WHITELISTED_IPS - Acceso Completo al Sistema
 

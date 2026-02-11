@@ -189,6 +189,12 @@ add_rule() {
     iptables -C "$chain" "$@" 2>/dev/null || iptables -A "$chain" "$@"
 }
 
+add_rule_first() {
+    local chain="$1"
+    shift
+    iptables -C "$chain" "$@" 2>/dev/null || iptables -I "$chain" 1 "$@"
+}
+
 add_rule_table() {
     local table="$1"
     shift
@@ -329,25 +335,39 @@ if [ "$VPN_ENABLED" = "true" ]; then
     VPN_PROTO=$(echo "$VPN_PROTO" | tr 'A-Z' 'a-z')
 
     # Allow OpenVPN handshake traffic
-    add_rule INPUT -p "$VPN_PROTO" --dport "$VPN_PORT" -j ACCEPT
+    add_rule_first INPUT -p "$VPN_PROTO" --dport "$VPN_PORT" -j ACCEPT
     if [ $TYPECHAIN -eq 1 ] || [ $TYPECHAIN -eq 2 ]; then
-        add_rule DOCKER -p "$VPN_PROTO" --dport "$VPN_PORT" -j ACCEPT
+        add_rule_first DOCKER -p "$VPN_PROTO" --dport "$VPN_PORT" -j ACCEPT
+    fi
+
+    if [ "$VPN_LOG_ENABLED" = "true" ]; then
+        add_rule_first INPUT -p "$VPN_PROTO" --dport "$VPN_PORT" -m limit --limit 30/min --limit-burst 10 -j LOG --log-prefix "$VPN_LOG_PREFIX" --log-level 4
+        if [ $TYPECHAIN -eq 1 ] || [ $TYPECHAIN -eq 2 ]; then
+            add_rule_first DOCKER -p "$VPN_PROTO" --dport "$VPN_PORT" -m limit --limit 30/min --limit-burst 10 -j LOG --log-prefix "$VPN_LOG_PREFIX" --log-level 4
+        fi
     fi
 
     # Allow VPN clients to reach host services
-    add_rule INPUT -i "$VPN_INTERFACE" -s "$VPN_SUBNET" -j ACCEPT
+    add_rule_first INPUT -i "$VPN_INTERFACE" -s "$VPN_SUBNET" -j ACCEPT
     if [ -n "$VPN_DOCKER_INTERFACE" ]; then
-        add_rule INPUT -i "$VPN_DOCKER_INTERFACE" -s "$VPN_SUBNET" -j ACCEPT
+        add_rule_first INPUT -i "$VPN_DOCKER_INTERFACE" -s "$VPN_SUBNET" -j ACCEPT
     fi
 
     # Forward VPN clients to LAN and allow return traffic
     if [ -n "$VPN_LAN_SUBNET" ]; then
-        add_rule FORWARD -i "$VPN_INTERFACE" -s "$VPN_SUBNET" -d "$VPN_LAN_SUBNET" -j ACCEPT
-        add_rule FORWARD -o "$VPN_INTERFACE" -s "$VPN_LAN_SUBNET" -d "$VPN_SUBNET" -m state --state ESTABLISHED,RELATED -j ACCEPT
+        add_rule_first FORWARD -i "$VPN_INTERFACE" -s "$VPN_SUBNET" -d "$VPN_LAN_SUBNET" -j ACCEPT
+        add_rule_first FORWARD -o "$VPN_INTERFACE" -s "$VPN_LAN_SUBNET" -d "$VPN_SUBNET" -m state --state ESTABLISHED,RELATED -j ACCEPT
 
         if [ -n "$VPN_DOCKER_INTERFACE" ]; then
-            add_rule FORWARD -i "$VPN_DOCKER_INTERFACE" -s "$VPN_SUBNET" -d "$VPN_LAN_SUBNET" -j ACCEPT
-            add_rule FORWARD -o "$VPN_DOCKER_INTERFACE" -s "$VPN_LAN_SUBNET" -d "$VPN_SUBNET" -m state --state ESTABLISHED,RELATED -j ACCEPT
+            add_rule_first FORWARD -i "$VPN_DOCKER_INTERFACE" -s "$VPN_SUBNET" -d "$VPN_LAN_SUBNET" -j ACCEPT
+            add_rule_first FORWARD -o "$VPN_DOCKER_INTERFACE" -s "$VPN_LAN_SUBNET" -d "$VPN_SUBNET" -m state --state ESTABLISHED,RELATED -j ACCEPT
+        fi
+
+        if [ "$VPN_LOG_ENABLED" = "true" ]; then
+            add_rule_first FORWARD -i "$VPN_INTERFACE" -s "$VPN_SUBNET" -d "$VPN_LAN_SUBNET" -m limit --limit 30/min --limit-burst 10 -j LOG --log-prefix "$VPN_LOG_PREFIX" --log-level 4
+            if [ -n "$VPN_DOCKER_INTERFACE" ]; then
+                add_rule_first FORWARD -i "$VPN_DOCKER_INTERFACE" -s "$VPN_SUBNET" -d "$VPN_LAN_SUBNET" -m limit --limit 30/min --limit-burst 10 -j LOG --log-prefix "$VPN_LOG_PREFIX" --log-level 4
+            fi
         fi
     else
         echo "⚠️  VPN_LAN_SUBNET is empty; skipping VPN forwarding rules"

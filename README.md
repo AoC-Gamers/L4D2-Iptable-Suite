@@ -92,6 +92,10 @@ VPN_DOCKER_INTERFACE="docker0"  # opcional para OpenVPN en Docker
 VPN_LAN_SUBNET="192.168.1.0/24"
 VPN_LAN_INTERFACE="enp3s0"  # requerido si VPN_ENABLE_NAT=true
 VPN_ENABLE_NAT=false
+VPN_LOG_ENABLED=false
+VPN_LOG_PREFIX="VPN_TRAFFIC: "
+
+Nota Docker: esta suite usa una cadena `DOCKER` propia en `filter`. Si deseas engancharte al flujo estandar de Docker, puedes adaptar las reglas a `DOCKER-USER`.
 ```
 
 > ⚠️ **ADVERTENCIA**: Las IPs en `WHITELISTED_IPS` tendrán acceso **completo e irrestricto** a toda la máquina (SSH, Web, Bases de datos, APIs, etc.). Usar solo para administradores e IPs absolutamente confiables.
