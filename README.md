@@ -92,6 +92,14 @@ VPN_DOCKER_INTERFACE="docker0"  # opcional para OpenVPN en Docker
 VPN_LAN_SUBNET="192.168.1.0/24"
 VPN_LAN_INTERFACE="enp3s0"  # requerido si VPN_ENABLE_NAT=true
 VPN_ENABLE_NAT=false
+
+# (Opcional) Alias del router/LAN vía VPN (DNAT) para evitar conflictos de subred en el cliente
+# Útil si el cliente VPN está en una red que también usa 192.168.1.0/24 y no puede acceder a 192.168.1.1.
+# Ejemplo: http://10.99.1.1  ->  Router real: 192.168.1.1
+# Si cualquiera de las variables está vacía, NO se crea el alias.
+VPN_ROUTER_REAL_IP=""
+VPN_ROUTER_ALIAS_IP=""
+
 VPN_LOG_ENABLED=false
 VPN_LOG_PREFIX="VPN_TRAFFIC: "
 
@@ -263,8 +271,8 @@ sudo logrotate -f /etc/logrotate.d/l4d2-iptables
 - **[📖 iptables.rules.sh](docs/iptables.rules.md)** - Documentación técnica del motor de protección
 - **[📖 ipp.sh](docs/ipp.md)** - Guía del gestor de persistencia
 - **[📖 iptable.loggin.py](docs/iptable.loggin.md)** - Manual del sistema de análisis
-- **[� venv.loggin.sh](docs/venv.loggin.md)** - Guía del gestor de entorno virtual
-- **[�📋 example.env](example.env)** - Archivo de configuración de ejemplo  
+- **[📖 venv.loggin.sh](docs/venv.loggin.md)** - Guía del gestor de entorno virtual
+- **[📋 example.env](example.env)** - Archivo de configuración de ejemplo  
 - **[📊 summary_example/](summary_example/)** - Ejemplos de reportes JSON
 
 ## 🤝 Créditos y Reconocimientos
