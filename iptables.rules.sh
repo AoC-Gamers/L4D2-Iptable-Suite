@@ -585,7 +585,8 @@ fi
 # - Server registration in public list
 # - Heartbeats and status communication
 # Dynamically resolves IPs for hl2master.steampowered.com
-STEAM_MASTER_IPS=$(dig +short hl2master.steampowered.com A || true)
+# Nota: `dig +short` puede incluir CNAME/hostnames; filtramos solo IPv4.
+STEAM_MASTER_IPS=$(dig +short hl2master.steampowered.com A 2>/dev/null | grep -E '^[0-9]{1,3}(\.[0-9]{1,3}){3}$' || true)
 if [ -n "$STEAM_MASTER_IPS" ]; then
     echo "Adding allowed IPs for hl2master.steampowered.com (port 27011/UDP)"
     for ip in $STEAM_MASTER_IPS; do
