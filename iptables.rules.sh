@@ -32,6 +32,16 @@ else
 # 0: INPUT only (native servers), 1: DOCKER only (containers), 2: BOTH
 TYPECHAIN=0
 
+# Docker compatibility when running TYPECHAIN=0
+# true: keeps Docker-managed chains/forwarding intact
+# false: applies full cleanup behavior
+DOCKER_INPUT_COMPAT=false
+
+# Auto-recover Docker chains when using TYPECHAIN=0 + DOCKER_INPUT_COMPAT=true
+# true: restart Docker automatically if DOCKER-USER / DOCKER-FORWARD are missing
+# false: only warn
+DOCKER_CHAIN_AUTORECOVER=true
+
 # Enable/disable TCP protection against RCON spam
 # true: Blocks malicious TCP connections to game ports (except whitelisted IPs)
 # false: Allows normal TCP connections with basic rate-limiting
@@ -137,6 +147,8 @@ fi
 
 # Set default values for any missing variables
 TYPECHAIN=${TYPECHAIN:-0}
+DOCKER_INPUT_COMPAT=${DOCKER_INPUT_COMPAT:-false}
+DOCKER_CHAIN_AUTORECOVER=${DOCKER_CHAIN_AUTORECOVER:-true}
 ENABLE_TCP_PROTECT=${ENABLE_TCP_PROTECT:-true}
 TCP_PROTECTION=${TCP_PROTECTION:-""}
 TCP_DOCKER=${TCP_DOCKER:-""}
@@ -234,21 +246,40 @@ add_rule_table() {
 
 ## Cleanup Rules First!
 ##--------------------
-iptables -P INPUT ACCEPT
-iptables -P FORWARD ACCEPT
-iptables -P OUTPUT ACCEPT
-iptables -F
-iptables -X
-iptables -t nat -F
-iptables -t nat -X
-iptables -t mangle -F
-iptables -t mangle -X
+DOCKER_COMPAT_INPUT_MODE=false
+if [ "$TYPECHAIN" -eq 0 ] && [ "$DOCKER_INPUT_COMPAT" = "true" ]; then
+    DOCKER_COMPAT_INPUT_MODE=true
+fi
+
+if [ "$DOCKER_COMPAT_INPUT_MODE" = "true" ]; then
+    echo "ℹ️  Docker compatibility mode enabled for TYPECHAIN=0"
+    iptables -P INPUT ACCEPT
+    iptables -P OUTPUT ACCEPT
+    iptables -F INPUT
+
+    for chain in UDP_GAME_NEW_LIMIT UDP_GAME_NEW_LIMIT_GLOBAL UDP_GAME_ESTABLISHED_LIMIT A2S_LIMITS A2S_PLAYERS_LIMITS A2S_RULES_LIMITS STEAM_GROUP_LIMITS l4d2loginfilter TCPfilter; do
+        iptables -F "$chain" 2>/dev/null || true
+        iptables -X "$chain" 2>/dev/null || true
+    done
+else
+    iptables -P INPUT ACCEPT
+    iptables -P FORWARD ACCEPT
+    iptables -P OUTPUT ACCEPT
+    iptables -F
+    iptables -X
+    iptables -t nat -F
+    iptables -t nat -X
+    iptables -t mangle -F
+    iptables -t mangle -X
+fi
 ##--------------------
 
 ## Policies
 ##--------------------
 iptables -P INPUT DROP
-iptables -P FORWARD DROP
+if [ "$DOCKER_COMPAT_INPUT_MODE" != "true" ]; then
+    iptables -P FORWARD DROP
+fi
 iptables -P OUTPUT ACCEPT
 ##--------------------
 
@@ -282,6 +313,55 @@ if [ $TYPECHAIN -eq 1 ] || [ $TYPECHAIN -eq 2 ]; then
     service docker restart
 fi
 ##--------------------
+
+verify_docker_chains() {
+    local iptables_rules
+    iptables_rules="$(iptables-save 2>/dev/null || true)"
+    grep -q '^:DOCKER-USER ' <<< "$iptables_rules" && grep -q '^:DOCKER-FORWARD ' <<< "$iptables_rules"
+}
+
+recover_docker_chains_if_needed() {
+    if [ "$TYPECHAIN" -eq 0 ] && [ "$DOCKER_INPUT_COMPAT" = "true" ]; then
+        if verify_docker_chains; then
+            echo "✅ Docker chains detected: DOCKER-USER / DOCKER-FORWARD"
+            return 0
+        fi
+
+        echo "⚠️  Docker chains missing: DOCKER-USER and/or DOCKER-FORWARD"
+
+        if [ "$DOCKER_CHAIN_AUTORECOVER" = "true" ]; then
+            echo "♻️  Attempting Docker chain auto-recovery (restart docker service)"
+            if command -v systemctl >/dev/null 2>&1; then
+                systemctl restart docker
+            else
+                service docker restart
+            fi
+            for _ in {1..15}; do
+                if verify_docker_chains; then
+                    break
+                fi
+                sleep 1
+            done
+
+            if ! verify_docker_chains && command -v docker >/dev/null 2>&1; then
+                echo "ℹ️  Triggering Docker network init to force chain creation"
+                temp_net="iptables-autofix-$RANDOM"
+                if docker network create "$temp_net" >/dev/null 2>&1; then
+                    docker network rm "$temp_net" >/dev/null 2>&1 || true
+                fi
+            fi
+
+            if verify_docker_chains; then
+                echo "✅ Docker chains recovered successfully"
+            else
+                echo "❌ Docker chains still missing after recovery attempt"
+                echo "   Run manually: sudo systemctl restart docker"
+            fi
+        else
+            echo "ℹ️  Auto-recovery disabled (DOCKER_CHAIN_AUTORECOVER=false)"
+        fi
+    fi
+}
 
 ## Create Rules
 ##---------------------
@@ -618,11 +698,17 @@ fi
 # Final policies: Deny all unauthorized traffic
 ##--------------------
 iptables -A INPUT -j DROP
-iptables -A FORWARD -j DROP
+if [ "$DOCKER_COMPAT_INPUT_MODE" != "true" ]; then
+    iptables -A FORWARD -j DROP
+fi
 iptables -A OUTPUT -j ACCEPT
 ##--------------------
+
+recover_docker_chains_if_needed
 
 echo "✅ iptables rules applied successfully"
 echo "   - SourceTV separated: Ports $TVSERVERPORTS"
 echo "   - TCP Protection: $ENABLE_TCP_PROTECT"
 echo "   - Chain type: $TYPECHAIN (0=INPUT, 1=DOCKER, 2=BOTH)"
+echo "   - Docker INPUT compatibility: $DOCKER_INPUT_COMPAT"
+echo "   - Docker chain auto-recover: $DOCKER_CHAIN_AUTORECOVER"
