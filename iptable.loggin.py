@@ -754,6 +754,10 @@ def run_analysis(env_file):
         # Show quick summary based on analysis type
         count = summary_counts[analysis_type](summary_data)
         print(f"📈 Summary: {count} {label_map[analysis_type]} analyzed")
+    except Exception as e:
+        print(f"❌ Error generating analysis: {e}")
+
+
 def main_menu(env_file):
     while True:
         print("\n===== L4D2 Logging Manager =====")
@@ -780,24 +784,19 @@ def main_menu(env_file):
         else:
             print("❌ Invalid option.")
 
+
 if __name__ == "__main__":
-                summary_data = generator(df)
+    if os.geteuid() != 0:
         print("❌ This script must be run as root or with sudo.")
         print(f"➡️  Use: sudo {__file__}")
         exit(1)
-    
-    # Parse command line arguments
+
     parser = argparse.ArgumentParser(description="L4D2 iptables Log Manager")
     parser.add_argument(
-        "--env-file", 
+        "--env-file",
         default=".env",
-                count = summary_counts[analysis_type](summary_data)
-                label_map = {
-                    "by_ip": "IPs",
-                    "by_port": "ports",
-                    "by_day": "days",
-                    "by_week": "weeks",
-                    "by_month": "months",
-                    "by_attack_type": "attack types"
-                }
-                print(f"📈 Summary: {count} {label_map[analysis_type]} analyzed")
+        help="Path to .env file (default: .env in current directory)"
+    )
+    args = parser.parse_args()
+
+    main_menu(args.env_file)

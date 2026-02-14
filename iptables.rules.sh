@@ -92,6 +92,10 @@ VPN_LAN_INTERFACE=""
 # Optional NAT for VPN clients (MASQUERADE)
 VPN_ENABLE_NAT=false
 
+# Optional VPN logging (limited to avoid log spam)
+VPN_LOG_ENABLED=false
+VPN_LOG_PREFIX="VPN_TRAFFIC: "
+
 # Source Engine game server ports (GameServer)
 # These ports handle: player connections, A2S queries, Steam communication
 # Standard format: "27001:27016" (16 servers), "27015" (single server)
@@ -171,6 +175,8 @@ VPN_DOCKER_INTERFACE=${VPN_DOCKER_INTERFACE:-""}
 VPN_LAN_SUBNET=${VPN_LAN_SUBNET:-"192.168.1.0/24"}
 VPN_LAN_INTERFACE=${VPN_LAN_INTERFACE:-""}
 VPN_ENABLE_NAT=${VPN_ENABLE_NAT:-false}
+VPN_LOG_ENABLED=${VPN_LOG_ENABLED:-false}
+VPN_LOG_PREFIX=${VPN_LOG_PREFIX:-"VPN_TRAFFIC: "}
 
 # Optional router alias (DNAT) to avoid client-side subnet conflicts
 VPN_ROUTER_REAL_IP=${VPN_ROUTER_REAL_IP:-""}
@@ -367,27 +373,38 @@ recover_docker_chains_if_needed() {
 ##---------------------
 if [ "$ENABLE_TCP_PROTECT" = "true" ] || [ -n "$TCP_PROTECTION" ] || [ -n "$TCP_DOCKER" ]; then
     iptables -A TCPfilter -m state --state NEW -m hashlimit --hashlimit-upto 1/sec --hashlimit-burst 5 --hashlimit-mode srcip,dstport --hashlimit-name TCPDOSPROTECT --hashlimit-htable-expire 60000 --hashlimit-htable-max 999999999 -j ACCEPT
+    iptables -A TCPfilter -m limit --limit 60/min --limit-burst 20 -j LOG --log-prefix "$LOG_PREFIX_TCP_RCON_BLOCK" --log-level 4
+    iptables -A TCPfilter -j DROP
 fi
 
 iptables -A UDP_GAME_NEW_LIMIT -m hashlimit --hashlimit-upto 1/s --hashlimit-burst 3 --hashlimit-mode srcip,dstport --hashlimit-name L4D2_NEW_HASHLIMIT --hashlimit-htable-expire 5000 -j UDP_GAME_NEW_LIMIT_GLOBAL
+iptables -A UDP_GAME_NEW_LIMIT -m limit --limit 60/min --limit-burst 20 -j LOG --log-prefix "$LOG_PREFIX_UDP_NEW_LIMIT" --log-level 4
 iptables -A UDP_GAME_NEW_LIMIT -j DROP
 iptables -A UDP_GAME_NEW_LIMIT_GLOBAL -m hashlimit --hashlimit-upto 10/s --hashlimit-burst 20 --hashlimit-mode dstport --hashlimit-name L4D2_NEW_HASHLIMIT_GLOBAL --hashlimit-htable-expire 5000 -j ACCEPT
+iptables -A UDP_GAME_NEW_LIMIT_GLOBAL -m limit --limit 60/min --limit-burst 20 -j LOG --log-prefix "$LOG_PREFIX_UDP_NEW_LIMIT" --log-level 4
 iptables -A UDP_GAME_NEW_LIMIT_GLOBAL -j DROP
 iptables -A UDP_GAME_ESTABLISHED_LIMIT -m hashlimit --hashlimit-upto ${CMD_LIMIT_LEEWAY}/s --hashlimit-burst ${CMD_LIMIT_UPPER} --hashlimit-mode srcip,srcport,dstport --hashlimit-name L4D2_ESTABLISHED_HASHLIMIT -j ACCEPT
+iptables -A UDP_GAME_ESTABLISHED_LIMIT -m limit --limit 60/min --limit-burst 20 -j LOG --log-prefix "$LOG_PREFIX_UDP_EST_LIMIT" --log-level 4
 iptables -A UDP_GAME_ESTABLISHED_LIMIT -j DROP
 iptables -A A2S_LIMITS -m hashlimit --hashlimit-upto 8/sec --hashlimit-burst 30 --hashlimit-mode dstport --hashlimit-name A2SFilter --hashlimit-htable-expire 5000 -j ACCEPT
+iptables -A A2S_LIMITS -m limit --limit 60/min --limit-burst 20 -j LOG --log-prefix "$LOG_PREFIX_A2S_INFO" --log-level 4
 iptables -A A2S_LIMITS -j DROP
 iptables -A A2S_PLAYERS_LIMITS -m hashlimit --hashlimit-upto 8/sec --hashlimit-burst 30 --hashlimit-mode dstport --hashlimit-name A2SPlayersFilter --hashlimit-htable-expire 5000 -j ACCEPT
+iptables -A A2S_PLAYERS_LIMITS -m limit --limit 60/min --limit-burst 20 -j LOG --log-prefix "$LOG_PREFIX_A2S_PLAYERS" --log-level 4
 iptables -A A2S_PLAYERS_LIMITS -j DROP
 iptables -A A2S_RULES_LIMITS -m hashlimit --hashlimit-upto 8/sec --hashlimit-burst 30 --hashlimit-mode dstport --hashlimit-name A2SRulesFilter --hashlimit-htable-expire 5000 -j ACCEPT
+iptables -A A2S_RULES_LIMITS -m limit --limit 60/min --limit-burst 20 -j LOG --log-prefix "$LOG_PREFIX_A2S_RULES" --log-level 4
 iptables -A A2S_RULES_LIMITS -j DROP
 iptables -A STEAM_GROUP_LIMITS -m hashlimit --hashlimit-upto 1/sec --hashlimit-burst 3 --hashlimit-mode srcip,dstport --hashlimit-name STEAMGROUPFilter --hashlimit-htable-expire 5000 -j ACCEPT
+iptables -A STEAM_GROUP_LIMITS -m limit --limit 60/min --limit-burst 20 -j LOG --log-prefix "$LOG_PREFIX_STEAM_GROUP" --log-level 4
 iptables -A STEAM_GROUP_LIMITS -j DROP
 
 # L4D2 login flood protection filter
 # Prevents mass connection attacks using "connect" and "reserve" strings
 iptables -A l4d2loginfilter -m hashlimit --hashlimit-upto 1/sec --hashlimit-burst 1 --hashlimit-mode srcip,dstip,dstport --hashlimit-name L4D2CONNECTPROTECT --hashlimit-htable-expire 1000 --hashlimit-htable-max 1048576 -m string --algo bm --string "connect" -j ACCEPT
 iptables -A l4d2loginfilter -m hashlimit --hashlimit-upto 1/sec --hashlimit-burst 1 --hashlimit-mode srcip,dstip,dstport --hashlimit-name L4D2RESERVEPROTECT --hashlimit-htable-expire 1000 --hashlimit-htable-max 1048576 -m string --algo bm --string "reserve" -j ACCEPT
+iptables -A l4d2loginfilter -m string --algo bm --string "connect" -m limit --limit 60/min --limit-burst 20 -j LOG --log-prefix "$LOG_PREFIX_L4D2_CONNECT" --log-level 4
+iptables -A l4d2loginfilter -m string --algo bm --string "reserve" -m limit --limit 60/min --limit-burst 20 -j LOG --log-prefix "$LOG_PREFIX_L4D2_RESERVE" --log-level 4
 iptables -A l4d2loginfilter -j DROP
 
 # Allow loopback traffic (local interface)
@@ -614,8 +631,10 @@ if [ "$ENABLE_TCP_PROTECT" = "true" ]; then
     # Then, if TCP_PROTECTION is defined, only block those ports;
     # if not, block all TCP to game ports
     if [ -n "$TCP_PROTECTION" ]; then
+        iptables -A INPUT -p tcp -m multiport --dports $TCP_PROTECTION -m limit --limit 60/min --limit-burst 20 -j LOG --log-prefix "$LOG_PREFIX_TCP_RCON_BLOCK" --log-level 4
         iptables -A INPUT -p tcp -m multiport --dports $TCP_PROTECTION -j DROP
     else
+        iptables -A INPUT -p tcp -m multiport --dports $GAMESERVERPORTS -m limit --limit 60/min --limit-burst 20 -j LOG --log-prefix "$LOG_PREFIX_TCP_RCON_BLOCK" --log-level 4
         iptables -A INPUT -p tcp -m multiport --dports $GAMESERVERPORTS -j DROP
     fi
     
@@ -623,8 +642,10 @@ if [ "$ENABLE_TCP_PROTECT" = "true" ]; then
     if [ $TYPECHAIN -eq 1 ] || [ $TYPECHAIN -eq 2 ]; then
         # Note: WHITELISTED_IPS already have complete system access from above rules
         if [ -n "$TCP_PROTECTION" ]; then
+            iptables -A DOCKER -p tcp -m multiport --dports $TCP_PROTECTION -m limit --limit 60/min --limit-burst 20 -j LOG --log-prefix "$LOG_PREFIX_TCP_RCON_BLOCK" --log-level 4
             iptables -A DOCKER -p tcp -m multiport --dports $TCP_PROTECTION -j DROP
         else
+            iptables -A DOCKER -p tcp -m multiport --dports $GAMESERVERPORTS -m limit --limit 60/min --limit-burst 20 -j LOG --log-prefix "$LOG_PREFIX_TCP_RCON_BLOCK" --log-level 4
             iptables -A DOCKER -p tcp -m multiport --dports $GAMESERVERPORTS -j DROP
         fi
     fi
@@ -682,9 +703,13 @@ fi
 # ICMP (ping) protection with anti-flood rate-limiting
 if [ $TYPECHAIN -eq 0 ] || [ $TYPECHAIN -eq 2 ]; then
     iptables -A INPUT -p icmp -m hashlimit --hashlimit-upto 20/sec --hashlimit-burst 2 --hashlimit-mode dstip --hashlimit-name PINGPROTECT --hashlimit-htable-expire 1000 --hashlimit-htable-max 1048576 -j ACCEPT
+    iptables -A INPUT -p icmp -m limit --limit 30/min --limit-burst 10 -j LOG --log-prefix "$LOG_PREFIX_ICMP_FLOOD" --log-level 4
+    iptables -A INPUT -p icmp -j DROP
 fi
 if [ $TYPECHAIN -eq 1 ] || [ $TYPECHAIN -eq 2 ]; then
     iptables -A DOCKER -p icmp -m hashlimit --hashlimit-upto 20/sec --hashlimit-burst 2 --hashlimit-mode dstip --hashlimit-name PINGPROTECT --hashlimit-htable-expire 1000 --hashlimit-htable-max 1048576 -j ACCEPT
+    iptables -A DOCKER -p icmp -m limit --limit 30/min --limit-burst 10 -j LOG --log-prefix "$LOG_PREFIX_ICMP_FLOOD" --log-level 4
+    iptables -A DOCKER -p icmp -j DROP
 fi
 
 # Allow SSH access for server administration
