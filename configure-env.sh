@@ -17,7 +17,7 @@ ask() {
 
 echo "=== L4D2 Env Wizard (MVP) ==="
 
-typechain="$(ask "TYPECHAIN (0=input, 1=docker, 2=both)" "0")"
+typechain="$(ask "TYPECHAIN (0=input, 1=docker-user, 2=both)" "0")"
 game_ports="$(ask "GAMESERVERPORTS (ej: 27015 o 27015:27020)" "27015")"
 tv_ports="$(ask "TVSERVERPORTS (ej: 27020 o 27115:27120)" "27020")"
 cmd_limit="$(ask "CMD_LIMIT" "100")"
