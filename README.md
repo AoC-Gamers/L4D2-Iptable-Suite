@@ -337,6 +337,7 @@ sudo logrotate -f /etc/logrotate.d/l4d2-iptables
 - **[📖 venv.loggin.sh](docs/venv.loggin.md)** - Guía del gestor de entorno virtual
 - **[📋 example.env](example.env)** - Archivo de configuración de ejemplo  
 - **[📊 summary_example/](summary_example/)** - Ejemplos de reportes JSON
+- **[📚 Documentación de Módulos](docs/modules/README.md)** - Índice con descripciones breves de cada módulo
 
 ## 🤝 Créditos y Reconocimientos
 
