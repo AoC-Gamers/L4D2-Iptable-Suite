@@ -12,10 +12,14 @@ run_preload() {
     declare -gA CLI_SET_VARS
     declare -ga PRELOAD_ONLY_MODULES
     declare -ga PRELOAD_SKIP_MODULES
+    declare -ga PRELOAD_ENV_ONLY_MODULES
+    declare -ga PRELOAD_ENV_SKIP_MODULES
     declare -ga PRELOAD_EXTRA_ARGS
     CLI_SET_VARS=()
     PRELOAD_ONLY_MODULES=()
     PRELOAD_SKIP_MODULES=()
+    PRELOAD_ENV_ONLY_MODULES=()
+    PRELOAD_ENV_SKIP_MODULES=()
     PRELOAD_EXTRA_ARGS=()
 
     while [ "$#" -gt 0 ]; do
@@ -89,6 +93,40 @@ run_preload() {
     for var_name in "${!CLI_SET_VARS[@]}"; do
         export "$var_name=${CLI_SET_VARS[$var_name]}"
     done
+
+    # MODULES_ONLY supports comma-separated module IDs, e.g.:
+    # MODULES_ONLY="ip_chain_setup,ip_udp_base"
+    # It is merged with --only entries.
+    local modules_only_raw="${MODULES_ONLY:-}"
+    if [ -n "$modules_only_raw" ]; then
+        local item trimmed
+        IFS=',' read -r -a _only_items <<< "$modules_only_raw"
+        for item in "${_only_items[@]}"; do
+            trimmed="$item"
+            trimmed="${trimmed#"${trimmed%%[![:space:]]*}"}"
+            trimmed="${trimmed%"${trimmed##*[![:space:]]}"}"
+            [ -z "$trimmed" ] && continue
+            PRELOAD_ENV_ONLY_MODULES+=("$trimmed")
+            PRELOAD_ONLY_MODULES+=("$trimmed")
+        done
+    fi
+
+    # MODULES_EXCLUDE supports comma-separated module IDs, e.g.:
+    # MODULES_EXCLUDE="ip_openvpn,ip_a2s_filters,nf_openvpn"
+    # It is merged with --skip entries.
+    local modules_exclude_raw="${MODULES_EXCLUDE:-}"
+    if [ -n "$modules_exclude_raw" ]; then
+        local item trimmed
+        IFS=',' read -r -a _exclude_items <<< "$modules_exclude_raw"
+        for item in "${_exclude_items[@]}"; do
+            trimmed="$item"
+            trimmed="${trimmed#"${trimmed%%[![:space:]]*}"}"
+            trimmed="${trimmed%"${trimmed##*[![:space:]]}"}"
+            [ -z "$trimmed" ] && continue
+            PRELOAD_ENV_SKIP_MODULES+=("$trimmed")
+            PRELOAD_SKIP_MODULES+=("$trimmed")
+        done
+    fi
 
     [ "$PRELOAD_VERBOSE" = "true" ] && echo "INFO: Preload ready for backend: $backend"
     return 0

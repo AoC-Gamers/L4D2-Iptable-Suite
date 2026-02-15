@@ -205,6 +205,8 @@ Sugerencia para CLI uniforme:
 Reglas:
 - --set siempre sobrescribe .env.
 - --only y --skip filtran después de descubrir módulos.
+- `MODULES_ONLY` (CSV en `.env`) también permite módulos y se combina con `--only`.
+- `MODULES_EXCLUDE` (CSV en `.env`) también excluye módulos y se combina con `--skip`.
 - --dry-run ejecuta metadata + validate, pero no apply.
 - Ambos entrypoints (`iptables.rules.sh` y `nftables.rules.sh`) ejecutan modo modular por defecto.
 
