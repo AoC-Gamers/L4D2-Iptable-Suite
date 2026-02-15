@@ -3,7 +3,7 @@
 ip_00_chain_setup_metadata() {
     cat << 'EOF'
 ID=ip_chain_setup
-DESCRIPTION=Inicializa limpieza, politicas base y cadenas necesarias para iptables
+DESCRIPTION=Sets up cleanup, base policies, and required chains for the iptables backend
 REQUIRED_VARS=TYPECHAIN DOCKER_INPUT_COMPAT DOCKER_CHAIN_AUTORECOVER ENABLE_TCP_PROTECT
 OPTIONAL_VARS=TCP_PROTECTION TCP_DOCKER
 DEFAULTS=TYPECHAIN=0 DOCKER_INPUT_COMPAT=false DOCKER_CHAIN_AUTORECOVER=true ENABLE_TCP_PROTECT=true TCP_PROTECTION= TCP_DOCKER=

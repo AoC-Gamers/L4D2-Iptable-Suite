@@ -6,7 +6,7 @@
 nf_10_whitelist_metadata() {
     cat << 'EOF'
 ID=nf_whitelist
-DESCRIPTION=Permite trafico completo de IPs confiables en nftables
+DESCRIPTION=Allows full traffic from trusted IPs in the nftables backend
 REQUIRED_VARS=TYPECHAIN
 OPTIONAL_VARS=WHITELISTED_IPS
 DEFAULTS=TYPECHAIN=0 WHITELISTED_IPS=

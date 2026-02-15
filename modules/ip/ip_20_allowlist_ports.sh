@@ -9,7 +9,7 @@ ip_20_allowlist_ports_add_first() {
 ip_20_allowlist_ports_metadata() {
     cat << 'EOF'
 ID=ip_allowlist_ports
-DESCRIPTION=Permite puertos extra UDP/TCP de forma directa via multiport
+DESCRIPTION=Allows additional UDP/TCP ports directly through multiport
 REQUIRED_VARS=TYPECHAIN
 OPTIONAL_VARS=UDP_ALLOW_PORTS TCP_ALLOW_PORTS
 DEFAULTS=TYPECHAIN=0 UDP_ALLOW_PORTS= TCP_ALLOW_PORTS=

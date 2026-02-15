@@ -3,7 +3,7 @@
 ip_35_tcpfilter_chain_metadata() {
     cat << 'EOF'
 ID=ip_tcpfilter_chain
-DESCRIPTION=Configura la cadena TCPfilter para control de nuevas conexiones TCP
+DESCRIPTION=Sets up the TCPfilter chain to control new TCP connections
 REQUIRED_VARS=ENABLE_TCP_PROTECT LOG_PREFIX_TCP_RCON_BLOCK
 OPTIONAL_VARS=TCP_PROTECTION TCP_DOCKER
 DEFAULTS=ENABLE_TCP_PROTECT=true LOG_PREFIX_TCP_RCON_BLOCK=TCP_RCON_BLOCK: TCP_PROTECTION= TCP_DOCKER=

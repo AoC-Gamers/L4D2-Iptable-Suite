@@ -3,7 +3,7 @@
 nf_99_finalize_metadata() {
     cat << 'EOF'
 ID=nf_finalize
-DESCRIPTION=Resumen final de aplicacion nftables
+DESCRIPTION=Applies final policies and prints a summary for the nftables backend
 REQUIRED_VARS=TYPECHAIN
 OPTIONAL_VARS=ENABLE_TCP_PROTECT TVSERVERPORTS
 DEFAULTS=TYPECHAIN=0 ENABLE_TCP_PROTECT=true TVSERVERPORTS=27020
