@@ -23,6 +23,21 @@ ip_50_udp_base_validate() {
         echo "ERROR: ip_udp_base: CMD_LIMIT must be numeric"
         return 2
     fi
+
+    if [ "$CMD_LIMIT" -lt 10 ] || [ "$CMD_LIMIT" -gt 10000 ]; then
+        echo "ERROR: ip_udp_base: CMD_LIMIT must be between 10 and 10000"
+        return 2
+    fi
+
+    if [ -n "${GAMESERVERPORTS:-}" ] && ! [[ "${GAMESERVERPORTS}" =~ ^[0-9]+(:[0-9]+)?(,[0-9]+(:[0-9]+)?)*$ ]]; then
+        echo "ERROR: ip_udp_base: invalid GAMESERVERPORTS format"
+        return 2
+    fi
+
+    if [ -n "${TVSERVERPORTS:-}" ] && ! [[ "${TVSERVERPORTS}" =~ ^[0-9]+(:[0-9]+)?(,[0-9]+(:[0-9]+)?)*$ ]]; then
+        echo "ERROR: ip_udp_base: invalid TVSERVERPORTS format"
+        return 2
+    fi
 }
 
 ip_50_udp_base_apply() {

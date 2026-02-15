@@ -116,6 +116,12 @@ TCP_ALLOW_PORTS=""
 Nota Docker: esta suite usa una cadena `DOCKER` propia en `filter`. Si deseas engancharte al flujo estandar de Docker, puedes adaptar las reglas a `DOCKER-USER`.
 ```
 
+Asistente rápido de configuración (`.env` guiado):
+
+```bash
+./configure-env.sh
+```
+
 > ⚠️ **ADVERTENCIA**: Las IPs en `WHITELISTED_IPS` tendrán acceso **completo e irrestricto** a toda la máquina (SSH, Web, Bases de datos, APIs, etc.). Usar solo para administradores e IPs absolutamente confiables.
 
 ## 🛠️ Herramientas Incluidas
@@ -185,6 +191,19 @@ Available options:
 ```
 
 **📖 [Documentación Completa](docs/venv.loggin.md)**
+
+---
+
+### 5. Tooling de Modularidad
+
+- **Smoke tests modulares**: `tests/smoke-modules.sh`
+  - Verifica contrato mínimo por módulo y ejecuta `--dry-run` de ambos backends si hay privilegios/dependencias.
+
+Comando rápido:
+
+```bash
+./tests/smoke-modules.sh
+```
 
 ---
 

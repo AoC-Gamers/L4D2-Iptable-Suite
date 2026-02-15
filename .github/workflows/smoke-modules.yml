@@ -1,0 +1,29 @@
+name: Smoke Modules
+
+on:
+  push:
+    branches:
+      - main
+      - master
+      - develop
+      - feature/**
+  pull_request:
+    branches:
+      - main
+      - master
+      - develop
+  workflow_dispatch:
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Ensure script is executable
+        run: chmod +x tests/smoke-modules.sh
+
+      - name: Run modular smoke tests
+        run: ./tests/smoke-modules.sh

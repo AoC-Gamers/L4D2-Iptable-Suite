@@ -36,7 +36,16 @@ nf_add_rule() {
 
 nf_ports_normalize() {
     local raw="$1"
-    local value="${raw// /}"
+    local value="$raw"
+    value="${value//;/,}"
+    value="${value// /}"
+    value="${value//$'\t'/}"
+    value="${value//$'\n'/}"
+    while [[ "$value" == *",,"* ]]; do
+        value="${value//,,/,}"
+    done
+    value="${value#,}"
+    value="${value%,}"
     value="${value//:/-}"
     echo "$value"
 }
@@ -45,4 +54,44 @@ nf_ports_set_expr() {
     local normalized
     normalized="$(nf_ports_normalize "$1")"
     echo "{ $normalized }"
+}
+
+nf_validate_ports_spec() {
+    local raw="$1"
+    local label="$2"
+    local normalized
+    local item start end
+
+    normalized="$(nf_ports_normalize "$raw")"
+
+    if [ -z "$normalized" ]; then
+        return 0
+    fi
+
+    if ! [[ "$normalized" =~ ^[0-9]+(-[0-9]+)?(,[0-9]+(-[0-9]+)?)*$ ]]; then
+        echo "ERROR: ${label}: invalid port expression '$raw'"
+        return 2
+    fi
+
+    IFS=',' read -r -a _nf_items <<< "$normalized"
+    for item in "${_nf_items[@]}"; do
+        if [[ "$item" == *"-"* ]]; then
+            start="${item%-*}"
+            end="${item#*-}"
+            if [ "$start" -gt "$end" ]; then
+                echo "ERROR: ${label}: invalid range '$item' (start > end)"
+                return 2
+            fi
+        else
+            start="$item"
+            end="$item"
+        fi
+
+        if [ "$start" -lt 1 ] || [ "$end" -gt 65535 ]; then
+            echo "ERROR: ${label}: ports must be in range 1-65535 ('$item')"
+            return 2
+        fi
+    done
+
+    return 0
 }

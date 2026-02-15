@@ -21,6 +21,14 @@ nf_20_allowlist_ports_validate() {
             return 2
             ;;
     esac
+
+    if [ -n "${UDP_ALLOW_PORTS:-}" ]; then
+        nf_validate_ports_spec "$UDP_ALLOW_PORTS" "nf_allowlist_ports: UDP_ALLOW_PORTS" || return $?
+    fi
+
+    if [ -n "${TCP_ALLOW_PORTS:-}" ]; then
+        nf_validate_ports_spec "$TCP_ALLOW_PORTS" "nf_allowlist_ports: TCP_ALLOW_PORTS" || return $?
+    fi
 }
 
 nf_20_allowlist_ports_apply() {

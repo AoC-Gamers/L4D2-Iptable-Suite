@@ -22,7 +22,7 @@ ip_99_finalize_validate() {
 
 ip_99_finalize_apply() {
     iptables -A INPUT -j DROP
-    if [ "${DOCKER_COMPAT_INPUT_MODE:-false}" != "true" ]; then
+    if [ "${DOCKER_INPUT_COMPAT:-false}" != "true" ]; then
         iptables -A FORWARD -j DROP
     fi
     iptables -A OUTPUT -j ACCEPT

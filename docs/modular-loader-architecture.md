@@ -313,11 +313,22 @@ Esperado:
 - Carga de módulos sin errores de `REQUIRED_VARS`.
 - Resumen en `postload` con módulos ejecutados/omitidos.
 
+### 1.1) Smoke test automatizado
+
+```bash
+./tests/smoke-modules.sh
+```
+
+Incluye:
+- Validación del contrato por módulo (`*_metadata`, `*_validate`, `*_apply`).
+- `dry-run` de ambos backends cuando el entorno tiene root + binarios disponibles.
+
 ### 2) Aplicación real por backend
 
 ```bash
 sudo ./iptables.rules.sh
 sudo ./nftables.rules.sh
+
 ```
 
 Esperado:

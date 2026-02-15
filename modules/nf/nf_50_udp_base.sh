@@ -26,6 +26,14 @@ nf_50_udp_base_validate() {
         echo "ERROR: nf_udp_base: CMD_LIMIT must be numeric"
         return 2
     fi
+
+    if [ "$CMD_LIMIT" -lt 10 ] || [ "$CMD_LIMIT" -gt 10000 ]; then
+        echo "ERROR: nf_udp_base: CMD_LIMIT must be between 10 and 10000"
+        return 2
+    fi
+
+    nf_validate_ports_spec "$GAMESERVERPORTS" "nf_udp_base: GAMESERVERPORTS" || return $?
+    nf_validate_ports_spec "$TVSERVERPORTS" "nf_udp_base: TVSERVERPORTS" || return $?
 }
 
 nf_50_udp_base_apply() {

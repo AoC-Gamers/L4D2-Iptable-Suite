@@ -77,6 +77,7 @@ from collections import defaultdict
 
 TIME_FORMAT = "%H:%M:%S"
 ISO_TIMESTAMP_FORMAT = "%Y-%m-%dT%H:%M:%S"
+ANALYSIS_YEAR = None
 
 # Default values - will be overridden by .env file
 LOGFILE = "/var/log/l4d2-iptables.log"
@@ -123,13 +124,26 @@ def expand_ports(port_string):
     ports = []
     if not port_string:
         return ports
-    for part in port_string.split(','):
+
+    chunks = [chunk.strip() for chunk in re.split(r"[\s,;]+", str(port_string)) if chunk.strip()]
+    for part in chunks:
         if ':' in part:
-            start, end = map(int, part.split(':'))
+            bounds = part.split(':', 1)
+            if len(bounds) != 2:
+                raise ValueError(f"Invalid port range format: {part}")
+            start, end = map(int, bounds)
+            if start > end:
+                raise ValueError(f"Invalid port range (start > end): {part}")
+            if start < 1 or end > 65535:
+                raise ValueError(f"Port range out of bounds (1-65535): {part}")
             ports.extend(range(start, end + 1))
         else:
-            ports.append(int(part))
-    return ports
+            port = int(part)
+            if port < 1 or port > 65535:
+                raise ValueError(f"Port out of bounds (1-65535): {part}")
+            ports.append(port)
+
+    return sorted(set(ports))
 
 def classify_port(port, game_ports, tv_ports):
     if port in game_ports:
@@ -139,7 +153,7 @@ def classify_port(port, game_ports, tv_ports):
     else:
         return "Other"
 
-def parse_log(log_path, game_ports, tv_ports):
+def parse_log(log_path, game_ports, tv_ports, year_hint=None):
     """Parse log file and extract attack information with timestamps"""
     ip_re = re.compile(r'SRC=(\S+)')
     port_re = re.compile(r'DPT=(\d+)')
@@ -147,6 +161,8 @@ def parse_log(log_path, game_ports, tv_ports):
     timestamp_re = re.compile(r'^(\w+\s+\d+\s+\d+:\d+:\d+)')
     
     entries = []
+    active_year = year_hint if year_hint is not None else datetime.now().year
+    last_timestamp = None
     
     with open(log_path, "r") as f:
         for line in f:
@@ -159,14 +175,22 @@ def parse_log(log_path, game_ports, tv_ports):
             
             # Parse timestamp and extract date/time components
             try:
-                # Add year to timestamp (assuming current year)
-                current_year = datetime.now().year
-                full_timestamp = f"{current_year} {timestamp_str}"
+                full_timestamp = f"{active_year} {timestamp_str}"
                 dt = datetime.strptime(full_timestamp, "%Y %b %d %H:%M:%S")
+
+                # Handle year rollover automatically (Dec -> Jan) when no explicit year is provided.
+                if year_hint is None and last_timestamp is not None:
+                    if dt < last_timestamp and last_timestamp.month == 12 and dt.month == 1:
+                        active_year += 1
+                        full_timestamp = f"{active_year} {timestamp_str}"
+                        dt = datetime.strptime(full_timestamp, "%Y %b %d %H:%M:%S")
+
                 fecha = dt.strftime("%Y-%m-%d")
                 hora = dt.strftime("%H:%M:%S")
             except ValueError:
                 continue
+
+            last_timestamp = dt
             
             ip = ip_re.search(line)
             port = port_re.search(line)
@@ -669,9 +693,14 @@ def run_analysis(env_file):
         return
 
     print(f"INFO: Reading logs from: {LOGFILE}")
-    game_ports = expand_ports(os.getenv("GAMESERVERPORTS", ""))
-    tv_ports = expand_ports(os.getenv("TVSERVERPORTS", ""))
-    df = parse_log(LOGFILE, game_ports, tv_ports)
+    try:
+        game_ports = expand_ports(os.getenv("GAMESERVERPORTS", ""))
+        tv_ports = expand_ports(os.getenv("TVSERVERPORTS", ""))
+    except ValueError as e:
+        print(f"ERROR: Invalid port configuration in .env: {e}")
+        return
+
+    df = parse_log(LOGFILE, game_ports, tv_ports, year_hint=ANALYSIS_YEAR)
     
     if df.empty:
         print("WARNING: No events found in log file")
@@ -797,6 +826,17 @@ if __name__ == "__main__":
         default=".env",
         help="Path to .env file (default: .env in current directory)"
     )
+    parser.add_argument(
+        "--year",
+        type=int,
+        default=None,
+        help="Force year for syslog timestamps (default: auto with Dec->Jan rollover handling)"
+    )
     args = parser.parse_args()
+
+    ANALYSIS_YEAR = args.year
+    if ANALYSIS_YEAR is not None and (ANALYSIS_YEAR < 1970 or ANALYSIS_YEAR > 2100):
+        print("ERROR: --year must be between 1970 and 2100")
+        exit(2)
 
     main_menu(args.env_file)
