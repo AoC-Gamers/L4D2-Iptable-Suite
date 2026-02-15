@@ -18,6 +18,7 @@
 ## 📋 Características Principales
 
 - 🛡️ **Protección Avanzada DDoS**: Mitigación específica contra ataques comunes a servidores L4D2
+- ⚖️ **Doble Backend**: Soporte modular para `iptables` (legacy) y `nftables` (modern)
 - 🐳 **Soporte Docker**: Compatibilidad completa con servidores nativos y contenedores
 - 🔐 **Soporte OpenVPN**: Acceso remoto seguro (host o Docker) sin afectar reglas de juego
 - 📊 **Sistema de Logging**: Análisis detallado de ataques con reportes JSON comprehensivos
@@ -46,6 +47,9 @@ nano .env  # Ajustar configuración según tu servidor
 
 # 3. Aplicar reglas de iptables
 sudo ./iptables.rules.sh
+
+# 3b. (Opcional) Aplicar reglas con backend nftables
+sudo ./nftables.rules.sh
 
 # 4. Hacer reglas persistentes
 sudo ./ipp.sh
@@ -123,6 +127,16 @@ Script principal que implementa reglas avanzadas de iptables específicamente di
 Soporta configuración flexible para servidores nativos, contenedores Docker o configuraciones híbridas mediante variables de entorno.
 
 **📖 [Documentación Completa](docs/iptables.rules.md)**
+
+---
+
+### 1b. `nftables.rules.sh` - Backend Moderno
+
+Entrypoint equivalente para aplicar protección usando `nftables` con la misma filosofía modular y configuración compartida por `.env`.
+
+Ideal para entornos modernos que ya operan con reglas `nft` y desean mantener paridad funcional con el flujo legacy.
+
+**📖 [Arquitectura Modular](docs/modular-loader-architecture.md)**
 
 ---
 
@@ -234,6 +248,28 @@ El sistema identifica y mitiga los siguientes patrones de ataque:
 
 ## 📈 Flujo de Trabajo Recomendado
 
+### Backends de Firewall
+
+```bash
+# Legacy (iptables)
+sudo ./iptables.rules.sh
+
+# Modern (nftables)
+sudo ./nftables.rules.sh
+```
+
+### Estructura modular actual
+
+```text
+modules/
+├─ common_loader.sh
+├─ preload.sh
+├─ postload.sh
+├─ common_nft.sh
+├─ ip/   # módulos ip_*.sh
+└─ nf/   # módulos nf_*.sh
+```
+
 ### 1. Instalación Inicial
 ```bash
 # Configurar reglas básicas
@@ -275,6 +311,8 @@ sudo logrotate -f /etc/logrotate.d/l4d2-iptables
 ## 📚 Documentación Completa
 
 - **[📖 iptables.rules.sh](docs/iptables.rules.md)** - Documentación técnica del motor de protección
+- **[📖 nftables.rules.sh](docs/modular-loader-architecture.md)** - Arquitectura y operación del backend moderno
+- **[📖 Arquitectura Modular](docs/modular-loader-architecture.md)** - Contrato de módulos, paridad y validación
 - **[📖 ipp.sh](docs/ipp.md)** - Guía del gestor de persistencia
 - **[📖 iptable.loggin.py](docs/iptable.loggin.md)** - Manual del sistema de análisis
 - **[📖 venv.loggin.sh](docs/venv.loggin.md)** - Guía del gestor de entorno virtual

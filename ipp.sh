@@ -2,7 +2,7 @@
 set -euo pipefail
 
 if [ "$(id -u)" -ne 0 ]; then
-    echo "❌ This script must be run as root or with sudo."
+    echo "ERROR: This script must be run as root or with sudo."
     exit 1
 fi
 
@@ -35,7 +35,7 @@ show_menu() {
 
 # Function to install iptables-persistent
 install_persistent() {
-    echo "🔄 Installing iptables-persistent..."
+    echo "INFO: Installing iptables-persistent..."
     
     # Pre-configure debconf to avoid interactive prompts
     echo iptables-persistent iptables-persistent/autosave_v4 boolean true | debconf-set-selections
@@ -50,31 +50,31 @@ install_persistent() {
     # Ensure the directory exists
     mkdir -p "$DIR_IPTABLES"
     
-    echo "✅ iptables-persistent installed successfully"
-    echo "📝 IPv6 support disabled (rules.v6 removed)"
+    echo "OK: iptables-persistent installed successfully"
+    echo "INFO: IPv6 support disabled (rules.v6 removed)"
 }
 
 # Function to remove iptables-persistent
 remove_persistent() {
-    echo "🔄 Removing iptables-persistent..."
+    echo "INFO: Removing iptables-persistent..."
     apt-get purge -y iptables-persistent
-    echo "✅ iptables-persistent removed successfully"
+    echo "OK: iptables-persistent removed successfully"
 }
 
 # Function to show current rules
 show_rules() {
-    echo "📋 Current iptables rules:"
+    echo "INFO: Current iptables rules:"
     echo "=========================="
     iptables -L -n -v --line-numbers
     echo ""
-    echo "📋 NAT table rules:"
+    echo "INFO: NAT table rules:"
     echo "=================="
     iptables -t nat -L -n -v --line-numbers
 }
 
 # Function to clear all rules
 clear_rules() {
-    echo "🧹 Clearing all iptables rules..."
+    echo "INFO: Clearing all iptables rules..."
     
     # Set default policies to ACCEPT
     iptables -P INPUT ACCEPT
@@ -89,12 +89,12 @@ clear_rules() {
     iptables -t mangle -F
     iptables -t mangle -X
     
-    echo "✅ All iptables rules cleared"
+    echo "OK: All iptables rules cleared"
 }
 
 # Function to save current rules
 save_rules() {
-    echo "💾 Saving current iptables rules..."
+    echo "INFO: Saving current iptables rules..."
     
     # Ensure directory exists
     mkdir -p "$DIR_IPTABLES"
@@ -105,67 +105,67 @@ save_rules() {
     # Set proper permissions
     chmod 644 "$DIR_IPTABLES/rules.v4"
     
-    echo "✅ Rules saved to $DIR_IPTABLES/rules.v4"
-    echo "📊 Total rules saved: $(grep -c '^-A' "$DIR_IPTABLES/rules.v4" 2>/dev/null || echo 0)"
+    echo "OK: Rules saved to $DIR_IPTABLES/rules.v4"
+    echo "INFO: Total rules saved: $(grep -c '^-A' "$DIR_IPTABLES/rules.v4" 2>/dev/null || echo 0)"
 }
 
 # Function to show saved rules
 show_saved_rules() {
     if [ -f "$DIR_IPTABLES/rules.v4" ]; then
-        echo "📋 Saved iptables rules from $DIR_IPTABLES/rules.v4:"
+        echo "INFO: Saved iptables rules from $DIR_IPTABLES/rules.v4:"
         echo "============================================="
         less "$DIR_IPTABLES/rules.v4"
     else
-        echo "❌ No saved rules file found at $DIR_IPTABLES/rules.v4"
-        echo "💡 Use option 5 to save current rules first"
+        echo "ERROR: No saved rules file found at $DIR_IPTABLES/rules.v4"
+        echo "INFO: Use option 5 to save current rules first"
     fi
 }
 
 # Function to clear saved rules
 clear_saved_rules() {
     if [ -f "$DIR_IPTABLES/rules.v4" ]; then
-        echo "🗑️  Clearing saved rules file..."
+        echo "INFO: Clearing saved rules file..."
         > "$DIR_IPTABLES/rules.v4"
-        echo "✅ Saved rules file cleared"
+        echo "OK: Saved rules file cleared"
     else
-        echo "⚠️  No saved rules file found at $DIR_IPTABLES/rules.v4"
+        echo "WARNING: No saved rules file found at $DIR_IPTABLES/rules.v4"
     fi
 }
 
 # Function to reload saved rules
 reload_rules() {
     if [ -f "$DIR_IPTABLES/rules.v4" ]; then
-        echo "🔄 Reloading saved iptables rules..."
+        echo "INFO: Reloading saved iptables rules..."
         iptables-restore < "$DIR_IPTABLES/rules.v4"
-        echo "✅ Rules reloaded successfully"
+        echo "OK: Rules reloaded successfully"
     else
-        echo "❌ No saved rules file found at $DIR_IPTABLES/rules.v4"
-        echo "💡 Use option 5 to save current rules first"
+        echo "ERROR: No saved rules file found at $DIR_IPTABLES/rules.v4"
+        echo "INFO: Use option 5 to save current rules first"
     fi
 }
 
 # Function to show service status
 show_status() {
-    echo "📊 IPTables service status:"
+    echo "INFO: IPTables service status:"
     echo "=========================="
     
     # Check if iptables-persistent is installed
     if dpkg -l | grep -q iptables-persistent; then
-        echo "✅ iptables-persistent: INSTALLED"
+        echo "OK: iptables-persistent: INSTALLED"
     else
-        echo "❌ iptables-persistent: NOT INSTALLED"
+        echo "ERROR: iptables-persistent: NOT INSTALLED"
     fi
     
     # Check if rules file exists
     if [ -f "$DIR_IPTABLES/rules.v4" ]; then
-        echo "✅ Rules file: EXISTS ($DIR_IPTABLES/rules.v4)"
-        echo "📊 Total saved rules: $(grep -c '^-A' "$DIR_IPTABLES/rules.v4" 2>/dev/null || echo 0)"
+        echo "OK: Rules file: EXISTS ($DIR_IPTABLES/rules.v4)"
+        echo "INFO: Total saved rules: $(grep -c '^-A' "$DIR_IPTABLES/rules.v4" 2>/dev/null || echo 0)"
     else
-        echo "❌ Rules file: NOT FOUND"
+        echo "ERROR: Rules file: NOT FOUND"
     fi
     
     # Show current rule count
-    echo "📊 Current active rules: $(iptables -S | wc -l)"
+    echo "INFO: Current active rules: $(iptables -S | wc -l)"
 }
 
 # Main menu loop
@@ -184,12 +184,12 @@ while true; do
             show_rules
             ;;
         4)
-            echo "⚠️  This will clear ALL iptables rules. Continue? [y/N]"
+            echo "WARNING: This will clear ALL iptables rules. Continue? [y/N]"
             read -r confirm
             if [[ $confirm =~ ^[Yy]$ ]]; then
                 clear_rules
             else
-                echo "❌ Operation cancelled"
+                echo "ERROR: Operation cancelled"
             fi
             ;;
         5)
@@ -199,12 +199,12 @@ while true; do
             show_saved_rules
             ;;
         7)
-            echo "⚠️  This will clear the saved rules file. Continue? [y/N]"
+            echo "WARNING: This will clear the saved rules file. Continue? [y/N]"
             read -r confirm
             if [[ $confirm =~ ^[Yy]$ ]]; then
                 clear_saved_rules
             else
-                echo "❌ Operation cancelled"
+                echo "ERROR: Operation cancelled"
             fi
             ;;
         8)
@@ -214,11 +214,11 @@ while true; do
             show_status
             ;;
         0)
-            echo "👋 Exiting..."
+            echo "EXIT: Exiting..."
             break
             ;;
         *)
-            echo "❌ Invalid option. Please select 0-9."
+            echo "ERROR: Invalid option. Please select 0-9."
             ;;
     esac
     

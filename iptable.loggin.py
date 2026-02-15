@@ -103,7 +103,7 @@ def load_config(env_file):
     global LOGFILE, RSYSLOG_CONF, LOG_PREFIXES
     
     if not os.path.exists(env_file):
-        print(f"❌ .env file not found: {env_file}")
+        print(f"ERROR: .env file not found: {env_file}")
         return False
     
     load_dotenv(dotenv_path=env_file)
@@ -548,7 +548,7 @@ def menu_analysis_options():
     if choice == "8":
         return None, None
     elif choice not in ["1", "2", "3", "4", "5", "6", "7"]:
-        print("❌ Invalid option")
+        print("ERROR: Invalid option")
         return None, None
     
     if choice == "7":
@@ -587,11 +587,11 @@ def generate_all_reports(df):
     
     generated_files = []
     
-    print("🔄 Generating all analysis reports...")
+    print("INFO: Generating all analysis reports...")
     
     for analysis_type, generator_func in reports.items():
         try:
-            print(f"  📊 Generating {analysis_type} analysis...")
+            print(f"  INFO: Generating {analysis_type} analysis...")
             
             # Generate the analysis data
             summary_data = generator_func(df)
@@ -610,10 +610,10 @@ def generate_all_reports(df):
                 'size': os.path.getsize(filepath)
             })
             
-            print(f"    ✅ {filename} created successfully")
+            print(f"    OK: {filename} created successfully")
             
         except Exception as e:
-            print(f"    ❌ Error generating {analysis_type}: {e}")
+            print(f"    ERROR: Error generating {analysis_type}: {e}")
     
     return generated_files
 
@@ -627,62 +627,62 @@ def install_rsyslog_and_config():
     print("[1] Installing rsyslog and creating custom configuration...")
 
     if subprocess.call(["which", "rsyslogd"], stdout=subprocess.DEVNULL) != 0:
-        print("⏳ Installing rsyslog...")
+        print("INFO: Installing rsyslog...")
         subprocess.call(["apt", "update"])
         subprocess.call(["apt", "install", "-y", "rsyslog"])
     else:
-        print("✅ rsyslog is already installed.")
+        print("OK: rsyslog is already installed.")
 
-    print("🛠️ Configuring", RSYSLOG_CONF)
+    print("INFO: Configuring", RSYSLOG_CONF)
     with open(RSYSLOG_CONF, "w") as f:
         for pattern_name, prefix in LOG_PREFIXES.items():
             f.write(f':msg,contains,"{prefix.strip()}"    {LOGFILE}\n')
         f.write("& stop\n")
 
     subprocess.call(["systemctl", "restart", "rsyslog"])
-    print("✅ Installation and configuration completed.")
-    print(f"📝 Optimized configuration: only {len(LOG_PREFIXES)} specific prefixes")
+    print("OK: Installation and configuration completed.")
+    print(f"INFO: Optimized configuration: only {len(LOG_PREFIXES)} specific prefixes")
 
 def verify_permissions():
     user = os.environ.get("SUDO_USER") or os.getlogin()
     print(f"[2] Verifying if '{user}' belongs to 'adm' group...")
     if check_permissions():
-        print(f"✅ User '{user}' belongs to 'adm' and can read logs.")
+        print(f"OK: User '{user}' belongs to 'adm' and can read logs.")
     else:
-        print(f"❌ User '{user}' does NOT belong to 'adm' group.")
+        print(f"ERROR: User '{user}' does NOT belong to 'adm' group.")
 
 def add_permissions():
     user = os.environ.get("SUDO_USER") or os.getlogin()
     print(f"[3] Adding permissions for '{user}'...")
     if check_permissions():
-        print(f"✅ User '{user}' already belongs to 'adm' group. Nothing to do.")
+        print(f"OK: User '{user}' already belongs to 'adm' group. Nothing to do.")
     else:
         subprocess.call(["usermod", "-aG", "adm", user])
-        print("✅ Permissions added. Please log out and log back in for changes to take effect.")
+        print("OK: Permissions added. Please log out and log back in for changes to take effect.")
 
 def run_analysis(env_file):
     if not load_config(env_file):
         return
 
     if not os.path.exists(LOGFILE):
-        print(f"❌ Log file not found: {LOGFILE}")
+        print(f"ERROR: Log file not found: {LOGFILE}")
         return
 
-    print(f"📁 Reading logs from: {LOGFILE}")
+    print(f"INFO: Reading logs from: {LOGFILE}")
     game_ports = expand_ports(os.getenv("GAMESERVERPORTS", ""))
     tv_ports = expand_ports(os.getenv("TVSERVERPORTS", ""))
     df = parse_log(LOGFILE, game_ports, tv_ports)
     
     if df.empty:
-        print("⚠️  No events found in log file")
+        print("WARNING: No events found in log file")
         return
     
-    print(f"📊 Found {len(df)} events from {df['IP'].nunique()} different IPs")
-    print(f"🗓️  Temporal coverage: {df['Date'].nunique()} unique days")
+    print(f"INFO: Found {len(df)} events from {df['IP'].nunique()} different IPs")
+    print(f"INFO: Temporal coverage: {df['Date'].nunique()} unique days")
 
     output_path, analysis_type = menu_analysis_options()
     if not output_path:
-        print("❌ Operation cancelled.")
+        print("ERROR: Operation cancelled.")
         return
 
     if analysis_type == "all":
@@ -690,24 +690,24 @@ def run_analysis(env_file):
         generated_files = generate_all_reports(df)
         
         if generated_files:
-            print("\n✅ All analysis reports generated successfully!")
-            print(f"📂 Location: {os.path.dirname(os.path.abspath(__file__))}")
-            print(f"📊 Summary: {len(generated_files)} files generated")
+            print("\nOK: All analysis reports generated successfully!")
+            print(f"INFO: Location: {os.path.dirname(os.path.abspath(__file__))}")
+            print(f"INFO: Summary: {len(generated_files)} files generated")
             
             # Show detailed summary
             total_size = sum(f['size'] for f in generated_files)
-            print(f"📈 Total data size: {total_size:,} bytes")
+            print(f"INFO: Total data size: {total_size:,} bytes")
             
-            print("\n📋 Generated files:")
+            print("\nINFO: Generated files:")
             for file_info in generated_files:
                 filename = os.path.basename(file_info['file'])
                 size_kb = file_info['size'] / 1024
                 print(f"  • {filename} ({size_kb:.1f} KB)")
         else:
-            print("❌ No files were generated successfully")
+            print("ERROR: No files were generated successfully")
         return
 
-    print(f"🔄 Generating {analysis_type} analysis in JSON format...")
+    print(f"INFO: Generating {analysis_type} analysis in JSON format...")
 
     generators = {
         "by_ip": generate_summary_by_ip,
@@ -738,7 +738,7 @@ def run_analysis(env_file):
 
     generator = generators.get(analysis_type)
     if not generator:
-        print("❌ Unknown analysis type")
+        print("ERROR: Unknown analysis type")
         return
 
     try:
@@ -748,14 +748,14 @@ def run_analysis(env_file):
         with open(output_path, 'w', encoding='utf-8') as f:
             json.dump(summary_data, f, indent=2, ensure_ascii=False, default=str)
 
-        print(f"✅ Analysis exported successfully to: {output_path}")
-        print(f"📂 Location: {os.path.abspath(output_path)}")
+        print(f"OK: Analysis exported successfully to: {output_path}")
+        print(f"INFO: Location: {os.path.abspath(output_path)}")
         
         # Show quick summary based on analysis type
         count = summary_counts[analysis_type](summary_data)
-        print(f"📈 Summary: {count} {label_map[analysis_type]} analyzed")
+        print(f"INFO: Summary: {count} {label_map[analysis_type]} analyzed")
     except Exception as e:
-        print(f"❌ Error generating analysis: {e}")
+        print(f"ERROR: Error generating analysis: {e}")
 
 
 def main_menu(env_file):
@@ -779,16 +779,16 @@ def main_menu(env_file):
         elif opt == "4":
             run_analysis(env_file)
         elif opt == "5":
-            print("👋 Exiting...")
+            print("EXIT: Exiting...")
             break
         else:
-            print("❌ Invalid option.")
+            print("ERROR: Invalid option.")
 
 
 if __name__ == "__main__":
     if os.geteuid() != 0:
-        print("❌ This script must be run as root or with sudo.")
-        print(f"➡️  Use: sudo {__file__}")
+        print("ERROR: This script must be run as root or with sudo.")
+        print(f"INFO: Use: sudo {__file__}")
         exit(1)
 
     parser = argparse.ArgumentParser(description="L4D2 iptables Log Manager")

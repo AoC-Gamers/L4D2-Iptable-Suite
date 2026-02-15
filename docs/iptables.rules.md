@@ -4,6 +4,7 @@
 
 - [Descripción General](#descripción-general)
 - [Instalación y Configuración](#instalación-y-configuración)
+- [Modelo Modular Actual](#modelo-modular-actual)
 - [Arquitectura del Sistema](#arquitectura-del-sistema)
 - [Detección y Mitigación de Ataques](#detección-y-mitigación-de-ataques)
 - [Algoritmos de Rate Limiting](#algoritmos-de-rate-limiting)
@@ -13,7 +14,9 @@
 
 ## Descripción General
 
-`iptables.rules.sh` es el núcleo de la suite L4D2 IPTables, implementando un sistema avanzado de protección contra ataques DDoS específicamente diseñado para servidores Source Engine. Utiliza técnicas sofisticadas de detección basadas en patrones de paquetes, validación de contenido y algoritmos de rate limiting para mitigar múltiples tipos de ataques.
+`iptables.rules.sh` es el entrypoint del backend legacy (iptables) de la suite L4D2 IPTables. Actualmente ejecuta un loader modular compartido y aplica la lógica de protección cargando módulos desde `modules/ip`.
+
+La protección sigue cubriendo detección por patrones, validación de paquetes y rate limiting para mitigar ataques comunes de Source Engine; la diferencia es que la implementación ahora está separada por módulos en vez de un único script monolítico.
 
 ### Características Técnicas Principales
 
@@ -23,6 +26,41 @@
 - **Separación Funcional**: Diferenciación entre GameServer y SourceTV
 - **Soporte Multi-Cadena**: Protección simultánea INPUT y DOCKER
 - **Logging Categorizado**: Sistema de logs con prefijos específicos por tipo de ataque
+
+## Modelo Modular Actual
+
+El flujo de `iptables.rules.sh` es:
+
+1. Cargar `modules/common_loader.sh`, `modules/preload.sh`, `modules/postload.sh`
+2. Leer configuración (`.env` + `--set KEY=VALUE`)
+3. Descubrir módulos `ip_*.sh` en `modules/ip`
+4. Ejecutar `metadata -> validate -> apply` por módulo
+5. Emitir resumen final en `postload`
+
+### Estructura relevante
+
+```text
+modules/
+├─ common_loader.sh
+├─ preload.sh
+├─ postload.sh
+└─ ip/
+    ├─ ip_00_chain_setup.sh
+    ├─ ip_05_loopback.sh
+    ├─ ip_10_whitelist.sh
+    ├─ ip_20_allowlist_ports.sh
+    ├─ ip_30_openvpn.sh
+    ├─ ip_35_tcpfilter_chain.sh
+    ├─ ip_40_tcp_ssh.sh
+    ├─ ip_50_udp_base.sh
+    ├─ ip_60_packet_validation.sh
+    ├─ ip_70_a2s_filters.sh
+    └─ ip_99_finalize.sh
+```
+
+### Nota de compatibilidad
+
+La lógica técnica de detección/mitigación documentada en este archivo sigue vigente; solo cambió la organización del código (modularización).
 
 ## Instalación y Configuración
 
@@ -141,8 +179,17 @@ iptables -A INPUT -s 10.0.0.5 -j ACCEPT         # TODOS los puertos
 ### Ejecución
 
 ```bash
+# Validación en seco (recomendado)
+sudo ./iptables.rules.sh --dry-run --verbose
+
 # Aplicar reglas (reemplaza configuración anterior)
 sudo ./iptables.rules.sh
+
+# Ejecutar subconjunto de módulos
+sudo ./iptables.rules.sh --only ip_whitelist --only ip_openvpn
+
+# Omitir módulos específicos
+sudo ./iptables.rules.sh --skip ip_openvpn
 
 # Verificar reglas aplicadas
 sudo iptables -L -n -v --line-numbers

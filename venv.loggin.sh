@@ -22,19 +22,19 @@ PYTHON_SCRIPT="iptable.loggin.py"
 
 # Function to display colored messages
 print_success() {
-    echo -e "${GREEN}✅ $1${NC}"
+    echo -e "${GREEN}OK: $1${NC}"
 }
 
 print_error() {
-    echo -e "${RED}❌ $1${NC}"
+    echo -e "${RED}ERROR: $1${NC}"
 }
 
 print_warning() {
-    echo -e "${YELLOW}⚠️  $1${NC}"
+    echo -e "${YELLOW}WARNING: $1${NC}"
 }
 
 print_info() {
-    echo -e "${BLUE}ℹ️  $1${NC}"
+    echo -e "${BLUE}INFO: $1${NC}"
 }
 
 print_header() {
@@ -541,14 +541,14 @@ show_menu() {
     echo ""
     echo "Available options:"
     echo ""
-    echo "  1. 🔧 Install virtual environment"
-    echo "  2. ▶️  Activate virtual environment"
-    echo "  3. ⏹️  Deactivate virtual environment"
-    echo "  4. 📊 Check environment status"
-    echo "  5. 🔄 Reinstall dependencies"
-    echo "  6. 🐍 Run iptable.loggin.py script"
-    echo "  7. ❓ Help"
-    echo "  8. 🚪 Exit"
+    echo "  1.  Install virtual environment"
+    echo "  2. Activate virtual environment"
+    echo "  3. Deactivate virtual environment"
+    echo "  4. INFO: Check environment status"
+    echo "  5. Reinstall dependencies"
+    echo "  6. Run iptable.loggin.py script"
+    echo "  7. Help"
+    echo "  8. Exit"
     echo ""
     echo -n "Select an option [1-8]: "
 }
@@ -637,7 +637,7 @@ main() {
 
 # Verify the script is executed with bash
 if [[ -z "$BASH_VERSION" ]]; then
-    echo "❌ This script must be executed with bash"
+    echo "ERROR: This script must be executed with bash"
     exit 1
 fi
 
