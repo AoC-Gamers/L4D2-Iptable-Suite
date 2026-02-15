@@ -34,6 +34,33 @@
 - **Permisos**: Acceso root/sudo
 - **Dependencias**: Python 3.6+, iptables, rsyslog
 
+### Bibliotecas/paquetes requeridos (Debian/Ubuntu)
+
+Instala primero los paquetes base del sistema:
+
+```bash
+sudo apt update
+sudo apt install -y \
+  iptables \
+  nftables \
+  rsyslog \
+  python3 \
+  python3-pip \
+  python3-venv
+```
+
+Instala luego las librerías de Python del analizador:
+
+```bash
+python3 -m pip install -r requirements.txt
+```
+
+Opcional (recomendado, para aislar dependencias):
+
+```bash
+./venv.loggin.sh
+```
+
 ### Instalación
 
 ```bash
