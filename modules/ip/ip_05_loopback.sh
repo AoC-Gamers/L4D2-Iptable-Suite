@@ -3,7 +3,7 @@
 ip_05_loopback_metadata() {
     cat << 'EOF'
 ID=ip_loopback
-DESCRIPTION=Allows loopback traffic in INPUT and DOCKER based on TYPECHAIN
+DESCRIPTION=Allows loopback traffic in INPUT and DOCKER-USER based on TYPECHAIN
 REQUIRED_VARS=TYPECHAIN
 OPTIONAL_VARS=
 DEFAULTS=TYPECHAIN=0
@@ -24,7 +24,7 @@ ip_05_loopback_apply() {
     iptables -A INPUT -i lo -j ACCEPT
 
     if [ "$TYPECHAIN" -eq 1 ] || [ "$TYPECHAIN" -eq 2 ]; then
-        iptables -N DOCKER 2>/dev/null || true
-        iptables -A DOCKER -i lo -j ACCEPT
+        iptables -N DOCKER-USER 2>/dev/null || true
+        iptables -A DOCKER-USER -i lo -j ACCEPT
     fi
 }

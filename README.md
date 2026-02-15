@@ -113,7 +113,7 @@ VPN_LOG_PREFIX="VPN_TRAFFIC: "
 UDP_ALLOW_PORTS=""
 TCP_ALLOW_PORTS=""
 
-Nota Docker: esta suite usa una cadena `DOCKER` propia en `filter`. Si deseas engancharte al flujo estandar de Docker, puedes adaptar las reglas a `DOCKER-USER`.
+Nota Docker: esta suite usa directamente la cadena `DOCKER-USER` en `filter` para las reglas del usuario, siguiendo el flujo recomendado por Docker.
 ```
 
 Asistente rápido de configuración (`.env` guiado):

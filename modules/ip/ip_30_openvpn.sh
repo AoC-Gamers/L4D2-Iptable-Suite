@@ -17,7 +17,7 @@ ip_30_openvpn_add_rule_table() {
 ip_30_openvpn_metadata() {
     cat << 'EOF'
 ID=ip_openvpn
-DESCRIPTION=Applies OpenVPN rules in the iptables backend (host/docker)
+DESCRIPTION=Applies OpenVPN rules in the iptables backend (host/DOCKER-USER)
 REQUIRED_VARS=TYPECHAIN VPN_ENABLED
 OPTIONAL_VARS=VPN_PROTO VPN_PORT VPN_SUBNET VPN_INTERFACE VPN_DOCKER_INTERFACE VPN_LAN_SUBNET VPN_LAN_INTERFACE VPN_ENABLE_NAT VPN_LOG_ENABLED VPN_LOG_PREFIX VPN_ROUTER_REAL_IP VPN_ROUTER_ALIAS_IP
 DEFAULTS=TYPECHAIN=0 VPN_ENABLED=false VPN_PROTO=udp VPN_PORT=1194 VPN_SUBNET=10.8.0.0/24 VPN_INTERFACE=tun0 VPN_DOCKER_INTERFACE= VPN_LAN_SUBNET=192.168.1.0/24 VPN_LAN_INTERFACE= VPN_ENABLE_NAT=false VPN_LOG_ENABLED=false VPN_LOG_PREFIX=VPN_TRAFFIC: VPN_ROUTER_REAL_IP= VPN_ROUTER_ALIAS_IP=
@@ -62,18 +62,18 @@ ip_30_openvpn_apply() {
     VPN_PROTO="$(echo "${VPN_PROTO}" | tr 'A-Z' 'a-z')"
 
     if [ "$TYPECHAIN" -eq 1 ] || [ "$TYPECHAIN" -eq 2 ]; then
-        iptables -N DOCKER 2>/dev/null || true
+        iptables -N DOCKER-USER 2>/dev/null || true
     fi
 
     ip_30_openvpn_add_rule_first INPUT -p "$VPN_PROTO" --dport "$VPN_PORT" -j ACCEPT
     if [ "$TYPECHAIN" -eq 1 ] || [ "$TYPECHAIN" -eq 2 ]; then
-        ip_30_openvpn_add_rule_first DOCKER -p "$VPN_PROTO" --dport "$VPN_PORT" -j ACCEPT
+        ip_30_openvpn_add_rule_first DOCKER-USER -p "$VPN_PROTO" --dport "$VPN_PORT" -j ACCEPT
     fi
 
     if [ "$VPN_LOG_ENABLED" = "true" ]; then
         ip_30_openvpn_add_rule_first INPUT -p "$VPN_PROTO" --dport "$VPN_PORT" -m limit --limit 30/min --limit-burst 10 -j LOG --log-prefix "$VPN_LOG_PREFIX" --log-level 4
         if [ "$TYPECHAIN" -eq 1 ] || [ "$TYPECHAIN" -eq 2 ]; then
-            ip_30_openvpn_add_rule_first DOCKER -p "$VPN_PROTO" --dport "$VPN_PORT" -m limit --limit 30/min --limit-burst 10 -j LOG --log-prefix "$VPN_LOG_PREFIX" --log-level 4
+            ip_30_openvpn_add_rule_first DOCKER-USER -p "$VPN_PROTO" --dport "$VPN_PORT" -m limit --limit 30/min --limit-burst 10 -j LOG --log-prefix "$VPN_LOG_PREFIX" --log-level 4
         fi
     fi
 

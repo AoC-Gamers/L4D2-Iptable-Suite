@@ -27,7 +27,7 @@ ip_10_whitelist_apply() {
     fi
 
     if [ "$TYPECHAIN" -eq 1 ] || [ "$TYPECHAIN" -eq 2 ]; then
-        iptables -N DOCKER 2>/dev/null || true
+        iptables -N DOCKER-USER 2>/dev/null || true
     fi
 
     local ip
@@ -37,7 +37,7 @@ ip_10_whitelist_apply() {
         fi
 
         if [ "$TYPECHAIN" -eq 1 ] || [ "$TYPECHAIN" -eq 2 ]; then
-            iptables -C DOCKER -s "$ip" -j ACCEPT 2>/dev/null || iptables -I DOCKER 1 -s "$ip" -j ACCEPT
+            iptables -C DOCKER-USER -s "$ip" -j ACCEPT 2>/dev/null || iptables -I DOCKER-USER 1 -s "$ip" -j ACCEPT
         fi
     done
 }

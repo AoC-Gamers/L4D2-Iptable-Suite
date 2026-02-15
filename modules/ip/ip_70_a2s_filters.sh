@@ -64,7 +64,7 @@ ip_70_a2s_filters_apply() {
     fi
 
     if [ "$TYPECHAIN" -eq 1 ] || [ "$TYPECHAIN" -eq 2 ]; then
-        iptables -N DOCKER 2>/dev/null || true
-        ip_70_a2s_filters_apply_for_chain DOCKER
+        iptables -N DOCKER-USER 2>/dev/null || true
+        ip_70_a2s_filters_apply_for_chain DOCKER-USER
     fi
 }

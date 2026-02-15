@@ -32,8 +32,8 @@ ip_20_allowlist_ports_apply() {
             ip_20_allowlist_ports_add_first INPUT -p udp -m multiport --dports "$UDP_ALLOW_PORTS" -j ACCEPT
         fi
         if [ "$TYPECHAIN" -eq 1 ] || [ "$TYPECHAIN" -eq 2 ]; then
-            iptables -N DOCKER 2>/dev/null || true
-            ip_20_allowlist_ports_add_first DOCKER -p udp -m multiport --dports "$UDP_ALLOW_PORTS" -j ACCEPT
+            iptables -N DOCKER-USER 2>/dev/null || true
+            ip_20_allowlist_ports_add_first DOCKER-USER -p udp -m multiport --dports "$UDP_ALLOW_PORTS" -j ACCEPT
         fi
     fi
 
@@ -42,8 +42,8 @@ ip_20_allowlist_ports_apply() {
             ip_20_allowlist_ports_add_first INPUT -p tcp -m multiport --dports "$TCP_ALLOW_PORTS" -j ACCEPT
         fi
         if [ "$TYPECHAIN" -eq 1 ] || [ "$TYPECHAIN" -eq 2 ]; then
-            iptables -N DOCKER 2>/dev/null || true
-            ip_20_allowlist_ports_add_first DOCKER -p tcp -m multiport --dports "$TCP_ALLOW_PORTS" -j ACCEPT
+            iptables -N DOCKER-USER 2>/dev/null || true
+            ip_20_allowlist_ports_add_first DOCKER-USER -p tcp -m multiport --dports "$TCP_ALLOW_PORTS" -j ACCEPT
         fi
     fi
 }

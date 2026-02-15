@@ -44,11 +44,11 @@ ip_40_tcp_ssh_apply() {
 
         if [ "$TYPECHAIN" -eq 1 ] || [ "$TYPECHAIN" -eq 2 ]; then
             if [ -n "$TCP_PROTECTION" ]; then
-                iptables -A DOCKER -p tcp -m multiport --dports "$TCP_PROTECTION" -m limit --limit 60/min --limit-burst 20 -j LOG --log-prefix "$LOG_PREFIX_TCP_RCON_BLOCK" --log-level 4
-                iptables -A DOCKER -p tcp -m multiport --dports "$TCP_PROTECTION" -j DROP
+                iptables -A DOCKER-USER -p tcp -m multiport --dports "$TCP_PROTECTION" -m limit --limit 60/min --limit-burst 20 -j LOG --log-prefix "$LOG_PREFIX_TCP_RCON_BLOCK" --log-level 4
+                iptables -A DOCKER-USER -p tcp -m multiport --dports "$TCP_PROTECTION" -j DROP
             else
-                iptables -A DOCKER -p tcp -m multiport --dports "$GAMESERVERPORTS" -m limit --limit 60/min --limit-burst 20 -j LOG --log-prefix "$LOG_PREFIX_TCP_RCON_BLOCK" --log-level 4
-                iptables -A DOCKER -p tcp -m multiport --dports "$GAMESERVERPORTS" -j DROP
+                iptables -A DOCKER-USER -p tcp -m multiport --dports "$GAMESERVERPORTS" -m limit --limit 60/min --limit-burst 20 -j LOG --log-prefix "$LOG_PREFIX_TCP_RCON_BLOCK" --log-level 4
+                iptables -A DOCKER-USER -p tcp -m multiport --dports "$GAMESERVERPORTS" -j DROP
             fi
         fi
     else
@@ -60,14 +60,14 @@ ip_40_tcp_ssh_apply() {
 
     if [ "$TYPECHAIN" -eq 1 ] || [ "$TYPECHAIN" -eq 2 ]; then
         if [ -n "$TCP_DOCKER" ]; then
-            iptables -I DOCKER -p tcp -m multiport --dports "$TCP_DOCKER" -j TCPfilter
+            iptables -I DOCKER-USER -p tcp -m multiport --dports "$TCP_DOCKER" -j TCPfilter
         fi
     fi
 
     iptables -A INPUT -p tcp -m multiport --dports "$SSH_PORT" -j ACCEPT
     if [ "$TYPECHAIN" -eq 1 ] || [ "$TYPECHAIN" -eq 2 ]; then
         if [ -n "$SSH_DOCKER" ]; then
-            iptables -I DOCKER -p tcp -m multiport --dports "$SSH_DOCKER" -j ACCEPT
+            iptables -I DOCKER-USER -p tcp -m multiport --dports "$SSH_DOCKER" -j ACCEPT
         fi
     fi
 }

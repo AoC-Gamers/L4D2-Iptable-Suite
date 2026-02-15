@@ -34,7 +34,7 @@ ip_99_finalize_apply() {
     echo "OK: iptables rules applied successfully"
     echo "   - SourceTV separated: Ports $TVSERVERPORTS"
     echo "   - TCP Protection: $ENABLE_TCP_PROTECT"
-    echo "   - Chain type: $TYPECHAIN (0=INPUT, 1=DOCKER, 2=BOTH)"
+    echo "   - Chain type: $TYPECHAIN (0=INPUT, 1=DOCKER-USER, 2=BOTH)"
     echo "   - Docker INPUT compatibility: $DOCKER_INPUT_COMPAT"
     echo "   - Docker chain auto-recover: $DOCKER_CHAIN_AUTORECOVER"
 }

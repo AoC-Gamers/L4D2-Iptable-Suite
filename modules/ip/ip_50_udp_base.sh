@@ -57,8 +57,8 @@ ip_50_udp_base_apply() {
     iptables -A UDP_GAME_ESTABLISHED_LIMIT -j DROP
 
     local chain
-    for chain in INPUT DOCKER; do
-        if [ "$chain" = "DOCKER" ] && [ "$TYPECHAIN" -eq 0 ]; then
+    for chain in INPUT DOCKER-USER; do
+        if [ "$chain" = "DOCKER-USER" ] && [ "$TYPECHAIN" -eq 0 ]; then
             continue
         fi
         if [ "$chain" = "INPUT" ] && [ "$TYPECHAIN" -eq 1 ]; then
@@ -74,12 +74,12 @@ ip_50_udp_base_apply() {
 
     iptables -A INPUT -m state --state ESTABLISHED,RELATED -j ACCEPT
     if [ "$TYPECHAIN" -eq 1 ] || [ "$TYPECHAIN" -eq 2 ]; then
-        iptables -A DOCKER -m state --state ESTABLISHED,RELATED -j ACCEPT
+        iptables -A DOCKER-USER -m state --state ESTABLISHED,RELATED -j ACCEPT
     fi
 
     iptables -A INPUT -p udp --sport 53 -m state --state ESTABLISHED,RELATED -j ACCEPT
     if [ "$TYPECHAIN" -eq 1 ] || [ "$TYPECHAIN" -eq 2 ]; then
-        iptables -A DOCKER -p udp --sport 53 -m state --state ESTABLISHED,RELATED -j ACCEPT
+        iptables -A DOCKER-USER -p udp --sport 53 -m state --state ESTABLISHED,RELATED -j ACCEPT
     fi
 
     if [ "$TYPECHAIN" -eq 0 ] || [ "$TYPECHAIN" -eq 2 ]; then
@@ -88,8 +88,8 @@ ip_50_udp_base_apply() {
         iptables -A INPUT -p icmp -j DROP
     fi
     if [ "$TYPECHAIN" -eq 1 ] || [ "$TYPECHAIN" -eq 2 ]; then
-        iptables -A DOCKER -p icmp -m hashlimit --hashlimit-upto 20/sec --hashlimit-burst 2 --hashlimit-mode dstip --hashlimit-name PINGPROTECT --hashlimit-htable-expire 1000 --hashlimit-htable-max 1048576 -j ACCEPT
-        iptables -A DOCKER -p icmp -m limit --limit 30/min --limit-burst 10 -j LOG --log-prefix "$LOG_PREFIX_ICMP_FLOOD" --log-level 4
-        iptables -A DOCKER -p icmp -j DROP
+        iptables -A DOCKER-USER -p icmp -m hashlimit --hashlimit-upto 20/sec --hashlimit-burst 2 --hashlimit-mode dstip --hashlimit-name PINGPROTECT --hashlimit-htable-expire 1000 --hashlimit-htable-max 1048576 -j ACCEPT
+        iptables -A DOCKER-USER -p icmp -m limit --limit 30/min --limit-burst 10 -j LOG --log-prefix "$LOG_PREFIX_ICMP_FLOOD" --log-level 4
+        iptables -A DOCKER-USER -p icmp -j DROP
     fi
 }

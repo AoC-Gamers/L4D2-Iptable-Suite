@@ -120,7 +120,7 @@ ip_00_chain_setup_apply() {
     fi
 
     if [ "$TYPECHAIN" -eq 1 ] || [ "$TYPECHAIN" -eq 2 ]; then
-        iptables -N DOCKER 2>/dev/null || true
+        iptables -N DOCKER-USER 2>/dev/null || true
         service docker restart
     fi
 

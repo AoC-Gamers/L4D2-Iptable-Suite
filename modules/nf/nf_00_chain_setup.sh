@@ -29,7 +29,9 @@ nf_00_chain_setup_validate() {
 }
 
 nf_00_chain_setup_apply() {
-    nft flush ruleset
+    if nft list table inet l4d2_filter >/dev/null 2>&1; then
+        nft delete table inet l4d2_filter
+    fi
     nft add table inet l4d2_filter
 
     local input_policy="accept"

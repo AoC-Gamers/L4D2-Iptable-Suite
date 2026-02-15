@@ -47,8 +47,8 @@ ip_60_packet_validation_apply() {
     fi
 
     if [ "$TYPECHAIN" -eq 1 ] || [ "$TYPECHAIN" -eq 2 ]; then
-        iptables -N DOCKER 2>/dev/null || true
-        ip_60_packet_validation_apply_for_chain DOCKER "$GAMESERVERPORTS"
-        ip_60_packet_validation_apply_for_chain DOCKER "$TVSERVERPORTS"
+        iptables -N DOCKER-USER 2>/dev/null || true
+        ip_60_packet_validation_apply_for_chain DOCKER-USER "$GAMESERVERPORTS"
+        ip_60_packet_validation_apply_for_chain DOCKER-USER "$TVSERVERPORTS"
     fi
 }
