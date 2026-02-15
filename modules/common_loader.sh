@@ -36,12 +36,22 @@ loader_array_contains() {
 
 loader_should_run_module() {
     local module_id="$1"
+    local only_count=0
+    local skip_count=0
 
-    if [ "${#PRELOAD_ONLY_MODULES[@]:-0}" -gt 0 ]; then
+    if declare -p PRELOAD_ONLY_MODULES >/dev/null 2>&1; then
+        only_count="${#PRELOAD_ONLY_MODULES[@]}"
+    fi
+
+    if declare -p PRELOAD_SKIP_MODULES >/dev/null 2>&1; then
+        skip_count="${#PRELOAD_SKIP_MODULES[@]}"
+    fi
+
+    if [ "$only_count" -gt 0 ]; then
         loader_array_contains "$module_id" "${PRELOAD_ONLY_MODULES[@]}" || return 1
     fi
 
-    if [ "${#PRELOAD_SKIP_MODULES[@]:-0}" -gt 0 ]; then
+    if [ "$skip_count" -gt 0 ]; then
         loader_array_contains "$module_id" "${PRELOAD_SKIP_MODULES[@]}" && return 1
     fi
 
