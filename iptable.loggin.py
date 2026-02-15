@@ -120,28 +120,36 @@ def load_config(env_file):
     
     return True
 
+
+def _validate_port_bounds(port_value, original_value):
+    if port_value < 1 or port_value > 65535:
+        raise ValueError(f"Port out of bounds (1-65535): {original_value}")
+
+
+def _parse_port_item(part):
+    if ':' in part:
+        bounds = part.split(':', 1)
+        if len(bounds) != 2:
+            raise ValueError(f"Invalid port range format: {part}")
+        start, end = map(int, bounds)
+        if start > end:
+            raise ValueError(f"Invalid port range (start > end): {part}")
+        _validate_port_bounds(start, part)
+        _validate_port_bounds(end, part)
+        return list(range(start, end + 1))
+
+    port = int(part)
+    _validate_port_bounds(port, part)
+    return [port]
+
 def expand_ports(port_string):
-    ports = []
     if not port_string:
-        return ports
+        return []
 
     chunks = [chunk.strip() for chunk in re.split(r"[\s,;]+", str(port_string)) if chunk.strip()]
+    ports = []
     for part in chunks:
-        if ':' in part:
-            bounds = part.split(':', 1)
-            if len(bounds) != 2:
-                raise ValueError(f"Invalid port range format: {part}")
-            start, end = map(int, bounds)
-            if start > end:
-                raise ValueError(f"Invalid port range (start > end): {part}")
-            if start < 1 or end > 65535:
-                raise ValueError(f"Port range out of bounds (1-65535): {part}")
-            ports.extend(range(start, end + 1))
-        else:
-            port = int(part)
-            if port < 1 or port > 65535:
-                raise ValueError(f"Port out of bounds (1-65535): {part}")
-            ports.append(port)
+        ports.extend(_parse_port_item(part))
 
     return sorted(set(ports))
 
@@ -152,6 +160,47 @@ def classify_port(port, game_ports, tv_ports):
         return "SourceTV"
     else:
         return "Other"
+
+
+def _extract_timestamp(timestamp_re, line, active_year, last_timestamp, year_hint):
+    timestamp_match = timestamp_re.search(line)
+    if not timestamp_match:
+        return None, active_year
+
+    timestamp_str = timestamp_match.group(1)
+
+    try:
+        dt = datetime.strptime(f"{active_year} {timestamp_str}", "%Y %b %d %H:%M:%S")
+    except ValueError:
+        return None, active_year
+
+    if year_hint is None and last_timestamp is not None:
+        if dt < last_timestamp and last_timestamp.month == 12 and dt.month == 1:
+            active_year += 1
+            try:
+                dt = datetime.strptime(f"{active_year} {timestamp_str}", "%Y %b %d %H:%M:%S")
+            except ValueError:
+                return None, active_year
+
+    return dt, active_year
+
+
+def _extract_line_fields(line, ip_re, port_re, length_re):
+    ip = ip_re.search(line)
+    port = port_re.search(line)
+    length = length_re.findall(line)
+
+    if not (ip and port and length):
+        return None
+
+    return ip.group(1), int(port.group(1)), int(length[-1])
+
+
+def _detect_attack_pattern(line):
+    for pattern_name, prefix in LOG_PREFIXES.items():
+        if prefix.strip() in line:
+            return pattern_name
+    return "UNKNOWN"
 
 def parse_log(log_path, game_ports, tv_ports, year_hint=None):
     """Parse log file and extract attack information with timestamps"""
@@ -166,56 +215,26 @@ def parse_log(log_path, game_ports, tv_ports, year_hint=None):
     
     with open(log_path, "r") as f:
         for line in f:
-            # Extract timestamp
-            timestamp_match = timestamp_re.search(line)
-            if not timestamp_match:
-                continue
-                
-            timestamp_str = timestamp_match.group(1)
-            
-            # Parse timestamp and extract date/time components
-            try:
-                full_timestamp = f"{active_year} {timestamp_str}"
-                dt = datetime.strptime(full_timestamp, "%Y %b %d %H:%M:%S")
-
-                # Handle year rollover automatically (Dec -> Jan) when no explicit year is provided.
-                if year_hint is None and last_timestamp is not None:
-                    if dt < last_timestamp and last_timestamp.month == 12 and dt.month == 1:
-                        active_year += 1
-                        full_timestamp = f"{active_year} {timestamp_str}"
-                        dt = datetime.strptime(full_timestamp, "%Y %b %d %H:%M:%S")
-
-                fecha = dt.strftime("%Y-%m-%d")
-                hora = dt.strftime("%H:%M:%S")
-            except ValueError:
+            dt, active_year = _extract_timestamp(timestamp_re, line, active_year, last_timestamp, year_hint)
+            if dt is None:
                 continue
 
             last_timestamp = dt
-            
-            ip = ip_re.search(line)
-            port = port_re.search(line)
-            length = length_re.findall(line)
-            
-            if not (ip and port and length):
+
+            line_fields = _extract_line_fields(line, ip_re, port_re, length_re)
+            if line_fields is None:
                 continue
-                
-            port_num = int(port.group(1))
-            
-            # Detect attack pattern from log prefixes
-            pattern_detected = "UNKNOWN"
-            for pattern_name, prefix in LOG_PREFIXES.items():
-                if prefix.strip() in line:
-                    pattern_detected = pattern_name
-                    break
-            
+
+            ip_value, port_num, packet_length = line_fields
+
             entries.append({
-                "IP": ip.group(1),
+                "IP": ip_value,
                 "Port": port_num,
                 "PortType": classify_port(port_num, game_ports, tv_ports),
-                "Pattern": pattern_detected,
-                "Length": int(length[-1]),
-                "Date": fecha,
-                "Time": hora,
+                "Pattern": _detect_attack_pattern(line),
+                "Length": packet_length,
+                "Date": dt.strftime("%Y-%m-%d"),
+                "Time": dt.strftime("%H:%M:%S"),
                 "Timestamp": dt
             })
 
