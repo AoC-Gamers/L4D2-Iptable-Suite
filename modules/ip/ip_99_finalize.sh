@@ -27,6 +27,10 @@ ip_99_finalize_apply() {
     fi
     iptables -A OUTPUT -j ACCEPT
 
+    if declare -F ip_00_chain_setup_recover_docker_chains_if_needed >/dev/null 2>&1; then
+        ip_00_chain_setup_recover_docker_chains_if_needed
+    fi
+
     echo "OK: iptables rules applied successfully"
     echo "   - SourceTV separated: Ports $TVSERVERPORTS"
     echo "   - TCP Protection: $ENABLE_TCP_PROTECT"

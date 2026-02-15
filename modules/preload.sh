@@ -74,8 +74,8 @@ run_preload() {
                 shift
                 ;;
             *)
-                PRELOAD_EXTRA_ARGS+=("$1")
-                shift
+                echo "ERROR: Unknown argument: $1"
+                return 2
                 ;;
         esac
     done
