@@ -30,9 +30,16 @@ nf_30_openvpn_validate() {
             ;;
     esac
 
-    if [ "${VPN_ENABLED}" = "true" ] && ! [[ "${VPN_PORT}" =~ ^[0-9]+$ ]]; then
-        echo "ERROR: nf_openvpn: VPN_PORT must be numeric"
-        return 2
+    if [ "${VPN_ENABLED}" = "true" ]; then
+        if ! [[ "${VPN_PORT}" =~ ^[0-9]+$ ]]; then
+            echo "ERROR: nf_openvpn: VPN_PORT must be numeric"
+            return 2
+        fi
+
+        if [ -z "${VPN_SUBNET:-}" ] || [ -z "${VPN_INTERFACE:-}" ]; then
+            echo "ERROR: nf_openvpn: VPN_SUBNET and VPN_INTERFACE are required when VPN_ENABLED=true"
+            return 2
+        fi
     fi
 }
 

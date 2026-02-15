@@ -48,17 +48,17 @@ nf_50_udp_base_apply() {
     nft add chain inet l4d2_filter udp_new_limit_global
     nft add chain inet l4d2_filter udp_established_limit
 
-    nf_add_rule udp_new_limit limit rate 1/second burst 3 packets jump udp_new_limit_global
-    nf_add_rule udp_new_limit limit rate over 60/minute burst 20 packets log prefix "$LOG_PREFIX_UDP_NEW_LIMIT "
-    nf_add_rule udp_new_limit drop
+    nf_add_rule udp_new_limit meter udp_new_src_under '{ ip saddr . udp dport limit rate 1/second burst 3 packets }' jump udp_new_limit_global
+    nf_add_rule udp_new_limit meter udp_new_src_over '{ ip saddr . udp dport limit rate over 1/second burst 3 packets }' log prefix "$LOG_PREFIX_UDP_NEW_LIMIT "
+    nf_add_rule udp_new_limit meter udp_new_src_over_drop '{ ip saddr . udp dport limit rate over 1/second burst 3 packets }' drop
 
-    nf_add_rule udp_new_limit_global limit rate 10/second burst 20 packets accept
-    nf_add_rule udp_new_limit_global limit rate over 60/minute burst 20 packets log prefix "$LOG_PREFIX_UDP_NEW_LIMIT "
-    nf_add_rule udp_new_limit_global drop
+    nf_add_rule udp_new_limit_global meter udp_new_global_under '{ udp dport limit rate 10/second burst 20 packets }' accept
+    nf_add_rule udp_new_limit_global meter udp_new_global_over '{ udp dport limit rate over 10/second burst 20 packets }' log prefix "$LOG_PREFIX_UDP_NEW_LIMIT "
+    nf_add_rule udp_new_limit_global meter udp_new_global_over_drop '{ udp dport limit rate over 10/second burst 20 packets }' drop
 
-    nf_add_rule udp_established_limit limit rate "${cmd_limit_leeway}/second" burst "$cmd_limit_upper" packets accept
-    nf_add_rule udp_established_limit limit rate over 60/minute burst 20 packets log prefix "$LOG_PREFIX_UDP_EST_LIMIT "
-    nf_add_rule udp_established_limit drop
+    nf_add_rule udp_established_limit meter udp_est_under '{ ip saddr . udp sport . udp dport limit rate '"${cmd_limit_leeway}"'/second burst '"${cmd_limit_upper}"' packets }' accept
+    nf_add_rule udp_established_limit meter udp_est_over '{ ip saddr . udp sport . udp dport limit rate over '"${cmd_limit_leeway}"'/second burst '"${cmd_limit_upper}"' packets }' log prefix "$LOG_PREFIX_UDP_EST_LIMIT "
+    nf_add_rule udp_established_limit meter udp_est_over_drop '{ ip saddr . udp sport . udp dport limit rate over '"${cmd_limit_leeway}"'/second burst '"${cmd_limit_upper}"' packets }' drop
 
     all_udp_ports_expr="{ $(nf_ports_normalize "$GAMESERVERPORTS"), $(nf_ports_normalize "$TVSERVERPORTS") }"
 

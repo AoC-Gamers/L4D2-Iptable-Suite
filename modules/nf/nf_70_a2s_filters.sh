@@ -31,27 +31,32 @@ nf_70_a2s_filters_apply() {
     nft add chain inet l4d2_filter a2s_players_limit
     nft add chain inet l4d2_filter a2s_rules_limit
     nft add chain inet l4d2_filter steam_group_limit
-    nft add chain inet l4d2_filter login_filter
+    nft add chain inet l4d2_filter login_connect_limit
+    nft add chain inet l4d2_filter login_reserve_limit
 
-    nf_add_rule a2s_info_limit limit rate 8/second burst 30 packets accept
-    nf_add_rule a2s_info_limit limit rate over 60/minute burst 20 packets log prefix "$LOG_PREFIX_A2S_INFO "
-    nf_add_rule a2s_info_limit drop
+    nf_add_rule a2s_info_limit meter a2s_info_under '{ ip saddr . udp dport limit rate 8/second burst 30 packets }' accept
+    nf_add_rule a2s_info_limit meter a2s_info_over '{ ip saddr . udp dport limit rate over 8/second burst 30 packets }' log prefix "$LOG_PREFIX_A2S_INFO "
+    nf_add_rule a2s_info_limit meter a2s_info_over_drop '{ ip saddr . udp dport limit rate over 8/second burst 30 packets }' drop
 
-    nf_add_rule a2s_players_limit limit rate 8/second burst 30 packets accept
-    nf_add_rule a2s_players_limit limit rate over 60/minute burst 20 packets log prefix "$LOG_PREFIX_A2S_PLAYERS "
-    nf_add_rule a2s_players_limit drop
+    nf_add_rule a2s_players_limit meter a2s_players_under '{ ip saddr . udp dport limit rate 8/second burst 30 packets }' accept
+    nf_add_rule a2s_players_limit meter a2s_players_over '{ ip saddr . udp dport limit rate over 8/second burst 30 packets }' log prefix "$LOG_PREFIX_A2S_PLAYERS "
+    nf_add_rule a2s_players_limit meter a2s_players_over_drop '{ ip saddr . udp dport limit rate over 8/second burst 30 packets }' drop
 
-    nf_add_rule a2s_rules_limit limit rate 8/second burst 30 packets accept
-    nf_add_rule a2s_rules_limit limit rate over 60/minute burst 20 packets log prefix "$LOG_PREFIX_A2S_RULES "
-    nf_add_rule a2s_rules_limit drop
+    nf_add_rule a2s_rules_limit meter a2s_rules_under '{ ip saddr . udp dport limit rate 8/second burst 30 packets }' accept
+    nf_add_rule a2s_rules_limit meter a2s_rules_over '{ ip saddr . udp dport limit rate over 8/second burst 30 packets }' log prefix "$LOG_PREFIX_A2S_RULES "
+    nf_add_rule a2s_rules_limit meter a2s_rules_over_drop '{ ip saddr . udp dport limit rate over 8/second burst 30 packets }' drop
 
-    nf_add_rule steam_group_limit limit rate 1/second burst 3 packets accept
-    nf_add_rule steam_group_limit limit rate over 60/minute burst 20 packets log prefix "$LOG_PREFIX_STEAM_GROUP "
-    nf_add_rule steam_group_limit drop
+    nf_add_rule steam_group_limit meter steam_group_under '{ ip saddr . udp dport limit rate 1/second burst 3 packets }' accept
+    nf_add_rule steam_group_limit meter steam_group_over '{ ip saddr . udp dport limit rate over 1/second burst 3 packets }' log prefix "$LOG_PREFIX_STEAM_GROUP "
+    nf_add_rule steam_group_limit meter steam_group_over_drop '{ ip saddr . udp dport limit rate over 1/second burst 3 packets }' drop
 
-    nf_add_rule login_filter limit rate 1/second burst 1 packets accept
-    nf_add_rule login_filter limit rate over 60/minute burst 20 packets log prefix "$LOG_PREFIX_L4D2_CONNECT "
-    nf_add_rule login_filter drop
+    nf_add_rule login_connect_limit meter login_connect_under '{ ip saddr . ip daddr . udp dport limit rate 1/second burst 1 packets }' accept
+    nf_add_rule login_connect_limit meter login_connect_over '{ ip saddr . ip daddr . udp dport limit rate over 1/second burst 1 packets }' log prefix "$LOG_PREFIX_L4D2_CONNECT "
+    nf_add_rule login_connect_limit meter login_connect_over_drop '{ ip saddr . ip daddr . udp dport limit rate over 1/second burst 1 packets }' drop
+
+    nf_add_rule login_reserve_limit meter login_reserve_under '{ ip saddr . ip daddr . udp dport limit rate 1/second burst 1 packets }' accept
+    nf_add_rule login_reserve_limit meter login_reserve_over '{ ip saddr . ip daddr . udp dport limit rate over 1/second burst 1 packets }' log prefix "$LOG_PREFIX_L4D2_RESERVE "
+    nf_add_rule login_reserve_limit meter login_reserve_over_drop '{ ip saddr . ip daddr . udp dport limit rate over 1/second burst 1 packets }' drop
 
     for chain in $(nf_get_target_chains); do
         nf_add_rule "$chain" udp dport "$game_ports_expr" @th,0,4 0xFFFFFFFF @th,4,1 0x54 jump a2s_info_limit
@@ -59,6 +64,7 @@ nf_70_a2s_filters_apply() {
         nf_add_rule "$chain" udp dport "$game_ports_expr" @th,0,4 0xFFFFFFFF @th,4,1 0x56 jump a2s_rules_limit
         nf_add_rule "$chain" udp dport "$game_ports_expr" @th,0,4 0xFFFFFFFF @th,4,1 0x00 jump steam_group_limit
 
-        nf_add_rule "$chain" udp dport "$game_ports_expr" meta length 1-70 jump login_filter
+        nf_add_rule "$chain" udp dport "$game_ports_expr" meta length 1-70 @th,0,4 0xFFFFFFFF @th,4,1 0x71 @th,8,7 0x636f6e6e656374 jump login_connect_limit
+        nf_add_rule "$chain" udp dport "$game_ports_expr" meta length 1-70 @th,0,4 0xFFFFFFFF @th,4,1 0x71 @th,8,7 0x72657365727665 jump login_reserve_limit
     done
 }
