@@ -3,7 +3,7 @@
 # shellcheck disable=SC1090
 . "${PROJECT_ROOT:-.}/modules/common_nft.sh"
 
-nf_00_chain_setup_metadata() {
+nf_chain_setup_metadata() {
     cat << 'EOF'
 ID=nf_chain_setup
 DESCRIPTION=Sets up the nftables ruleset and base chains for L4D2
@@ -13,7 +13,7 @@ DEFAULTS=TYPECHAIN=0
 EOF
 }
 
-nf_00_chain_setup_validate() {
+nf_chain_setup_validate() {
     case "${TYPECHAIN:-}" in
         0|1|2) ;;
         *)
@@ -28,7 +28,7 @@ nf_00_chain_setup_validate() {
     fi
 }
 
-nf_00_chain_setup_apply() {
+nf_chain_setup_apply() {
     if nft list table inet l4d2_filter >/dev/null 2>&1; then
         nft delete table inet l4d2_filter
     fi

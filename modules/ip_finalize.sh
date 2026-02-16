@@ -1,6 +1,6 @@
 #!/bin/bash
 
-ip_99_finalize_metadata() {
+ip_finalize_metadata() {
     cat << 'EOF'
 ID=ip_finalize
 DESCRIPTION=Applies final policies and prints a summary for the iptables backend
@@ -10,7 +10,7 @@ DEFAULTS=TYPECHAIN=0 DOCKER_INPUT_COMPAT=false ENABLE_TCP_PROTECT=true TVSERVERP
 EOF
 }
 
-ip_99_finalize_validate() {
+ip_finalize_validate() {
     case "${TYPECHAIN:-}" in
         0|1|2) ;;
         *)
@@ -20,15 +20,15 @@ ip_99_finalize_validate() {
     esac
 }
 
-ip_99_finalize_apply() {
+ip_finalize_apply() {
     iptables -A INPUT -j DROP
     if [ "${DOCKER_INPUT_COMPAT:-false}" != "true" ]; then
         iptables -A FORWARD -j DROP
     fi
     iptables -A OUTPUT -j ACCEPT
 
-    if declare -F ip_00_chain_setup_recover_docker_chains_if_needed >/dev/null 2>&1; then
-        ip_00_chain_setup_recover_docker_chains_if_needed
+    if declare -F ip_chain_setup_recover_docker_chains_if_needed >/dev/null 2>&1; then
+        ip_chain_setup_recover_docker_chains_if_needed
     fi
 
     echo "OK: iptables rules applied successfully"

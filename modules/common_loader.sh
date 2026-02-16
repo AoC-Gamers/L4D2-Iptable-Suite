@@ -125,8 +125,29 @@ discover_target_modules() {
     local target_prefix="$1"
     local modules_dir="$2"
 
-    find "$modules_dir" -maxdepth 1 -type f -name "${target_prefix}_*.sh" \
-        | sort
+    local search_dirs=()
+    search_dirs+=("$modules_dir")
+
+    if [ -n "${MODULES_ROOT_DIR:-}" ] && [ "$MODULES_ROOT_DIR" != "$modules_dir" ]; then
+        search_dirs+=("$MODULES_ROOT_DIR")
+    fi
+
+    find "${search_dirs[@]}" -maxdepth 1 -type f -name "${target_prefix}_*.sh" \
+        | sort -u \
+        | awk -F/ '
+            {
+                fname=$NF
+                pr=500
+                if (fname ~ /_chain_setup\.sh$/) {
+                    pr=0
+                } else if (fname ~ /_finalize\.sh$/) {
+                    pr=999
+                }
+                printf "%03d|%s|%s\n", pr, fname, $0
+            }
+        ' \
+        | sort -t'|' -k1,1n -k2,2 \
+        | cut -d'|' -f3-
 }
 
 run_target_modules() {

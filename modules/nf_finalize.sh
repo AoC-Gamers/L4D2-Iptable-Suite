@@ -1,6 +1,6 @@
 #!/bin/bash
 
-nf_99_finalize_metadata() {
+nf_finalize_metadata() {
     cat << 'EOF'
 ID=nf_finalize
 DESCRIPTION=Applies final policies and prints a summary for the nftables backend
@@ -10,7 +10,7 @@ DEFAULTS=TYPECHAIN=0 ENABLE_TCP_PROTECT=true TVSERVERPORTS=27020
 EOF
 }
 
-nf_99_finalize_validate() {
+nf_finalize_validate() {
     case "${TYPECHAIN:-}" in
         0|1|2) ;;
         *)
@@ -20,7 +20,7 @@ nf_99_finalize_validate() {
     esac
 }
 
-nf_99_finalize_apply() {
+nf_finalize_apply() {
     echo "OK: nftables rules applied successfully"
     echo "   - Chain type: $TYPECHAIN (0=input, 1=forward, 2=both)"
     echo "   - SourceTV reference ports: $TVSERVERPORTS"

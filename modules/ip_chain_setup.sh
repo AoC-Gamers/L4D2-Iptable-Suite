@@ -1,6 +1,6 @@
 #!/bin/bash
 
-ip_00_chain_setup_metadata() {
+ip_chain_setup_metadata() {
     cat << 'EOF'
 ID=ip_chain_setup
 DESCRIPTION=Sets up cleanup, base policies, and required chains for the iptables backend
@@ -10,7 +10,7 @@ DEFAULTS=TYPECHAIN=0 DOCKER_INPUT_COMPAT=false DOCKER_CHAIN_AUTORECOVER=true ENA
 EOF
 }
 
-ip_00_chain_setup_validate() {
+ip_chain_setup_validate() {
     case "${TYPECHAIN:-}" in
         0|1|2) ;;
         *)
@@ -20,15 +20,15 @@ ip_00_chain_setup_validate() {
     esac
 }
 
-ip_00_chain_setup_verify_docker_chains() {
+ip_chain_setup_verify_docker_chains() {
     local iptables_rules
     iptables_rules="$(iptables-save 2>/dev/null || true)"
     grep -q '^:DOCKER-USER ' <<< "$iptables_rules" && grep -q '^:DOCKER-FORWARD ' <<< "$iptables_rules"
 }
 
-ip_00_chain_setup_recover_docker_chains_if_needed() {
+ip_chain_setup_recover_docker_chains_if_needed() {
     if [ "$TYPECHAIN" -eq 0 ] && [ "$DOCKER_INPUT_COMPAT" = "true" ]; then
-        if ip_00_chain_setup_verify_docker_chains; then
+        if ip_chain_setup_verify_docker_chains; then
             echo "OK: Docker chains detected: DOCKER-USER / DOCKER-FORWARD"
             return 0
         fi
@@ -44,13 +44,13 @@ ip_00_chain_setup_recover_docker_chains_if_needed() {
             fi
 
             for _ in {1..15}; do
-                if ip_00_chain_setup_verify_docker_chains; then
+                if ip_chain_setup_verify_docker_chains; then
                     break
                 fi
                 sleep 1
             done
 
-            if ! ip_00_chain_setup_verify_docker_chains && command -v docker >/dev/null 2>&1; then
+            if ! ip_chain_setup_verify_docker_chains && command -v docker >/dev/null 2>&1; then
                 echo "INFO: Triggering Docker network init to force chain creation"
                 local temp_net="iptables-autofix-$RANDOM"
                 if docker network create "$temp_net" >/dev/null 2>&1; then
@@ -58,7 +58,7 @@ ip_00_chain_setup_recover_docker_chains_if_needed() {
                 fi
             fi
 
-            if ip_00_chain_setup_verify_docker_chains; then
+            if ip_chain_setup_verify_docker_chains; then
                 echo "OK: Docker chains recovered successfully"
             else
                 echo "ERROR: Docker chains still missing after recovery attempt"
@@ -70,7 +70,7 @@ ip_00_chain_setup_recover_docker_chains_if_needed() {
     fi
 }
 
-ip_00_chain_setup_apply() {
+ip_chain_setup_apply() {
     DOCKER_COMPAT_INPUT_MODE=false
     if [ "$TYPECHAIN" -eq 0 ] && [ "$DOCKER_INPUT_COMPAT" = "true" ]; then
         DOCKER_COMPAT_INPUT_MODE=true
@@ -127,5 +127,5 @@ ip_00_chain_setup_apply() {
         service docker restart
     fi
 
-    ip_00_chain_setup_recover_docker_chains_if_needed
+    ip_chain_setup_recover_docker_chains_if_needed
 }
