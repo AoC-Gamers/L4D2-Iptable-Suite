@@ -19,20 +19,20 @@ else
 fi
 
 say_section() {
-    echo
-    echo -e "${C_BOLD}${C_CYAN}== $1 ==${C_RESET}"
+    echo >&2
+    echo -e "${C_BOLD}${C_CYAN}== $1 ==${C_RESET}" >&2
 }
 
 say_info() {
-    echo -e "${C_GREEN}INFO:${C_RESET} $1"
+    echo -e "${C_GREEN}INFO:${C_RESET} $1" >&2
 }
 
 say_hint() {
-    echo -e "${C_YELLOW}Hint:${C_RESET} $1"
+    echo -e "${C_YELLOW}Hint:${C_RESET} $1" >&2
 }
 
 say_warn() {
-    echo -e "${C_YELLOW}WARNING:${C_RESET} $1"
+    echo -e "${C_YELLOW}WARNING:${C_RESET} $1" >&2
 }
 
 is_typechain() {
@@ -126,14 +126,14 @@ ask_with_context() {
     local validator="$6"
     local error_text="$7"
 
-    echo
-    echo -e "${C_BOLD}$title${C_RESET}"
+    echo >&2
+    echo -e "${C_BOLD}$title${C_RESET}" >&2
     say_hint "$context"
     say_hint "Fuente: $source_doc"
     ask_validated "$prompt" "$default" "$validator" "$error_text"
 }
 
-echo -e "${C_BOLD}${C_CYAN}=== L4D2 Env Wizard (MVP) ===${C_RESET}"
+echo -e "${C_BOLD}${C_CYAN}=== L4D2 Env Wizard (MVP) ===${C_RESET}" >&2
 say_info "Este asistente genera .env usando el contexto documentado en docs/modules/*.md"
 
 say_section "Backend y alcance"
@@ -345,19 +345,19 @@ LOGFILE=/var/log/l4d2-iptables.log
 RSYSLOG_CONF=/etc/rsyslog.d/l4d2-iptables.conf
 EOF
 
-echo "OK: .env generated at $output_file"
+echo "OK: .env generated at $output_file" >&2
 
-echo
-echo -e "${C_BOLD}${C_GREEN}Resumen rápido:${C_RESET}"
-echo "  TYPECHAIN=$typechain"
-echo "  GAMESERVERPORTS=$game_ports"
-echo "  TVSERVERPORTS=$tv_ports"
-echo "  CMD_LIMIT=$cmd_limit"
-echo "  SSH_PORT=$ssh_ports"
-echo "  ENABLE_TCP_PROTECT=$enable_tcp_protect"
-echo "  VPN_ENABLED=$vpn_enabled"
-echo "  VPN_PORT=$vpn_port"
-echo "  VPN_SUBNET=$vpn_subnet"
-echo "  VPN_INTERFACE=$vpn_interface"
-echo "  DOCKER_INPUT_COMPAT=$docker_input_compat"
-echo "  DOCKER_CHAIN_AUTORECOVER=$docker_chain_autorecover"
+echo >&2
+echo -e "${C_BOLD}${C_GREEN}Resumen rápido:${C_RESET}" >&2
+echo "  TYPECHAIN=$typechain" >&2
+echo "  GAMESERVERPORTS=$game_ports" >&2
+echo "  TVSERVERPORTS=$tv_ports" >&2
+echo "  CMD_LIMIT=$cmd_limit" >&2
+echo "  SSH_PORT=$ssh_ports" >&2
+echo "  ENABLE_TCP_PROTECT=$enable_tcp_protect" >&2
+echo "  VPN_ENABLED=$vpn_enabled" >&2
+echo "  VPN_PORT=$vpn_port" >&2
+echo "  VPN_SUBNET=$vpn_subnet" >&2
+echo "  VPN_INTERFACE=$vpn_interface" >&2
+echo "  DOCKER_INPUT_COMPAT=$docker_input_compat" >&2
+echo "  DOCKER_CHAIN_AUTORECOVER=$docker_chain_autorecover" >&2
