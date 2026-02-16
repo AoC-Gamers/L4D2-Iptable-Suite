@@ -27,6 +27,12 @@ nf_10_whitelist_apply() {
     local effective_whitelist chain ip domain resolved_count has_static_whitelist
 
     effective_whitelist="${WHITELISTED_IPS:-}"
+
+    # Normalize separators from env/custom input (space/comma/semicolon/newline)
+    effective_whitelist="${effective_whitelist//,/ }"
+    effective_whitelist="${effective_whitelist//;/ }"
+    effective_whitelist="${effective_whitelist//$'\n'/ }"
+
     has_static_whitelist=false
     if [ -n "${WHITELISTED_IPS:-}" ]; then
         has_static_whitelist=true
@@ -74,6 +80,11 @@ nf_10_whitelist_apply() {
     local chain
     for chain in $(nf_get_target_chains); do
         for ip in $effective_whitelist; do
+            # Accept single IPv4 and IPv4 CIDR only
+            if ! [[ "$ip" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}(/[0-9]{1,2})?$ ]]; then
+                echo "WARNING: nf_whitelist: skipping invalid IPv4/CIDR entry '$ip'"
+                continue
+            fi
             nf_add_rule "$chain" ip saddr "$ip" accept
         done
     done
