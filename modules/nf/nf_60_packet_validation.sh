@@ -27,19 +27,19 @@ nf_60_packet_validation_apply_chain() {
     local chain="$1"
     local ports_expr="$2"
 
-    nf_add_rule "$chain" udp dport "$ports_expr" meta length 0-28 limit rate over 60/minute log prefix "$LOG_PREFIX_INVALID_SIZE "
+    nf_add_rule "$chain" udp dport "$ports_expr" meta length 0-28 limit rate over 60/minute log prefix "\"$LOG_PREFIX_INVALID_SIZE \""
     nf_add_rule "$chain" udp dport "$ports_expr" meta length 0-28 drop
 
-    nf_add_rule "$chain" udp dport "$ports_expr" meta length 2521-65535 limit rate over 60/minute log prefix "$LOG_PREFIX_INVALID_SIZE "
+    nf_add_rule "$chain" udp dport "$ports_expr" meta length 2521-65535 limit rate over 60/minute log prefix "\"$LOG_PREFIX_INVALID_SIZE \""
     nf_add_rule "$chain" udp dport "$ports_expr" meta length 2521-65535 drop
 
-    nf_add_rule "$chain" udp dport "$ports_expr" meta length 30-32 limit rate over 60/minute log prefix "$LOG_PREFIX_MALFORMED "
+    nf_add_rule "$chain" udp dport "$ports_expr" meta length 30-32 limit rate over 60/minute log prefix "\"$LOG_PREFIX_MALFORMED \""
     nf_add_rule "$chain" udp dport "$ports_expr" meta length 30-32 drop
 
-    nf_add_rule "$chain" udp dport "$ports_expr" meta length 46 limit rate over 60/minute log prefix "$LOG_PREFIX_MALFORMED "
+    nf_add_rule "$chain" udp dport "$ports_expr" meta length 46 limit rate over 60/minute log prefix "\"$LOG_PREFIX_MALFORMED \""
     nf_add_rule "$chain" udp dport "$ports_expr" meta length 46 drop
 
-    nf_add_rule "$chain" udp dport "$ports_expr" meta length 60 limit rate over 60/minute log prefix "$LOG_PREFIX_MALFORMED "
+    nf_add_rule "$chain" udp dport "$ports_expr" meta length 60 limit rate over 60/minute log prefix "\"$LOG_PREFIX_MALFORMED \""
     nf_add_rule "$chain" udp dport "$ports_expr" meta length 60 drop
 }
 

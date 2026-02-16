@@ -62,7 +62,7 @@ nf_40_tcp_ssh_apply() {
         fi
 
         if [ "$ENABLE_TCP_PROTECT" = "true" ]; then
-            nf_add_rule "$chain" tcp dport "$protected_ports_expr" limit rate over 60/minute burst 20 packets log prefix "$LOG_PREFIX_TCP_RCON_BLOCK "
+            nf_add_rule "$chain" tcp dport "$protected_ports_expr" limit rate over 60/minute burst 20 packets log prefix "\"$LOG_PREFIX_TCP_RCON_BLOCK \""
             nf_add_rule "$chain" tcp dport "$protected_ports_expr" drop
         fi
     done
