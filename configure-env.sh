@@ -184,11 +184,30 @@ ssh_ports="$(ask_with_context \
     "is_required_ports_expr" \
     "Formato inválido para SSH_PORT.")"
 
+ssh_require_whitelist_raw="$(ask_with_context \
+    "SSH_REQUIRE_WHITELIST" \
+    "Si es true, SSH_PORT no se abre públicamente y solo entra vía whitelist." \
+    "docs/modules/18_ip_40_tcp_ssh.md" \
+    "SSH_REQUIRE_WHITELIST (true/false)" \
+    "false" \
+    "is_bool" \
+    "SSH_REQUIRE_WHITELIST debe ser true o false.")"
+ssh_require_whitelist="${ssh_require_whitelist_raw,,}"
+
 whitelist="$(ask_with_context \
     "WHITELISTED_IPS" \
     "IPs de confianza (separadas por espacio), sin rate limits." \
     "docs/modules/14_ip_10_whitelist.md" \
     "WHITELISTED_IPS (espacio separado)" \
+    "" \
+    "true" \
+    "")"
+
+whitelist_domains="$(ask_with_context \
+    "WHITELISTED_DOMAINS" \
+    "Dominios de confianza (separados por espacio), se resuelven a IPv4 al aplicar reglas." \
+    "docs/modules/14_ip_10_whitelist.md" \
+    "WHITELISTED_DOMAINS (espacio separado, optional)" \
     "" \
     "true" \
     "")"
@@ -309,7 +328,9 @@ GAMESERVERPORTS="${game_ports}"
 TVSERVERPORTS="${tv_ports}"
 CMD_LIMIT=${cmd_limit}
 SSH_PORT="${ssh_ports}"
+SSH_REQUIRE_WHITELIST=${ssh_require_whitelist}
 WHITELISTED_IPS="${whitelist}"
+WHITELISTED_DOMAINS="${whitelist_domains}"
 
 UDP_ALLOW_PORTS="${udp_allow}"
 TCP_ALLOW_PORTS="${tcp_allow}"
@@ -354,7 +375,9 @@ echo "  GAMESERVERPORTS=$game_ports" >&2
 echo "  TVSERVERPORTS=$tv_ports" >&2
 echo "  CMD_LIMIT=$cmd_limit" >&2
 echo "  SSH_PORT=$ssh_ports" >&2
+echo "  SSH_REQUIRE_WHITELIST=$ssh_require_whitelist" >&2
 echo "  ENABLE_TCP_PROTECT=$enable_tcp_protect" >&2
+echo "  WHITELISTED_DOMAINS=$whitelist_domains" >&2
 echo "  VPN_ENABLED=$vpn_enabled" >&2
 echo "  VPN_PORT=$vpn_port" >&2
 echo "  VPN_SUBNET=$vpn_subnet" >&2

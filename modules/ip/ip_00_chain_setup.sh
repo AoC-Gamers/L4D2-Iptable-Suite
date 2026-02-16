@@ -106,6 +106,9 @@ ip_00_chain_setup_apply() {
     fi
     iptables -P OUTPUT ACCEPT
 
+    iptables -C INPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT 2>/dev/null || \
+        iptables -I INPUT 1 -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
+
     iptables -N UDP_GAME_NEW_LIMIT 2>/dev/null || true
     iptables -N UDP_GAME_NEW_LIMIT_GLOBAL 2>/dev/null || true
     iptables -N UDP_GAME_ESTABLISHED_LIMIT 2>/dev/null || true

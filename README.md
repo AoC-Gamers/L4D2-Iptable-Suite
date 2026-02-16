@@ -110,8 +110,13 @@ TVSERVERPORTS="27020"
 # Protección TCP RCON
 ENABLE_TCP_PROTECT=true
 
+# SSH: no exponer públicamente cuando sea true
+SSH_PORT="2222,22220:22229"
+SSH_REQUIRE_WHITELIST=true
+
 # IPs de confianza (acceso completo al sistema - ⚠️ TODOS los puertos)
-WHITELISTED_IPS="192.168.1.100 10.0.0.5"
+WHITELISTED_IPS="198.51.100.10 203.0.113.5"
+WHITELISTED_DOMAINS="admin-gateway.example.net"
 
 # OpenVPN (host o Docker)
 VPN_ENABLED=false
@@ -149,7 +154,7 @@ Asistente rápido de configuración (`.env` guiado):
 ./configure-env.sh
 ```
 
-> ⚠️ **ADVERTENCIA**: Las IPs en `WHITELISTED_IPS` tendrán acceso **completo e irrestricto** a toda la máquina (SSH, Web, Bases de datos, APIs, etc.). Usar solo para administradores e IPs absolutamente confiables.
+> ⚠️ **ADVERTENCIA**: Las entradas de `WHITELISTED_IPS` y `WHITELISTED_DOMAINS` tendrán acceso **completo e irrestricto** a toda la máquina (SSH, Web, Bases de datos, APIs, etc.). Usar solo para administradores y orígenes absolutamente confiables.
 
 ## 🛠️ Herramientas Incluidas
 

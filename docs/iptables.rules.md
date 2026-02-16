@@ -104,7 +104,9 @@ TCP_PROTECTION=""               # Puertos específicos (vacío = todos)
 
 # === ACCESO ADMINISTRATIVO ===
 SSH_PORT="22"                   # Puertos SSH del sistema
+SSH_REQUIRE_WHITELIST=false      # true = no abre SSH públicamente; solo whitelist
 WHITELISTED_IPS=""              # IPs con acceso completo al sistema (⚠️ TODOS los puertos)
+WHITELISTED_DOMAINS=""          # Dominios resueltos a IPv4 y fusionados con WHITELISTED_IPS
 
 # === LOGGING DETALLADO ===
 LOG_PREFIX_INVALID_SIZE="INVALID_SIZE: "
@@ -157,11 +159,11 @@ VPN_LOG_PREFIX="VPN_TRAFFIC: "
 
 ```bash
 # Configuración: IPs con acceso irrestricto
-WHITELISTED_IPS="192.168.1.100 10.0.0.5"
+WHITELISTED_IPS="198.51.100.10 203.0.113.5"
 
 # Resultado: Reglas iptables generadas
-iptables -A INPUT -s 192.168.1.100 -j ACCEPT    # TODO el tráfico
-iptables -A INPUT -s 10.0.0.5 -j ACCEPT         # TODOS los puertos
+iptables -A INPUT -s 198.51.100.10 -j ACCEPT    # TODO el tráfico
+iptables -A INPUT -s 203.0.113.5 -j ACCEPT      # TODOS los puertos
 ```
 
 **Las IPs en esta lista tendrán**:
@@ -174,6 +176,31 @@ iptables -A INPUT -s 10.0.0.5 -j ACCEPT         # TODOS los puertos
 - Administradores con IPs fijas
 - Servidores de monitoreo confiables
 - IPs corporativas verificadas
+
+#### Resolución de dominios en whitelist
+
+También puedes usar `WHITELISTED_DOMAINS` para resolver nombres a IPv4 al aplicar reglas.
+
+```bash
+WHITELISTED_IPS="192.0.2.0/24"
+WHITELISTED_DOMAINS="admin-gateway.example.net"
+```
+
+Notas operativas:
+- Los dominios se resuelven en tiempo de aplicación (`iptables.rules.sh`).
+- Si DNS no resuelve y existe `WHITELISTED_IPS`, la suite continúa usando fallback por IP.
+- Si DNS cambia, reaplica reglas para refrescar IPs resueltas.
+
+#### SSH privado solo por whitelist
+
+Cuando `SSH_REQUIRE_WHITELIST=true`, la suite **no** crea regla pública para `SSH_PORT`; el acceso queda restringido a lo que pase por `WHITELISTED_IPS`/`WHITELISTED_DOMAINS`.
+
+```bash
+SSH_PORT="2222,22220:22229"
+SSH_REQUIRE_WHITELIST=true
+WHITELISTED_IPS="192.0.2.0/24"
+WHITELISTED_DOMAINS="admin-gateway.example.net"
+```
 ```
 
 ### Ejecución
