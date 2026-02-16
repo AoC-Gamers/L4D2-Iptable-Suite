@@ -140,7 +140,7 @@ say_section "Backend y alcance"
 typechain="$(ask_with_context \
     "TYPECHAIN" \
     "0=input host, 1=docker-user (contenedores), 2=ambos." \
-    "docs/modules/12_ip_00_chain_setup.md" \
+    "docs/modules/12_ip_chain_setup.md" \
     "TYPECHAIN (0=input, 1=docker-user, 2=both)" \
     "0" \
     "is_typechain" \
@@ -290,7 +290,7 @@ say_section "Compatibilidad Docker"
 docker_input_compat_raw="$(ask_with_context \
     "DOCKER_INPUT_COMPAT" \
     "Si TYPECHAIN=0, preserva flujo Docker sin romper FORWARD/NAT." \
-    "docs/modules/12_ip_00_chain_setup.md" \
+    "docs/modules/12_ip_chain_setup.md" \
     "DOCKER_INPUT_COMPAT (true/false)" \
     "false" \
     "is_bool" \
@@ -300,7 +300,7 @@ docker_input_compat="${docker_input_compat_raw,,}"
 docker_chain_autorecover_raw="$(ask_with_context \
     "DOCKER_CHAIN_AUTORECOVER" \
     "Intenta recuperar cadenas Docker si faltan." \
-    "docs/modules/12_ip_00_chain_setup.md" \
+    "docs/modules/12_ip_chain_setup.md" \
     "DOCKER_CHAIN_AUTORECOVER (true/false)" \
     "true" \
     "is_bool" \
