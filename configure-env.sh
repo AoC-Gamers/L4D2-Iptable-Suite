@@ -89,6 +89,17 @@ is_interface_name() {
     [[ "$1" =~ ^[a-zA-Z0-9._:+-]+$ ]]
 }
 
+is_module_mode() {
+    case "${1,,}" in
+        whitelist|blacklist) return 0 ;;
+        *) return 1 ;;
+    esac
+}
+
+is_rate_expr() {
+    [[ "$1" =~ ^[0-9]+/(sec|min|hour|day)$ ]]
+}
+
 ask() {
     local prompt="$1"
     local default="$2"
@@ -117,6 +128,67 @@ ask_validated() {
     done
 }
 
+ask_yes_no() {
+    local prompt="$1"
+    local default_bool="$2"
+    local suffix="[y/N]"
+    local value
+
+    if [ "$default_bool" = "true" ]; then
+        suffix="[Y/n]"
+    fi
+
+    while true; do
+        read -r -p "$prompt $suffix: " value
+        value="${value,,}"
+
+        if [ -z "$value" ]; then
+            echo "$default_bool"
+            return 0
+        fi
+
+        case "$value" in
+            y|yes|s|si|sí|true)
+                echo "true"
+                return 0
+                ;;
+            n|no|false)
+                echo "false"
+                return 0
+                ;;
+            *)
+                say_warn "Responde y/n"
+                ;;
+        esac
+    done
+}
+
+module_default_include() {
+    case "$1" in
+        ip_loopback|ip_whitelist|ip_allowlist_ports|ip_openvpn|ip_tcp_ssh|ip_http_https_protect)
+            echo "true"
+            ;;
+        ip_tcpfilter_chain|ip_udp_base|ip_packet_validation|ip_a2s_filters)
+            echo "false"
+            ;;
+        *)
+            echo "false"
+            ;;
+    esac
+}
+
+build_csv() {
+    local sep=""
+    local out=""
+    local item
+    for item in "$@"; do
+        [ -z "$item" ] && continue
+        out+="${sep}${item}"
+        sep=","
+    done
+    echo "$out"
+}
+
 ask_with_context() {
     local title="$1"
     local context="$2"
@@ -136,6 +208,8 @@ ask_with_context() {
 echo -e "${C_BOLD}${C_CYAN}=== L4D2 Env Wizard (MVP) ===${C_RESET}" >&2
 say_info "Este asistente genera .env usando el contexto documentado en docs/modules/*.md"
 
+declare -A module_enabled=()
+
 say_section "Backend y alcance"
 typechain="$(ask_with_context \
     "TYPECHAIN" \
@@ -146,144 +220,318 @@ typechain="$(ask_with_context \
     "is_typechain" \
     "TYPECHAIN debe ser 0, 1 o 2.")"
 
-say_section "Servicios de juego (UDP base)"
-game_ports="$(ask_with_context \
-    "GAMESERVERPORTS" \
-    "Puertos UDP principales del GameServer." \
-    "docs/modules/19_ip_50_udp_base.md" \
-    "GAMESERVERPORTS (ej: 27015 o 27015:27020)" \
-    "27015" \
-    "is_required_ports_expr" \
-    "Formato inválido. Usa puertos/rangos separados por coma (ej: 27015 o 27015:27020).")"
+say_section "Selección de módulos"
+module_mode="$(ask_validated \
+    "Modo de selección de módulos (whitelist=solo incluidos, blacklist=excluir algunos)" \
+    "whitelist" \
+    "is_module_mode" \
+    "El modo debe ser whitelist o blacklist")"
+module_mode="${module_mode,,}"
 
-tv_ports="$(ask_with_context \
-    "TVSERVERPORTS" \
-    "Puertos SourceTV/separados para espectadores." \
-    "docs/modules/19_ip_50_udp_base.md" \
-    "TVSERVERPORTS (ej: 27020 o 27115:27120)" \
-    "27020" \
-    "is_required_ports_expr" \
-    "Formato inválido. Usa puertos/rangos separados por coma (ej: 27020 o 27115:27120).")"
+module_enabled[ip_chain_setup]="true"
+module_enabled[ip_finalize]="true"
 
-cmd_limit="$(ask_with_context \
-    "CMD_LIMIT" \
-    "Controla los límites dinámicos de UDP; recomendado según tickrate." \
-    "docs/modules/19_ip_50_udp_base.md" \
-    "CMD_LIMIT" \
-    "100" \
-    "is_cmd_limit" \
-    "CMD_LIMIT debe ser numérico entre 10 y 10000.")"
+declare -a selectable_modules=(
+    "ip_loopback|Loopback local"
+    "ip_whitelist|Whitelist por IP/dominio"
+    "ip_allowlist_ports|Allowlist de puertos manual"
+    "ip_openvpn|Reglas OpenVPN"
+    "ip_tcp_ssh|Acceso SSH y TCP"
+    "ip_http_https_protect|Protección HTTP/HTTPS"
+    "ip_tcpfilter_chain|Cadena TCPfilter"
+    "ip_udp_base|Base UDP GameServer"
+    "ip_packet_validation|Validación de paquetes UDP"
+    "ip_a2s_filters|Filtros A2S/Steam"
+)
 
-say_section "Acceso y protección TCP"
-ssh_ports="$(ask_with_context \
-    "SSH_PORT" \
-    "Puertos SSH permitidos; admite lista/rango." \
-    "docs/modules/18_ip_40_tcp_ssh.md" \
-    "SSH_PORT (ej: 22 o 423,4230:4239)" \
-    "22" \
-    "is_required_ports_expr" \
-    "Formato inválido para SSH_PORT.")"
+declare -a selected_only=()
+declare -a selected_exclude=()
+selected_only+=("ip_chain_setup")
 
-ssh_require_whitelist_raw="$(ask_with_context \
-    "SSH_REQUIRE_WHITELIST" \
-    "Si es true, SSH_PORT no se abre públicamente y solo entra vía whitelist." \
-    "docs/modules/18_ip_40_tcp_ssh.md" \
-    "SSH_REQUIRE_WHITELIST (true/false)" \
-    "false" \
-    "is_bool" \
-    "SSH_REQUIRE_WHITELIST debe ser true o false.")"
-ssh_require_whitelist="${ssh_require_whitelist_raw,,}"
+say_info "Módulos fijos: ip_chain_setup e ip_finalize siempre incluidos"
 
-whitelist="$(ask_with_context \
-    "WHITELISTED_IPS" \
-    "IPs de confianza (separadas por espacio), sin rate limits." \
-    "docs/modules/14_ip_10_whitelist.md" \
-    "WHITELISTED_IPS (espacio separado)" \
-    "" \
-    "true" \
-    "")"
+for module_info in "${selectable_modules[@]}"; do
+    module_id="${module_info%%|*}"
+    module_desc="${module_info#*|}"
+    default_include="$(module_default_include "$module_id")"
 
-whitelist_domains="$(ask_with_context \
-    "WHITELISTED_DOMAINS" \
-    "Dominios de confianza (separados por espacio), se resuelven a IPv4 al aplicar reglas." \
-    "docs/modules/14_ip_10_whitelist.md" \
-    "WHITELISTED_DOMAINS (espacio separado, optional)" \
-    "" \
-    "true" \
-    "")"
+    if [ "$module_mode" = "whitelist" ]; then
+        answer="$(ask_yes_no "¿Incluir $module_id ($module_desc)?" "$default_include")"
+        module_enabled[$module_id]="$answer"
+    else
+        default_exclude="false"
+        if [ "$default_include" = "false" ]; then
+            default_exclude="true"
+        fi
+        answer="$(ask_yes_no "¿Excluir $module_id ($module_desc)?" "$default_exclude")"
+        if [ "$answer" = "true" ]; then
+            module_enabled[$module_id]="false"
+        else
+            module_enabled[$module_id]="true"
+        fi
+    fi
 
-udp_allow="$(ask_with_context \
-    "UDP_ALLOW_PORTS" \
-    "Excepciones UDP adicionales (opcional)." \
-    "docs/modules/15_ip_20_allowlist_ports.md" \
-    "UDP_ALLOW_PORTS (comma/range, optional)" \
-    "" \
-    "is_optional_ports_expr" \
-    "Formato inválido para UDP_ALLOW_PORTS.")"
+    if [ "${module_enabled[$module_id]}" = "true" ]; then
+        say_info "$module_id => incluido"
+        selected_only+=("$module_id")
+    else
+        say_warn "$module_id => excluido"
+        selected_exclude+=("$module_id")
+    fi
+done
 
-tcp_allow="$(ask_with_context \
-    "TCP_ALLOW_PORTS" \
-    "Excepciones TCP adicionales (opcional)." \
-    "docs/modules/15_ip_20_allowlist_ports.md" \
-    "TCP_ALLOW_PORTS (comma/range, optional)" \
-    "" \
-    "is_optional_ports_expr" \
-    "Formato inválido para TCP_ALLOW_PORTS.")"
+selected_only+=("ip_finalize")
 
-enable_tcp_protect_raw="$(ask_with_context \
-    "ENABLE_TCP_PROTECT" \
-    "Activa bloqueo/protección anti-spam TCP (RCON)." \
-    "docs/modules/18_ip_40_tcp_ssh.md" \
-    "ENABLE_TCP_PROTECT (true/false)" \
-    "true" \
-    "is_bool" \
-    "ENABLE_TCP_PROTECT debe ser true o false.")"
-enable_tcp_protect="${enable_tcp_protect_raw,,}"
+modules_only=""
+modules_exclude=""
+if [ "$module_mode" = "whitelist" ]; then
+    modules_only="$(build_csv "${selected_only[@]}")"
+else
+    modules_exclude="$(build_csv "${selected_exclude[@]}")"
+fi
 
-say_section "OpenVPN"
-vpn_enabled_raw="$(ask_with_context \
-    "VPN_ENABLED" \
-    "Habilita reglas OpenVPN (host/gateway)." \
-    "docs/modules/16_ip_30_openvpn.md" \
-    "VPN_ENABLED (true/false)" \
-    "false" \
-    "is_bool" \
-    "VPN_ENABLED debe ser true o false.")"
-vpn_enabled="${vpn_enabled_raw,,}"
+if [ "$module_mode" = "whitelist" ]; then
+    say_info "MODULES_ONLY=$modules_only"
+else
+    say_info "MODULES_EXCLUDE=$modules_exclude"
+fi
 
-vpn_port="1194"
+game_ports="27015"
+tv_ports="27020"
+cmd_limit="100"
+ssh_ports="22"
+ssh_require_whitelist="false"
+whitelist=""
+whitelist_domains=""
+udp_allow=""
+tcp_allow=""
+enable_tcp_protect="false"
+enable_http_protect="false"
+http_https_ports="80,443"
+http_https_docker="80,443"
+http_https_rate="180/min"
+http_https_burst="360"
+vpn_enabled="false"
+vpn_port="1195"
 vpn_subnet="10.8.0.0/24"
 vpn_interface="tun0"
+vpn_proto="udp"
 
-if [ "$vpn_enabled" = "true" ]; then
-    vpn_port="$(ask_with_context \
-        "VPN_PORT" \
-        "Puerto de escucha de OpenVPN (1-65535)." \
-        "docs/modules/16_ip_30_openvpn.md" \
-        "VPN_PORT" \
-        "1194" \
-        "is_port_number" \
-        "VPN_PORT debe ser numérico entre 1 y 65535.")"
+if [ "${module_enabled[ip_tcp_ssh]:-false}" = "true" ]; then
+    say_section "SSH/TCP"
+    ssh_ports="$(ask_with_context \
+        "SSH_PORT" \
+        "Puertos SSH permitidos; admite lista/rango." \
+        "docs/modules/18_ip_40_tcp_ssh.md" \
+        "SSH_PORT (ej: 22 o 423,4230:4239)" \
+        "22" \
+        "is_required_ports_expr" \
+        "Formato inválido para SSH_PORT.")"
 
-    vpn_subnet="$(ask_with_context \
-        "VPN_SUBNET" \
-        "Subred del túnel en formato CIDR IPv4 (ej: 10.8.0.0/24)." \
-        "docs/modules/16_ip_30_openvpn.md" \
-        "VPN_SUBNET" \
-        "10.8.0.0/24" \
-        "is_ipv4_cidr" \
-        "VPN_SUBNET debe tener formato CIDR IPv4 válido (ej: 10.8.0.0/24).")"
+    ssh_require_whitelist_raw="$(ask_with_context \
+        "SSH_REQUIRE_WHITELIST" \
+        "Si es true, SSH_PORT no se abre públicamente y solo entra vía whitelist." \
+        "docs/modules/18_ip_40_tcp_ssh.md" \
+        "SSH_REQUIRE_WHITELIST (true/false)" \
+        "true" \
+        "is_bool" \
+        "SSH_REQUIRE_WHITELIST debe ser true o false.")"
+    ssh_require_whitelist="${ssh_require_whitelist_raw,,}"
 
-    vpn_interface="$(ask_with_context \
-        "VPN_INTERFACE" \
-        "Interfaz del túnel OpenVPN (ej: tun0)." \
+    enable_tcp_protect_raw="$(ask_with_context \
+        "ENABLE_TCP_PROTECT" \
+        "Activa bloqueo/protección anti-spam TCP (RCON/juego)." \
+        "docs/modules/18_ip_40_tcp_ssh.md" \
+        "ENABLE_TCP_PROTECT (true/false)" \
+        "false" \
+        "is_bool" \
+        "ENABLE_TCP_PROTECT debe ser true o false.")"
+    enable_tcp_protect="${enable_tcp_protect_raw,,}"
+
+    if [ "$enable_tcp_protect" = "true" ]; then
+        game_ports="$(ask_with_context \
+            "GAMESERVERPORTS" \
+            "Puertos usados para protección TCP de juego/RCON." \
+            "docs/modules/18_ip_40_tcp_ssh.md" \
+            "GAMESERVERPORTS (ej: 27015 o 27015:27020)" \
+            "27015" \
+            "is_required_ports_expr" \
+            "Formato inválido. Usa puertos/rangos separados por coma.")"
+    fi
+fi
+
+if [ "${module_enabled[ip_whitelist]:-false}" = "true" ] || [ "$ssh_require_whitelist" = "true" ]; then
+    say_section "Whitelist"
+    whitelist="$(ask_with_context \
+        "WHITELISTED_IPS" \
+        "IPs de confianza (separadas por espacio), sin rate limits." \
+        "docs/modules/14_ip_10_whitelist.md" \
+        "WHITELISTED_IPS (espacio separado)" \
+        "" \
+        "true" \
+        "")"
+
+    whitelist_domains="$(ask_with_context \
+        "WHITELISTED_DOMAINS" \
+        "Dominios de confianza (separados por espacio), se resuelven a IPv4 al aplicar reglas." \
+        "docs/modules/14_ip_10_whitelist.md" \
+        "WHITELISTED_DOMAINS (espacio separado, optional)" \
+        "" \
+        "true" \
+        "")"
+fi
+
+if [ "$ssh_require_whitelist" = "true" ] && [ -z "$whitelist" ] && [ -z "$whitelist_domains" ]; then
+    say_warn "SSH_REQUIRE_WHITELIST=true requiere WHITELISTED_IPS o WHITELISTED_DOMAINS. Se fuerza false."
+    ssh_require_whitelist="false"
+fi
+
+if [ "${module_enabled[ip_allowlist_ports]:-false}" = "true" ]; then
+    say_section "Allowlist de puertos"
+    udp_allow="$(ask_with_context \
+        "UDP_ALLOW_PORTS" \
+        "Excepciones UDP adicionales (opcional)." \
+        "docs/modules/15_ip_20_allowlist_ports.md" \
+        "UDP_ALLOW_PORTS (comma/range, optional)" \
+        "" \
+        "is_optional_ports_expr" \
+        "Formato inválido para UDP_ALLOW_PORTS.")"
+
+    tcp_allow="$(ask_with_context \
+        "TCP_ALLOW_PORTS" \
+        "Excepciones TCP adicionales (opcional)." \
+        "docs/modules/15_ip_20_allowlist_ports.md" \
+        "TCP_ALLOW_PORTS (comma/range, optional)" \
+        "" \
+        "is_optional_ports_expr" \
+        "Formato inválido para TCP_ALLOW_PORTS.")"
+fi
+
+if [ "${module_enabled[ip_http_https_protect]:-false}" = "true" ]; then
+    say_section "Web HTTP/HTTPS"
+    enable_http_protect_raw="$(ask_with_context \
+        "ENABLE_HTTP_PROTECT" \
+        "Activa protección anti-abuso para puertos web." \
+        "docs/modules/22_ip_45_http_https_protect.md" \
+        "ENABLE_HTTP_PROTECT (true/false)" \
+        "true" \
+        "is_bool" \
+        "ENABLE_HTTP_PROTECT debe ser true o false.")"
+    enable_http_protect="${enable_http_protect_raw,,}"
+
+    if [ "$enable_http_protect" = "true" ]; then
+        http_https_ports="$(ask_with_context \
+            "HTTP_HTTPS_PORTS" \
+            "Puertos web en INPUT (host)." \
+            "docs/modules/22_ip_45_http_https_protect.md" \
+            "HTTP_HTTPS_PORTS (ej: 80,443)" \
+            "80,443" \
+            "is_required_ports_expr" \
+            "Formato inválido para HTTP_HTTPS_PORTS.")"
+
+        http_https_docker="$(ask_with_context \
+            "HTTP_HTTPS_DOCKER" \
+            "Puertos web en DOCKER-USER (opcional)." \
+            "docs/modules/22_ip_45_http_https_protect.md" \
+            "HTTP_HTTPS_DOCKER (ej: 80,443)" \
+            "80,443" \
+            "is_required_ports_expr" \
+            "Formato inválido para HTTP_HTTPS_DOCKER.")"
+
+        http_https_rate="$(ask_with_context \
+            "HTTP_HTTPS_RATE" \
+            "Límite de conexiones nuevas por origen (formato num/unidad)." \
+            "docs/modules/22_ip_45_http_https_protect.md" \
+            "HTTP_HTTPS_RATE (ej: 180/min)" \
+            "180/min" \
+            "is_rate_expr" \
+            "Formato inválido. Usa <num>/(sec|min|hour|day).")"
+
+        http_https_burst="$(ask_with_context \
+            "HTTP_HTTPS_BURST" \
+            "Ráfaga permitida antes de bloquear." \
+            "docs/modules/22_ip_45_http_https_protect.md" \
+            "HTTP_HTTPS_BURST" \
+            "360" \
+            "is_cmd_limit" \
+            "HTTP_HTTPS_BURST debe ser numérico.")"
+    fi
+fi
+
+if [ "${module_enabled[ip_openvpn]:-false}" = "true" ]; then
+    say_section "OpenVPN"
+    vpn_enabled_raw="$(ask_with_context \
+        "VPN_ENABLED" \
+        "Habilita reglas OpenVPN (host/gateway)." \
         "docs/modules/16_ip_30_openvpn.md" \
-        "VPN_INTERFACE" \
-        "tun0" \
-        "is_interface_name" \
-        "VPN_INTERFACE contiene caracteres no válidos.")"
+        "VPN_ENABLED (true/false)" \
+        "true" \
+        "is_bool" \
+        "VPN_ENABLED debe ser true o false.")"
+    vpn_enabled="${vpn_enabled_raw,,}"
+
+    if [ "$vpn_enabled" = "true" ]; then
+        vpn_port="$(ask_with_context \
+            "VPN_PORT" \
+            "Puerto de escucha de OpenVPN (1-65535)." \
+            "docs/modules/16_ip_30_openvpn.md" \
+            "VPN_PORT" \
+            "1195" \
+            "is_port_number" \
+            "VPN_PORT debe ser numérico entre 1 y 65535.")"
+
+        vpn_subnet="$(ask_with_context \
+            "VPN_SUBNET" \
+            "Subred del túnel en formato CIDR IPv4 (ej: 10.8.0.0/24)." \
+            "docs/modules/16_ip_30_openvpn.md" \
+            "VPN_SUBNET" \
+            "10.8.0.0/24" \
+            "is_ipv4_cidr" \
+            "VPN_SUBNET debe tener formato CIDR IPv4 válido (ej: 10.8.0.0/24).")"
+
+        vpn_interface="$(ask_with_context \
+            "VPN_INTERFACE" \
+            "Interfaz del túnel OpenVPN (ej: tun0)." \
+            "docs/modules/16_ip_30_openvpn.md" \
+            "VPN_INTERFACE" \
+            "tun0" \
+            "is_interface_name" \
+            "VPN_INTERFACE contiene caracteres no válidos.")"
+    else
+        say_info "Módulo OpenVPN incluido pero VPN_ENABLED=false (quedará sin aplicar reglas VPN)."
+    fi
+fi
+
+if [ "${module_enabled[ip_udp_base]:-false}" = "true" ] || [ "${module_enabled[ip_packet_validation]:-false}" = "true" ] || [ "${module_enabled[ip_a2s_filters]:-false}" = "true" ]; then
+    say_section "Servicios de juego (UDP)"
+    game_ports="$(ask_with_context \
+        "GAMESERVERPORTS" \
+        "Puertos UDP principales del GameServer." \
+        "docs/modules/19_ip_50_udp_base.md" \
+        "GAMESERVERPORTS (ej: 27015 o 27015:27020)" \
+        "$game_ports" \
+        "is_required_ports_expr" \
+        "Formato inválido. Usa puertos/rangos separados por coma (ej: 27015 o 27015:27020).")"
+
+    tv_ports="$(ask_with_context \
+        "TVSERVERPORTS" \
+        "Puertos SourceTV/separados para espectadores." \
+        "docs/modules/19_ip_50_udp_base.md" \
+        "TVSERVERPORTS (ej: 27020 o 27115:27120)" \
+        "27020" \
+        "is_required_ports_expr" \
+        "Formato inválido. Usa puertos/rangos separados por coma (ej: 27020 o 27115:27120).")"
+
+    cmd_limit="$(ask_with_context \
+        "CMD_LIMIT" \
+        "Controla los límites dinámicos de UDP; recomendado según tickrate." \
+        "docs/modules/19_ip_50_udp_base.md" \
+        "CMD_LIMIT" \
+        "100" \
+        "is_cmd_limit" \
+        "CMD_LIMIT debe ser numérico entre 10 y 10000.")"
 else
-    say_info "VPN deshabilitada: se usarán defaults para variables VPN en .env"
+    say_info "Módulos de juego no incluidos: se mantienen defaults mínimos (sin activar protección de juego)."
 fi
 
 say_section "Compatibilidad Docker"
@@ -316,13 +564,14 @@ cat > "$output_file" <<EOF
 MODULES_ROOT_DIR=""
 MODULES_IP_DIR=""
 MODULES_NF_DIR=""
-MODULES_ONLY=""
-MODULES_EXCLUDE=""
+MODULES_ONLY="${modules_only}"
+MODULES_EXCLUDE="${modules_exclude}"
 
 TYPECHAIN=${typechain}
 DOCKER_INPUT_COMPAT=${docker_input_compat}
 DOCKER_CHAIN_AUTORECOVER=${docker_chain_autorecover}
 ENABLE_TCP_PROTECT=${enable_tcp_protect}
+ENABLE_HTTP_PROTECT=${enable_http_protect}
 
 GAMESERVERPORTS="${game_ports}"
 TVSERVERPORTS="${tv_ports}"
@@ -334,9 +583,14 @@ WHITELISTED_DOMAINS="${whitelist_domains}"
 
 UDP_ALLOW_PORTS="${udp_allow}"
 TCP_ALLOW_PORTS="${tcp_allow}"
+HTTP_HTTPS_PORTS="${http_https_ports}"
+HTTP_HTTPS_DOCKER="${http_https_docker}"
+HTTP_HTTPS_RATE="${http_https_rate}"
+HTTP_HTTPS_BURST=${http_https_burst}
+LOG_PREFIX_HTTP_HTTPS_ABUSE="HTTP_HTTPS_ABUSE: "
 
 VPN_ENABLED=${vpn_enabled}
-VPN_PROTO="udp"
+VPN_PROTO="${vpn_proto}"
 VPN_PORT=${vpn_port}
 VPN_SUBNET="${vpn_subnet}"
 VPN_INTERFACE="${vpn_interface}"
@@ -370,6 +624,9 @@ echo "OK: .env generated at $output_file" >&2
 
 echo >&2
 echo -e "${C_BOLD}${C_GREEN}Resumen rápido:${C_RESET}" >&2
+echo "  MODULE_MODE=$module_mode" >&2
+echo "  MODULES_ONLY=$modules_only" >&2
+echo "  MODULES_EXCLUDE=$modules_exclude" >&2
 echo "  TYPECHAIN=$typechain" >&2
 echo "  GAMESERVERPORTS=$game_ports" >&2
 echo "  TVSERVERPORTS=$tv_ports" >&2
@@ -377,6 +634,7 @@ echo "  CMD_LIMIT=$cmd_limit" >&2
 echo "  SSH_PORT=$ssh_ports" >&2
 echo "  SSH_REQUIRE_WHITELIST=$ssh_require_whitelist" >&2
 echo "  ENABLE_TCP_PROTECT=$enable_tcp_protect" >&2
+echo "  ENABLE_HTTP_PROTECT=$enable_http_protect" >&2
 echo "  WHITELISTED_DOMAINS=$whitelist_domains" >&2
 echo "  VPN_ENABLED=$vpn_enabled" >&2
 echo "  VPN_PORT=$vpn_port" >&2
