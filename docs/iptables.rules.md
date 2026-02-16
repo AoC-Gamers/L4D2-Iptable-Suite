@@ -14,7 +14,7 @@
 
 ## Descripción General
 
-`iptables.rules.sh` es el entrypoint del backend legacy (iptables) de la suite L4D2 IPTables. Actualmente ejecuta un loader modular compartido y aplica la lógica de protección cargando módulos desde `modules/ip`.
+`iptables.rules.sh` es el entrypoint del backend legacy (iptables) de la suite L4D2 IPTables. Actualmente ejecuta un loader modular compartido y aplica la lógica de protección cargando módulos desde `modules/ip` y `modules/` (módulos raíz).
 
 La protección sigue cubriendo detección por patrones, validación de paquetes y rate limiting para mitigar ataques comunes de Source Engine; la diferencia es que la implementación ahora está separada por módulos en vez de un único script monolítico.
 
@@ -33,7 +33,7 @@ El flujo de `iptables.rules.sh` es:
 
 1. Cargar `modules/common_loader.sh`, `modules/preload.sh`, `modules/postload.sh`
 2. Leer configuración (`.env` + `--set KEY=VALUE`)
-3. Descubrir módulos `ip_*.sh` en `modules/ip`
+3. Descubrir módulos `ip_*.sh` en `modules/ip` + `modules/`
 4. Ejecutar `metadata -> validate -> apply` por módulo
 5. Emitir resumen final en `postload`
 
@@ -44,18 +44,19 @@ modules/
 ├─ common_loader.sh
 ├─ preload.sh
 ├─ postload.sh
+├─ ip_chain_setup.sh
+├─ ip_finalize.sh
 └─ ip/
-    ├─ ip_00_chain_setup.sh
     ├─ ip_05_loopback.sh
     ├─ ip_10_whitelist.sh
     ├─ ip_20_allowlist_ports.sh
     ├─ ip_30_openvpn.sh
     ├─ ip_35_tcpfilter_chain.sh
     ├─ ip_40_tcp_ssh.sh
+    ├─ ip_45_http_https_protect.sh
     ├─ ip_50_udp_base.sh
     ├─ ip_60_packet_validation.sh
-    ├─ ip_70_a2s_filters.sh
-    └─ ip_99_finalize.sh
+    └─ ip_70_a2s_filters.sh
 ```
 
 ### Nota de compatibilidad

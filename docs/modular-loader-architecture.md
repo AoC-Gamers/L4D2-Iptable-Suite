@@ -16,7 +16,7 @@ Ambos deben cargar módulos dinámicamente desde modules sin conocer de antemano
 1. Monorepo con dos targets coexistiendo indefinidamente.
 2. Descubrimiento automático de módulos por prefijo de archivo.
 3. Metadata embebida en cada módulo (no archivo metadata central).
-4. Sin prioridad manual; ejecución determinista por orden alfabético del nombre de archivo.
+4. Ejecución determinista por orden semántico: `*_chain_setup` primero, `*_finalize` al final y resto por orden alfabético.
 5. Validación centralizada de variables requeridas (CLI > .env > default).
 6. Hooks globales de preload y postload para lógica transversal.
 
@@ -34,37 +34,39 @@ Ambos deben cargar módulos dinámicamente desde modules sin conocer de antemano
 │  ├─ common_nft.sh
 │  ├─ preload.sh
 │  ├─ postload.sh
+│  ├─ ip_chain_setup.sh
+│  ├─ ip_finalize.sh
+│  ├─ nf_chain_setup.sh
+│  ├─ nf_finalize.sh
 │  ├─ ip/
-│  │  ├─ ip_00_chain_setup.sh
 │  │  ├─ ip_05_loopback.sh
 │  │  ├─ ip_10_whitelist.sh
 │  │  ├─ ip_20_allowlist_ports.sh
 │  │  ├─ ip_30_openvpn.sh
 │  │  ├─ ip_35_tcpfilter_chain.sh
 │  │  ├─ ip_40_tcp_ssh.sh
+│  │  ├─ ip_45_http_https_protect.sh
 │  │  ├─ ip_50_udp_base.sh
 │  │  ├─ ip_60_packet_validation.sh
-│  │  ├─ ip_70_a2s_filters.sh
-│  │  └─ ip_99_finalize.sh
+│  │  └─ ip_70_a2s_filters.sh
 │  └─ nf/
-│     ├─ nf_00_chain_setup.sh
 │     ├─ nf_10_whitelist.sh
 │     ├─ nf_20_allowlist_ports.sh
 │     ├─ nf_30_openvpn.sh
 │     ├─ nf_40_tcp_ssh.sh
+│     ├─ nf_45_http_https_protect.sh
 │     ├─ nf_50_udp_base.sh
 │     ├─ nf_60_packet_validation.sh
-│     ├─ nf_70_a2s_filters.sh
-│     └─ nf_99_finalize.sh
+│     └─ nf_70_a2s_filters.sh
 └─ docs/
    └─ modular-loader-architecture.md
 ```
 
 Notas:
-- Prefijos recomendados: ip_ y nf_.
-- En iptables y nftables, usar prefijo numérico (`*_00_...`, `*_10_...`) permite orden estable sin sistema de prioridades.
-- Módulos common_ solo para utilidades compartidas (sin reglas específicas de backend).
-- Los entrypoints cargan módulos exclusivamente desde `modules/ip` y `modules/nf`.
+- Prefijos recomendados: `ip_` y `nf_`.
+- Los módulos de infraestructura transversal por backend (`ip_chain_setup`, `ip_finalize`, `nf_chain_setup`, `nf_finalize`) viven en `modules/` raíz.
+- Módulos `common_*` solo para utilidades compartidas (sin reglas específicas de backend).
+- Los entrypoints cargan desde el directorio del backend y también desde `modules/` raíz.
 
 ---
 
@@ -142,16 +144,17 @@ Responsabilidades:
 
 ### Selección por target
 
-- En iptables.rules.sh: buscar modules/ip/ip_*.sh
-- En nftables.rules.sh: buscar modules/nf/nf_*.sh
+- En `iptables.rules.sh`: buscar `ip_*.sh` en `modules/ip` y `modules/`.
+- En `nftables.rules.sh`: buscar `nf_*.sh` en `modules/nf` y `modules/`.
 
 ### Comportamiento recomendado
 
-1. Listar archivos del patrón correspondiente.
-2. Ordenar alfabéticamente para determinismo.
-3. source de cada módulo.
-4. Derivar nombre base del módulo desde archivo.
-5. Invocar funciones metadata/validate/apply de ese módulo.
+1. Listar archivos del patrón correspondiente en backend + raíz.
+2. Asignar prioridad semántica (`*_chain_setup` primero, `*_finalize` último).
+3. Ordenar por prioridad y nombre para determinismo.
+4. `source` de cada módulo.
+5. Derivar nombre base del módulo desde archivo.
+6. Invocar funciones `metadata/validate/apply` de ese módulo.
 
 ---
 
@@ -230,7 +233,7 @@ Recomendaciones:
 ## Ejemplo de flujo (iptables)
 
 1. iptables.rules.sh invoca preload.
-2. Descubre modules/ip/ip_*.sh.
+2. Descubre `ip_*.sh` en `modules/ip` + `modules/`.
 3. Carga ip_30_openvpn.sh.
 4. Lee metadata y resuelve VPN_PORT por CLI/.env/default.
 5. Ejecuta ip_30_openvpn_validate.
@@ -243,10 +246,10 @@ Recomendaciones:
 ## Ejemplo de flujo (nftables)
 
 1. nftables.rules.sh invoca preload.
-2. Descubre modules/nf/nf_*.sh.
-3. nf_00_chain_setup crea tabla/cadenas base inet.
+2. Descubre `nf_*.sh` en `modules/nf` + `modules/`.
+3. `nf_chain_setup` crea tabla/cadenas base inet.
 4. nf_10..nf_70 aplican reglas por área (whitelist, OpenVPN, TCP, UDP, validaciones, A2S).
-5. nf_99_finalize muestra resumen operativo.
+5. `nf_finalize` muestra resumen operativo.
 6. postload reporta módulos ejecutados y omitidos.
 
 ---
@@ -277,8 +280,8 @@ sudo ./nftables.rules.sh --set TYPECHAIN=2 --set VPN_ENABLED=true --set VPN_PORT
 
 | Área | IPTables | NFTables | Estado |
 |---|---|---|---|
-| Inicialización de cadenas/tablas | `ip_00_chain_setup` | `nf_00_chain_setup` | ✅ Implementado |
-| Loopback | `ip_05_loopback` | Integrado en `nf_00_chain_setup` | ✅ Equivalente funcional |
+| Inicialización de cadenas/tablas | `ip_chain_setup` | `nf_chain_setup` | ✅ Implementado |
+| Loopback | `ip_05_loopback` | Integrado en `nf_chain_setup` | ✅ Equivalente funcional |
 | Whitelist IP | `ip_10_whitelist` | `nf_10_whitelist` | ✅ Implementado |
 | Allowlist de puertos | `ip_20_allowlist_ports` | `nf_20_allowlist_ports` | ✅ Implementado |
 | OpenVPN base | `ip_30_openvpn` | `nf_30_openvpn` | ✅ Implementado |
@@ -287,7 +290,7 @@ sudo ./nftables.rules.sh --set TYPECHAIN=2 --set VPN_ENABLED=true --set VPN_PORT
 | UDP base y límites | `ip_50_udp_base` | `nf_50_udp_base` | ✅ Implementado |
 | Validación de tamaños UDP | `ip_60_packet_validation` | `nf_60_packet_validation` | ✅ Implementado |
 | Filtros A2S / Steam / login | `ip_70_a2s_filters` | `nf_70_a2s_filters` | ✅ Implementado |
-| Cierre y resumen | `ip_99_finalize` | `nf_99_finalize` | ✅ Implementado |
+| Cierre y resumen | `ip_finalize` | `nf_finalize` | ✅ Implementado |
 
 Notas de paridad:
 - Hay equivalencia funcional por área, no equivalencia 1:1 de sintaxis entre motores.
@@ -332,7 +335,7 @@ sudo ./nftables.rules.sh
 ```
 
 Esperado:
-- Mensajes de éxito en `ip_99_finalize` / `nf_99_finalize`.
+- Mensajes de éxito en `ip_finalize` / `nf_finalize`.
 - Sin errores durante carga/validate/apply.
 
 ### 3) Verificación de reglas cargadas
@@ -361,7 +364,7 @@ Esperado:
 Antes de merge:
 - `--dry-run` en ambos entrypoints.
 - Revisión de que nuevos módulos respeten contrato `metadata/validate/apply`.
-- Verificar orden por prefijo numérico (`00..99`).
+- Verificar orden semántico (`*_chain_setup` primero, `*_finalize` al final) y alfabético en el resto.
 
 Resultado de aceptación sugerido:
 - Sin errores de validación.
@@ -376,7 +379,7 @@ Resultado de aceptación sugerido:
 - Mantenible: metadata y lógica viven juntas en el módulo.
 - Coexistencia limpia: dos entrypoints, misma filosofía.
 - Menor acoplamiento: utilidades comunes separadas de reglas específicas.
-- Determinista: orden alfabético evita ejecuciones ambiguas.
+- Determinista: prioridad semántica + orden alfabético evita ejecuciones ambiguas.
 
 ---
 
