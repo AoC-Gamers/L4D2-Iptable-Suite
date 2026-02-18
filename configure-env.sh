@@ -161,7 +161,7 @@ module_default_include() {
         ip_loopback|ip_whitelist|ip_allowlist_ports|ip_openvpn|ip_tcp_ssh|ip_http_https_protect)
             echo "true"
             ;;
-        ip_tcpfilter_chain|ip_l4d2_tcp_protect|ip_l4d2_udp_base|ip_l4d2_packet_validation|ip_l4d2_a2s_filters)
+        ip_l4d2_tcpfilter_chain|ip_l4d2_tcp_protect|ip_l4d2_udp_base|ip_l4d2_packet_validation|ip_l4d2_a2s_filters)
             echo "false"
             ;;
         *)
@@ -196,7 +196,7 @@ module_token_to_module_ids() {
         l4d2_packet_validation) echo "ip_l4d2_packet_validation nf_l4d2_packet_validation" ;;
         l4d2_a2s_filters) echo "ip_l4d2_a2s_filters nf_l4d2_a2s_filters" ;;
         loopback) echo "ip_loopback" ;;
-        tcpfilter_chain) echo "ip_tcpfilter_chain" ;;
+        l4d2_tcpfilter_chain|tcpfilter_chain) echo "ip_l4d2_tcpfilter_chain nf_l4d2_tcpfilter_chain" ;;
         ip_*|nf_*) echo "$token" ;;
         *) echo "$token" ;;
     esac
@@ -329,7 +329,7 @@ declare -a selectable_modules=(
     "ip_tcp_ssh|Acceso SSH base"
     "ip_l4d2_tcp_protect|Protección TCP L4D2"
     "ip_http_https_protect|Protección HTTP/HTTPS"
-    "ip_tcpfilter_chain|Cadena TCPfilter"
+    "ip_l4d2_tcpfilter_chain|Cadena TCPfilter L4D2"
     "ip_l4d2_udp_base|Base UDP GameServer"
     "ip_l4d2_packet_validation|Validación de paquetes UDP"
     "ip_l4d2_a2s_filters|Filtros A2S/Steam"

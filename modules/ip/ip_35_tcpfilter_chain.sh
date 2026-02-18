@@ -2,8 +2,8 @@
 
 ip_35_tcpfilter_chain_metadata() {
     cat << 'EOF'
-ID=ip_tcpfilter_chain
-ALIASES=tcpfilter_chain
+ID=ip_l4d2_tcpfilter_chain
+ALIASES=l4d2_tcpfilter_chain
 DESCRIPTION=Sets up the TCPfilter chain to control new TCP connections
 REQUIRED_VARS=
 OPTIONAL_VARS=ENABLE_L4D2_TCP_PROTECT LOG_PREFIX_TCP_RCON_BLOCK L4D2_TCP_PROTECTION TCP_DOCKER
@@ -15,7 +15,7 @@ ip_35_tcpfilter_chain_validate() {
     case "${ENABLE_L4D2_TCP_PROTECT:-}" in
         true|false) ;;
         *)
-            echo "ERROR: ip_tcpfilter_chain: ENABLE_L4D2_TCP_PROTECT must be true or false"
+            echo "ERROR: ip_l4d2_tcpfilter_chain: ENABLE_L4D2_TCP_PROTECT must be true or false"
             return 2
             ;;
     esac

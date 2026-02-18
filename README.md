@@ -330,8 +330,8 @@ modules/
   - `ip_l4d2_tcp_protect` / `nf_l4d2_tcp_protect`
   - Variables: `ENABLE_L4D2_TCP_PROTECT`, `L4D2_GAMESERVER_PORTS`, `L4D2_TCP_PROTECTION`, `LOG_PREFIX_TCP_RCON_BLOCK`
 - **Cadena anti-spam TCP (ip específico)**
-  - `ip_tcpfilter_chain`
-  - En `nftables` no hay equivalente 1:1 de cadena.
+  - `ip_l4d2_tcpfilter_chain` / `nf_l4d2_tcpfilter_chain` (compatibilidad)
+  - En `nftables`, la protección efectiva la aplica `nf_l4d2_tcp_protect`.
 
 ### 1. Instalación Inicial
 ```bash

@@ -13,7 +13,7 @@ Inicializar cadenas/tablas base y políticas por defecto antes de módulos funci
 
 ## Alcance
 - `chain_setup` no gestiona políticas de dominio L4D2.
-- La protección TCP L4D2 se maneja en `l4d2_tcp_protect` y la cadena `TCPfilter` en `ip_tcpfilter_chain`.
+- La protección TCP L4D2 se maneja en `l4d2_tcp_protect`; `l4d2_tcpfilter_chain` es cadena real en `ip` y compatibilidad no-op en `nf`.
 
 ## Diferencias por backend
 - `ip`: limpieza amplia de tablas/cadenas y compatibilidad Docker opcional.

@@ -51,6 +51,7 @@ Ambos deben cargar módulos dinámicamente desde modules sin conocer de antemano
 │  │  ├─ ip_60_l4d2_packet_validation.sh
 │  │  └─ ip_70_l4d2_a2s_filters.sh
 │  └─ nf/
+│     ├─ nf_35_l4d2_tcpfilter_chain.sh
 │     ├─ nf_10_whitelist.sh
 │     ├─ nf_20_allowlist_ports.sh
 │     ├─ nf_30_openvpn.sh
@@ -287,7 +288,7 @@ sudo ./nftables.rules.sh --set TYPECHAIN=2 --set VPN_PORT=1194
 | Whitelist IP | `ip_10_whitelist` | `nf_10_whitelist` | ✅ Implementado |
 | Allowlist de puertos | `ip_20_allowlist_ports` | `nf_20_allowlist_ports` | ✅ Implementado |
 | OpenVPN base | `ip_30_openvpn` | `nf_30_openvpn` | ✅ Implementado |
-| Cadena TCP anti-spam | `ip_35_tcpfilter_chain` | Sin equivalente 1:1 | ✅ Implementado |
+| Cadena TCP anti-spam | `ip_l4d2_tcpfilter_chain` | `nf_l4d2_tcpfilter_chain` (compat/no-op) | ✅ Implementado |
 | SSH base | `ip_40_tcp_ssh` | `nf_40_tcp_ssh` | ✅ Implementado |
 | Protección TCP L4D2 | `ip_l4d2_tcp_protect` | `nf_l4d2_tcp_protect` | ✅ Implementado |
 | UDP base y límites | `ip_l4d2_udp_base` | `nf_l4d2_udp_base` | ✅ Implementado |
