@@ -4,9 +4,9 @@ ip_chain_setup_metadata() {
     cat << 'EOF'
 ID=ip_chain_setup
 DESCRIPTION=Sets up cleanup, base policies, and required chains for the iptables backend
-REQUIRED_VARS=TYPECHAIN DOCKER_INPUT_COMPAT DOCKER_CHAIN_AUTORECOVER ENABLE_TCP_PROTECT
-OPTIONAL_VARS=TCP_PROTECTION TCP_DOCKER
-DEFAULTS=TYPECHAIN=0 DOCKER_INPUT_COMPAT=false DOCKER_CHAIN_AUTORECOVER=true ENABLE_TCP_PROTECT=true TCP_PROTECTION= TCP_DOCKER=
+REQUIRED_VARS=TYPECHAIN DOCKER_INPUT_COMPAT DOCKER_CHAIN_AUTORECOVER ENABLE_L4D2_TCP_PROTECT
+OPTIONAL_VARS=L4D2_TCP_PROTECTION TCP_DOCKER
+DEFAULTS=TYPECHAIN=0 DOCKER_INPUT_COMPAT=false DOCKER_CHAIN_AUTORECOVER=true ENABLE_L4D2_TCP_PROTECT=true L4D2_TCP_PROTECTION= TCP_DOCKER=
 EOF
 }
 
@@ -118,7 +118,7 @@ ip_chain_setup_apply() {
     iptables -N STEAM_GROUP_LIMITS 2>/dev/null || true
     iptables -N l4d2loginfilter 2>/dev/null || true
 
-    if [ "$ENABLE_TCP_PROTECT" = "true" ] || [ -n "$TCP_PROTECTION" ] || [ -n "$TCP_DOCKER" ]; then
+    if [ "$ENABLE_L4D2_TCP_PROTECT" = "true" ] || [ -n "$L4D2_TCP_PROTECTION" ] || [ -n "$TCP_DOCKER" ]; then
         iptables -N TCPfilter 2>/dev/null || true
     fi
 

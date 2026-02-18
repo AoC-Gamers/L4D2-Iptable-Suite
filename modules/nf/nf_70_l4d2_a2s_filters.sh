@@ -3,29 +3,45 @@
 # shellcheck disable=SC1090
 . "${PROJECT_ROOT:-.}/modules/common_nft.sh"
 
-nf_70_a2s_filters_metadata() {
+nf_70_l4d2_a2s_filters_metadata() {
     cat << 'EOF'
-ID=nf_a2s_filters
+ID=nf_l4d2_a2s_filters
 DESCRIPTION=Applies A2S/Steam Group filters and short-flood controls in the nftables backend
-REQUIRED_VARS=TYPECHAIN GAMESERVERPORTS LOG_PREFIX_A2S_INFO LOG_PREFIX_A2S_PLAYERS LOG_PREFIX_A2S_RULES LOG_PREFIX_STEAM_GROUP LOG_PREFIX_L4D2_CONNECT LOG_PREFIX_L4D2_RESERVE
+REQUIRED_VARS=TYPECHAIN ENABLE_L4D2_A2S_FILTERS L4D2_GAMESERVER_PORTS LOG_PREFIX_A2S_INFO LOG_PREFIX_A2S_PLAYERS LOG_PREFIX_A2S_RULES LOG_PREFIX_STEAM_GROUP LOG_PREFIX_L4D2_CONNECT LOG_PREFIX_L4D2_RESERVE
 OPTIONAL_VARS=
-DEFAULTS=TYPECHAIN=0 GAMESERVERPORTS=27015 LOG_PREFIX_A2S_INFO=A2S_INFO_FLOOD: LOG_PREFIX_A2S_PLAYERS=A2S_PLAYERS_FLOOD: LOG_PREFIX_A2S_RULES=A2S_RULES_FLOOD: LOG_PREFIX_STEAM_GROUP=STEAM_GROUP_FLOOD: LOG_PREFIX_L4D2_CONNECT=L4D2_CONNECT_FLOOD: LOG_PREFIX_L4D2_RESERVE=L4D2_RESERVE_FLOOD:
+DEFAULTS=TYPECHAIN=0 ENABLE_L4D2_A2S_FILTERS=true L4D2_GAMESERVER_PORTS=27015 LOG_PREFIX_A2S_INFO=A2S_INFO_FLOOD: LOG_PREFIX_A2S_PLAYERS=A2S_PLAYERS_FLOOD: LOG_PREFIX_A2S_RULES=A2S_RULES_FLOOD: LOG_PREFIX_STEAM_GROUP=STEAM_GROUP_FLOOD: LOG_PREFIX_L4D2_CONNECT=L4D2_CONNECT_FLOOD: LOG_PREFIX_L4D2_RESERVE=L4D2_RESERVE_FLOOD:
 EOF
 }
 
-nf_70_a2s_filters_validate() {
+nf_70_l4d2_a2s_filters_validate() {
     case "${TYPECHAIN:-}" in
         0|1|2) ;;
         *)
-            echo "ERROR: nf_a2s_filters: TYPECHAIN must be 0, 1 or 2"
+            echo "ERROR: nf_l4d2_a2s_filters: TYPECHAIN must be 0, 1 or 2"
             return 2
             ;;
     esac
+
+    case "${ENABLE_L4D2_A2S_FILTERS:-true}" in
+        true|false) ;;
+        *)
+            echo "ERROR: nf_l4d2_a2s_filters: ENABLE_L4D2_A2S_FILTERS must be true or false"
+            return 2
+            ;;
+    esac
+
+    nf_validate_ports_spec "$L4D2_GAMESERVER_PORTS" "nf_l4d2_a2s_filters: L4D2_GAMESERVER_PORTS" || return $?
 }
 
-nf_70_a2s_filters_apply() {
+nf_70_l4d2_a2s_filters_apply() {
     local chain game_ports_expr
-    game_ports_expr="$(nf_ports_set_expr "$GAMESERVERPORTS")"
+
+    if [ "${ENABLE_L4D2_A2S_FILTERS:-true}" != "true" ]; then
+        echo "INFO: nf_l4d2_a2s_filters: disabled (ENABLE_L4D2_A2S_FILTERS=false), skipping"
+        return 0
+    fi
+
+    game_ports_expr="$(nf_ports_set_expr "$L4D2_GAMESERVER_PORTS")"
 
     nft add chain inet l4d2_filter a2s_info_limit
     nft add chain inet l4d2_filter a2s_players_limit

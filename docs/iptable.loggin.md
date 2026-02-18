@@ -159,19 +159,17 @@ LOG_PREFIX_TCP_RCON_BLOCK=\"TCP_RCON_BLOCK: \"
 LOG_PREFIX_ICMP_FLOOD=\"ICMP_FLOOD: \"
 
 # Configuración de Puertos (para clasificación en reportes)
-GAMESERVERPORTS=\"27015\"
-TVSERVERPORTS=\"27020\"
+L4D2_GAMESERVER_PORTS="27015"
+L4D2_TV_PORTS="27020"
 ```
-
-### 2. Configuración de Permisos
-
+- **Configuración**: Basada en `L4D2_CMD_LIMIT` y algoritmos hashlimit específicos
 Para que el script pueda acceder a los logs del sistema, el usuario debe tener permisos adecuados:
 
-```bash
+L4D2_CMD_LIMIT=60  # Reducir de 100 a 60
 # Agregar usuario al grupo 'adm' (para acceso a logs)
 sudo usermod -a -G adm $USER
-
-# Reiniciar sesión o aplicar cambios de grupo
+ENABLE_L4D2_TCP_PROTECT=true
+L4D2_TCP_PROTECTION="27015:27020"
 newgrp adm
 
 # Verificar permisos
@@ -440,7 +438,7 @@ Todos los reportes JSON incluyen:
 #### UDP_NEW_LIMIT y UDP_EST_LIMIT
 - **Descripción**: Protección contra floods UDP en conexiones nuevas y establecidas
 - **Detalles técnicos**: Ver [Ataques de Rate Limiting UDP](iptables.rules.md#ataques-rate-limiting-udp)
-- **Configuración**: Basada en `CMD_LIMIT` y algoritmos hashlimit específicos
+- **Configuración**: Basada en `L4D2_CMD_LIMIT` y algoritmos hashlimit específicos
 
 ### Otros Ataques
 
@@ -489,14 +487,14 @@ Todos los reportes JSON incluyen:
 #### Si predominan ataques A2S:
 ```bash
 # Ajustar límites más estrictos en .env
-CMD_LIMIT=60  # Reducir de 100 a 60
+L4D2_CMD_LIMIT=60  # Reducir de 100 a 60
 ```
 
 #### Si hay muchos TCP_RCON_BLOCK:
 ```bash
 # Habilitar protección TCP completa
-ENABLE_TCP_PROTECT=true
-TCP_PROTECTION=\"27015:27020\"
+ENABLE_L4D2_TCP_PROTECT=true
+L4D2_TCP_PROTECTION=\"27015:27020\"
 ```
 
 #### Si hay ataques persistentes de una IP:

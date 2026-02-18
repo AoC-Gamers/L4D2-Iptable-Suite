@@ -95,7 +95,7 @@ run_preload() {
     done
 
     # MODULES_ONLY supports comma-separated module IDs, e.g.:
-    # MODULES_ONLY="ip_chain_setup,ip_udp_base"
+    # MODULES_ONLY="ip_chain_setup,ip_l4d2_udp_base"
     # It is merged with --only entries.
     local modules_only_raw="${MODULES_ONLY:-}"
     if [ -n "$modules_only_raw" ]; then
@@ -112,7 +112,7 @@ run_preload() {
     fi
 
     # MODULES_EXCLUDE supports comma-separated module IDs, e.g.:
-    # MODULES_EXCLUDE="ip_openvpn,ip_a2s_filters,nf_openvpn"
+    # MODULES_EXCLUDE="ip_openvpn,ip_l4d2_a2s_filters,nf_openvpn"
     # It is merged with --skip entries.
     local modules_exclude_raw="${MODULES_EXCLUDE:-}"
     if [ -n "$modules_exclude_raw" ]; then

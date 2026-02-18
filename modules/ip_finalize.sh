@@ -4,9 +4,9 @@ ip_finalize_metadata() {
     cat << 'EOF'
 ID=ip_finalize
 DESCRIPTION=Applies final policies and prints a summary for the iptables backend
-REQUIRED_VARS=TYPECHAIN DOCKER_INPUT_COMPAT ENABLE_TCP_PROTECT TVSERVERPORTS DOCKER_CHAIN_AUTORECOVER
+REQUIRED_VARS=TYPECHAIN DOCKER_INPUT_COMPAT ENABLE_L4D2_TCP_PROTECT L4D2_TV_PORTS DOCKER_CHAIN_AUTORECOVER
 OPTIONAL_VARS=
-DEFAULTS=TYPECHAIN=0 DOCKER_INPUT_COMPAT=false ENABLE_TCP_PROTECT=true TVSERVERPORTS=27020 DOCKER_CHAIN_AUTORECOVER=true
+DEFAULTS=TYPECHAIN=0 DOCKER_INPUT_COMPAT=false ENABLE_L4D2_TCP_PROTECT=true L4D2_TV_PORTS=27020 DOCKER_CHAIN_AUTORECOVER=true
 EOF
 }
 
@@ -32,8 +32,8 @@ ip_finalize_apply() {
     fi
 
     echo "OK: iptables rules applied successfully"
-    echo "   - SourceTV separated: Ports $TVSERVERPORTS"
-    echo "   - TCP Protection: $ENABLE_TCP_PROTECT"
+    echo "   - SourceTV separated: Ports $L4D2_TV_PORTS"
+    echo "   - TCP Protection: $ENABLE_L4D2_TCP_PROTECT"
     echo "   - Chain type: $TYPECHAIN (0=INPUT, 1=DOCKER-USER, 2=BOTH)"
     echo "   - Docker INPUT compatibility: $DOCKER_INPUT_COMPAT"
     echo "   - Docker chain auto-recover: $DOCKER_CHAIN_AUTORECOVER"

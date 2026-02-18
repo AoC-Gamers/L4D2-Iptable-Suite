@@ -46,18 +46,18 @@ Ambos deben cargar módulos dinámicamente desde modules sin conocer de antemano
 │  │  ├─ ip_35_tcpfilter_chain.sh
 │  │  ├─ ip_40_tcp_ssh.sh
 │  │  ├─ ip_45_http_https_protect.sh
-│  │  ├─ ip_50_udp_base.sh
-│  │  ├─ ip_60_packet_validation.sh
-│  │  └─ ip_70_a2s_filters.sh
+│  │  ├─ ip_50_l4d2_udp_base.sh
+│  │  ├─ ip_60_l4d2_packet_validation.sh
+│  │  └─ ip_70_l4d2_a2s_filters.sh
 │  └─ nf/
 │     ├─ nf_10_whitelist.sh
 │     ├─ nf_20_allowlist_ports.sh
 │     ├─ nf_30_openvpn.sh
 │     ├─ nf_40_tcp_ssh.sh
 │     ├─ nf_45_http_https_protect.sh
-│     ├─ nf_50_udp_base.sh
-│     ├─ nf_60_packet_validation.sh
-│     └─ nf_70_a2s_filters.sh
+│     ├─ nf_50_l4d2_udp_base.sh
+│     ├─ nf_60_l4d2_packet_validation.sh
+│     └─ nf_70_l4d2_a2s_filters.sh
 └─ docs/
    └─ modular-loader-architecture.md
 ```
@@ -287,9 +287,9 @@ sudo ./nftables.rules.sh --set TYPECHAIN=2 --set VPN_ENABLED=true --set VPN_PORT
 | OpenVPN base | `ip_30_openvpn` | `nf_30_openvpn` | ✅ Implementado |
 | Cadena TCP anti-spam | `ip_35_tcpfilter_chain` | Integrado en `nf_40_tcp_ssh` | ✅ Equivalente funcional |
 | TCP/SSH protección | `ip_40_tcp_ssh` | `nf_40_tcp_ssh` | ✅ Implementado |
-| UDP base y límites | `ip_50_udp_base` | `nf_50_udp_base` | ✅ Implementado |
-| Validación de tamaños UDP | `ip_60_packet_validation` | `nf_60_packet_validation` | ✅ Implementado |
-| Filtros A2S / Steam / login | `ip_70_a2s_filters` | `nf_70_a2s_filters` | ✅ Implementado |
+| UDP base y límites | `ip_l4d2_udp_base` | `nf_l4d2_udp_base` | ✅ Implementado |
+| Validación de tamaños UDP | `ip_l4d2_packet_validation` | `nf_l4d2_packet_validation` | ✅ Implementado |
+| Filtros A2S / Steam / login | `ip_l4d2_a2s_filters` | `nf_l4d2_a2s_filters` | ✅ Implementado |
 | Cierre y resumen | `ip_finalize` | `nf_finalize` | ✅ Implementado |
 
 Notas de paridad:
@@ -353,7 +353,7 @@ Esperado:
 Ejecutar para ambos backends (mismo `.env`):
 - `TYPECHAIN=0`, `TYPECHAIN=1`, `TYPECHAIN=2`.
 - `VPN_ENABLED=false` y `VPN_ENABLED=true`.
-- `ENABLE_TCP_PROTECT=false` y `ENABLE_TCP_PROTECT=true`.
+- `ENABLE_L4D2_TCP_PROTECT=false` y `ENABLE_L4D2_TCP_PROTECT=true`.
 - Con y sin `WHITELISTED_IPS`.
 
 Esperado:

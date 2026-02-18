@@ -1,48 +1,61 @@
 #!/bin/bash
 
-ip_50_udp_base_metadata() {
+ip_50_l4d2_udp_base_metadata() {
     cat << 'EOF'
-ID=ip_udp_base
+ID=ip_l4d2_udp_base
 DESCRIPTION=Applies base UDP/state/ICMP rules for GameServer and SourceTV services
-REQUIRED_VARS=TYPECHAIN GAMESERVERPORTS TVSERVERPORTS CMD_LIMIT LOG_PREFIX_UDP_NEW_LIMIT LOG_PREFIX_UDP_EST_LIMIT LOG_PREFIX_ICMP_FLOOD
+REQUIRED_VARS=TYPECHAIN ENABLE_L4D2_UDP_BASE L4D2_GAMESERVER_PORTS L4D2_TV_PORTS L4D2_CMD_LIMIT LOG_PREFIX_UDP_NEW_LIMIT LOG_PREFIX_UDP_EST_LIMIT LOG_PREFIX_ICMP_FLOOD
 OPTIONAL_VARS=
-DEFAULTS=TYPECHAIN=0 GAMESERVERPORTS=27015 TVSERVERPORTS=27020 CMD_LIMIT=100 LOG_PREFIX_UDP_NEW_LIMIT=UDP_NEW_LIMIT: LOG_PREFIX_UDP_EST_LIMIT=UDP_EST_LIMIT: LOG_PREFIX_ICMP_FLOOD=ICMP_FLOOD:
+DEFAULTS=TYPECHAIN=0 ENABLE_L4D2_UDP_BASE=true L4D2_GAMESERVER_PORTS=27015 L4D2_TV_PORTS=27020 L4D2_CMD_LIMIT=100 LOG_PREFIX_UDP_NEW_LIMIT=UDP_NEW_LIMIT: LOG_PREFIX_UDP_EST_LIMIT=UDP_EST_LIMIT: LOG_PREFIX_ICMP_FLOOD=ICMP_FLOOD:
 EOF
 }
 
-ip_50_udp_base_validate() {
+ip_50_l4d2_udp_base_validate() {
     case "${TYPECHAIN:-}" in
         0|1|2) ;;
         *)
-            echo "ERROR: ip_udp_base: TYPECHAIN must be 0, 1 or 2"
+            echo "ERROR: ip_l4d2_udp_base: TYPECHAIN must be 0, 1 or 2"
             return 2
             ;;
     esac
 
-    if ! [[ "${CMD_LIMIT}" =~ ^[0-9]+$ ]]; then
-        echo "ERROR: ip_udp_base: CMD_LIMIT must be numeric"
+    case "${ENABLE_L4D2_UDP_BASE:-}" in
+        true|false) ;;
+        *)
+            echo "ERROR: ip_l4d2_udp_base: ENABLE_L4D2_UDP_BASE must be true or false"
+            return 2
+            ;;
+    esac
+
+    if ! [[ "${L4D2_CMD_LIMIT}" =~ ^[0-9]+$ ]]; then
+        echo "ERROR: ip_l4d2_udp_base: L4D2_CMD_LIMIT must be numeric"
         return 2
     fi
 
-    if [ "$CMD_LIMIT" -lt 10 ] || [ "$CMD_LIMIT" -gt 10000 ]; then
-        echo "ERROR: ip_udp_base: CMD_LIMIT must be between 10 and 10000"
+    if [ "$L4D2_CMD_LIMIT" -lt 10 ] || [ "$L4D2_CMD_LIMIT" -gt 10000 ]; then
+        echo "ERROR: ip_l4d2_udp_base: L4D2_CMD_LIMIT must be between 10 and 10000"
         return 2
     fi
 
-    if [ -n "${GAMESERVERPORTS:-}" ] && ! [[ "${GAMESERVERPORTS}" =~ ^[0-9]+(:[0-9]+)?(,[0-9]+(:[0-9]+)?)*$ ]]; then
-        echo "ERROR: ip_udp_base: invalid GAMESERVERPORTS format"
+    if [ -n "${L4D2_GAMESERVER_PORTS:-}" ] && ! [[ "${L4D2_GAMESERVER_PORTS}" =~ ^[0-9]+(:[0-9]+)?(,[0-9]+(:[0-9]+)?)*$ ]]; then
+        echo "ERROR: ip_l4d2_udp_base: invalid L4D2_GAMESERVER_PORTS format"
         return 2
     fi
 
-    if [ -n "${TVSERVERPORTS:-}" ] && ! [[ "${TVSERVERPORTS}" =~ ^[0-9]+(:[0-9]+)?(,[0-9]+(:[0-9]+)?)*$ ]]; then
-        echo "ERROR: ip_udp_base: invalid TVSERVERPORTS format"
+    if [ -n "${L4D2_TV_PORTS:-}" ] && ! [[ "${L4D2_TV_PORTS}" =~ ^[0-9]+(:[0-9]+)?(,[0-9]+(:[0-9]+)?)*$ ]]; then
+        echo "ERROR: ip_l4d2_udp_base: invalid L4D2_TV_PORTS format"
         return 2
     fi
 }
 
-ip_50_udp_base_apply() {
-    local cmd_limit_leeway=$((CMD_LIMIT + 10))
-    local cmd_limit_upper=$((CMD_LIMIT + 30))
+ip_50_l4d2_udp_base_apply() {
+    local cmd_limit_leeway=$((L4D2_CMD_LIMIT + 10))
+    local cmd_limit_upper=$((L4D2_CMD_LIMIT + 30))
+
+    if [ "$ENABLE_L4D2_UDP_BASE" != "true" ]; then
+        echo "INFO: ip_l4d2_udp_base: disabled (ENABLE_L4D2_UDP_BASE=false), skipping"
+        return 0
+    fi
 
     iptables -A UDP_GAME_NEW_LIMIT -m hashlimit --hashlimit-upto 1/s --hashlimit-burst 3 --hashlimit-mode srcip,dstport --hashlimit-name L4D2_NEW_HASHLIMIT --hashlimit-htable-expire 5000 -j UDP_GAME_NEW_LIMIT_GLOBAL
     iptables -A UDP_GAME_NEW_LIMIT -m limit --limit 60/min --limit-burst 20 -j LOG --log-prefix "$LOG_PREFIX_UDP_NEW_LIMIT" --log-level 4
@@ -65,11 +78,11 @@ ip_50_udp_base_apply() {
             continue
         fi
 
-        iptables -A "$chain" -p udp -m multiport --dports "$GAMESERVERPORTS" -m state --state NEW -j UDP_GAME_NEW_LIMIT
-        iptables -A "$chain" -p udp -m multiport --dports "$TVSERVERPORTS" -m state --state NEW -j UDP_GAME_NEW_LIMIT
+        iptables -A "$chain" -p udp -m multiport --dports "$L4D2_GAMESERVER_PORTS" -m state --state NEW -j UDP_GAME_NEW_LIMIT
+        iptables -A "$chain" -p udp -m multiport --dports "$L4D2_TV_PORTS" -m state --state NEW -j UDP_GAME_NEW_LIMIT
 
-        iptables -A "$chain" -p udp -m multiport --dports "$GAMESERVERPORTS" -m state --state ESTABLISHED -j UDP_GAME_ESTABLISHED_LIMIT
-        iptables -A "$chain" -p udp -m multiport --dports "$TVSERVERPORTS" -m state --state ESTABLISHED -j UDP_GAME_ESTABLISHED_LIMIT
+        iptables -A "$chain" -p udp -m multiport --dports "$L4D2_GAMESERVER_PORTS" -m state --state ESTABLISHED -j UDP_GAME_ESTABLISHED_LIMIT
+        iptables -A "$chain" -p udp -m multiport --dports "$L4D2_TV_PORTS" -m state --state ESTABLISHED -j UDP_GAME_ESTABLISHED_LIMIT
     done
 
     iptables -A INPUT -m state --state ESTABLISHED,RELATED -j ACCEPT

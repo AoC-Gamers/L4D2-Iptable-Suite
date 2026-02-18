@@ -168,7 +168,7 @@ module_default_include() {
         ip_loopback|ip_whitelist|ip_allowlist_ports|ip_openvpn|ip_tcp_ssh|ip_http_https_protect)
             echo "true"
             ;;
-        ip_tcpfilter_chain|ip_udp_base|ip_packet_validation|ip_a2s_filters)
+        ip_tcpfilter_chain|ip_l4d2_udp_base|ip_l4d2_packet_validation|ip_l4d2_a2s_filters)
             echo "false"
             ;;
         *)
@@ -214,7 +214,7 @@ say_section "Backend y alcance"
 typechain="$(ask_with_context \
     "TYPECHAIN" \
     "0=input host, 1=docker-user (contenedores), 2=ambos." \
-    "docs/modules/12_ip_chain_setup.md" \
+    "docs/modules/03_chain_setup.md" \
     "TYPECHAIN (0=input, 1=docker-user, 2=both)" \
     "0" \
     "is_typechain" \
@@ -239,9 +239,9 @@ declare -a selectable_modules=(
     "ip_tcp_ssh|Acceso SSH y TCP"
     "ip_http_https_protect|Protección HTTP/HTTPS"
     "ip_tcpfilter_chain|Cadena TCPfilter"
-    "ip_udp_base|Base UDP GameServer"
-    "ip_packet_validation|Validación de paquetes UDP"
-    "ip_a2s_filters|Filtros A2S/Steam"
+    "ip_l4d2_udp_base|Base UDP GameServer"
+    "ip_l4d2_packet_validation|Validación de paquetes UDP"
+    "ip_l4d2_a2s_filters|Filtros A2S/Steam"
 )
 
 declare -a selected_only=()
@@ -296,16 +296,19 @@ else
     say_info "MODULES_EXCLUDE=$modules_exclude"
 fi
 
-game_ports="27015"
-tv_ports="27020"
-cmd_limit="100"
+l4d2_game_ports="27015"
+l4d2_tv_ports="27020"
+l4d2_cmd_limit="100"
 ssh_ports="22"
 ssh_require_whitelist="false"
 whitelist=""
 whitelist_domains=""
 udp_allow=""
 tcp_allow=""
-enable_tcp_protect="false"
+enable_l4d2_tcp_protect="false"
+enable_l4d2_udp_base="false"
+enable_l4d2_packet_validation="false"
+enable_l4d2_a2s_filters="false"
 enable_http_protect="false"
 http_https_ports="80,443"
 http_https_docker="80,443"
@@ -316,13 +319,14 @@ vpn_port="1195"
 vpn_subnet="10.8.0.0/24"
 vpn_interface="tun0"
 vpn_proto="udp"
+l4d2_tcp_protection=""
 
 if [ "${module_enabled[ip_tcp_ssh]:-false}" = "true" ]; then
     say_section "SSH/TCP"
     ssh_ports="$(ask_with_context \
         "SSH_PORT" \
         "Puertos SSH permitidos; admite lista/rango." \
-        "docs/modules/18_ip_40_tcp_ssh.md" \
+        "docs/modules/07_tcp_ssh.md" \
         "SSH_PORT (ej: 22 o 423,4230:4239)" \
         "22" \
         "is_required_ports_expr" \
@@ -331,29 +335,29 @@ if [ "${module_enabled[ip_tcp_ssh]:-false}" = "true" ]; then
     ssh_require_whitelist_raw="$(ask_with_context \
         "SSH_REQUIRE_WHITELIST" \
         "Si es true, SSH_PORT no se abre públicamente y solo entra vía whitelist." \
-        "docs/modules/18_ip_40_tcp_ssh.md" \
+        "docs/modules/07_tcp_ssh.md" \
         "SSH_REQUIRE_WHITELIST (true/false)" \
         "true" \
         "is_bool" \
         "SSH_REQUIRE_WHITELIST debe ser true o false.")"
     ssh_require_whitelist="${ssh_require_whitelist_raw,,}"
 
-    enable_tcp_protect_raw="$(ask_with_context \
-        "ENABLE_TCP_PROTECT" \
+    enable_l4d2_tcp_protect_raw="$(ask_with_context \
+        "ENABLE_L4D2_TCP_PROTECT" \
         "Activa bloqueo/protección anti-spam TCP (RCON/juego)." \
-        "docs/modules/18_ip_40_tcp_ssh.md" \
-        "ENABLE_TCP_PROTECT (true/false)" \
+        "docs/modules/07_tcp_ssh.md" \
+        "ENABLE_L4D2_TCP_PROTECT (true/false)" \
         "false" \
         "is_bool" \
-        "ENABLE_TCP_PROTECT debe ser true o false.")"
-    enable_tcp_protect="${enable_tcp_protect_raw,,}"
+        "ENABLE_L4D2_TCP_PROTECT debe ser true o false.")"
+    enable_l4d2_tcp_protect="${enable_l4d2_tcp_protect_raw,,}"
 
-    if [ "$enable_tcp_protect" = "true" ]; then
-        game_ports="$(ask_with_context \
-            "GAMESERVERPORTS" \
+    if [ "$enable_l4d2_tcp_protect" = "true" ]; then
+        l4d2_game_ports="$(ask_with_context \
+            "L4D2_GAMESERVER_PORTS" \
             "Puertos usados para protección TCP de juego/RCON." \
-            "docs/modules/18_ip_40_tcp_ssh.md" \
-            "GAMESERVERPORTS (ej: 27015 o 27015:27020)" \
+            "docs/modules/07_tcp_ssh.md" \
+            "L4D2_GAMESERVER_PORTS (ej: 27015 o 27015:27020)" \
             "27015" \
             "is_required_ports_expr" \
             "Formato inválido. Usa puertos/rangos separados por coma.")"
@@ -365,7 +369,7 @@ if [ "${module_enabled[ip_whitelist]:-false}" = "true" ] || [ "$ssh_require_whit
     whitelist="$(ask_with_context \
         "WHITELISTED_IPS" \
         "IPs de confianza (separadas por espacio), sin rate limits." \
-        "docs/modules/14_ip_10_whitelist.md" \
+        "docs/modules/04_whitelist.md" \
         "WHITELISTED_IPS (espacio separado)" \
         "" \
         "true" \
@@ -374,7 +378,7 @@ if [ "${module_enabled[ip_whitelist]:-false}" = "true" ] || [ "$ssh_require_whit
     whitelist_domains="$(ask_with_context \
         "WHITELISTED_DOMAINS" \
         "Dominios de confianza (separados por espacio), se resuelven a IPv4 al aplicar reglas." \
-        "docs/modules/14_ip_10_whitelist.md" \
+        "docs/modules/04_whitelist.md" \
         "WHITELISTED_DOMAINS (espacio separado, optional)" \
         "" \
         "true" \
@@ -391,7 +395,7 @@ if [ "${module_enabled[ip_allowlist_ports]:-false}" = "true" ]; then
     udp_allow="$(ask_with_context \
         "UDP_ALLOW_PORTS" \
         "Excepciones UDP adicionales (opcional)." \
-        "docs/modules/15_ip_20_allowlist_ports.md" \
+        "docs/modules/05_allowlist_ports.md" \
         "UDP_ALLOW_PORTS (comma/range, optional)" \
         "" \
         "is_optional_ports_expr" \
@@ -400,7 +404,7 @@ if [ "${module_enabled[ip_allowlist_ports]:-false}" = "true" ]; then
     tcp_allow="$(ask_with_context \
         "TCP_ALLOW_PORTS" \
         "Excepciones TCP adicionales (opcional)." \
-        "docs/modules/15_ip_20_allowlist_ports.md" \
+        "docs/modules/05_allowlist_ports.md" \
         "TCP_ALLOW_PORTS (comma/range, optional)" \
         "" \
         "is_optional_ports_expr" \
@@ -412,7 +416,7 @@ if [ "${module_enabled[ip_http_https_protect]:-false}" = "true" ]; then
     enable_http_protect_raw="$(ask_with_context \
         "ENABLE_HTTP_PROTECT" \
         "Activa protección anti-abuso para puertos web." \
-        "docs/modules/22_ip_45_http_https_protect.md" \
+        "docs/modules/08_http_https_protect.md" \
         "ENABLE_HTTP_PROTECT (true/false)" \
         "true" \
         "is_bool" \
@@ -423,7 +427,7 @@ if [ "${module_enabled[ip_http_https_protect]:-false}" = "true" ]; then
         http_https_ports="$(ask_with_context \
             "HTTP_HTTPS_PORTS" \
             "Puertos web en INPUT (host)." \
-            "docs/modules/22_ip_45_http_https_protect.md" \
+            "docs/modules/08_http_https_protect.md" \
             "HTTP_HTTPS_PORTS (ej: 80,443)" \
             "80,443" \
             "is_required_ports_expr" \
@@ -432,7 +436,7 @@ if [ "${module_enabled[ip_http_https_protect]:-false}" = "true" ]; then
         http_https_docker="$(ask_with_context \
             "HTTP_HTTPS_DOCKER" \
             "Puertos web en DOCKER-USER (opcional)." \
-            "docs/modules/22_ip_45_http_https_protect.md" \
+            "docs/modules/08_http_https_protect.md" \
             "HTTP_HTTPS_DOCKER (ej: 80,443)" \
             "80,443" \
             "is_required_ports_expr" \
@@ -441,7 +445,7 @@ if [ "${module_enabled[ip_http_https_protect]:-false}" = "true" ]; then
         http_https_rate="$(ask_with_context \
             "HTTP_HTTPS_RATE" \
             "Límite de conexiones nuevas por origen (formato num/unidad)." \
-            "docs/modules/22_ip_45_http_https_protect.md" \
+            "docs/modules/08_http_https_protect.md" \
             "HTTP_HTTPS_RATE (ej: 180/min)" \
             "180/min" \
             "is_rate_expr" \
@@ -450,7 +454,7 @@ if [ "${module_enabled[ip_http_https_protect]:-false}" = "true" ]; then
         http_https_burst="$(ask_with_context \
             "HTTP_HTTPS_BURST" \
             "Ráfaga permitida antes de bloquear." \
-            "docs/modules/22_ip_45_http_https_protect.md" \
+            "docs/modules/08_http_https_protect.md" \
             "HTTP_HTTPS_BURST" \
             "360" \
             "is_cmd_limit" \
@@ -463,7 +467,7 @@ if [ "${module_enabled[ip_openvpn]:-false}" = "true" ]; then
     vpn_enabled_raw="$(ask_with_context \
         "VPN_ENABLED" \
         "Habilita reglas OpenVPN (host/gateway)." \
-        "docs/modules/16_ip_30_openvpn.md" \
+        "docs/modules/06_openvpn.md" \
         "VPN_ENABLED (true/false)" \
         "true" \
         "is_bool" \
@@ -474,7 +478,7 @@ if [ "${module_enabled[ip_openvpn]:-false}" = "true" ]; then
         vpn_port="$(ask_with_context \
             "VPN_PORT" \
             "Puerto de escucha de OpenVPN (1-65535)." \
-            "docs/modules/16_ip_30_openvpn.md" \
+            "docs/modules/06_openvpn.md" \
             "VPN_PORT" \
             "1195" \
             "is_port_number" \
@@ -483,7 +487,7 @@ if [ "${module_enabled[ip_openvpn]:-false}" = "true" ]; then
         vpn_subnet="$(ask_with_context \
             "VPN_SUBNET" \
             "Subred del túnel en formato CIDR IPv4 (ej: 10.8.0.0/24)." \
-            "docs/modules/16_ip_30_openvpn.md" \
+            "docs/modules/06_openvpn.md" \
             "VPN_SUBNET" \
             "10.8.0.0/24" \
             "is_ipv4_cidr" \
@@ -492,7 +496,7 @@ if [ "${module_enabled[ip_openvpn]:-false}" = "true" ]; then
         vpn_interface="$(ask_with_context \
             "VPN_INTERFACE" \
             "Interfaz del túnel OpenVPN (ej: tun0)." \
-            "docs/modules/16_ip_30_openvpn.md" \
+            "docs/modules/06_openvpn.md" \
             "VPN_INTERFACE" \
             "tun0" \
             "is_interface_name" \
@@ -502,34 +506,44 @@ if [ "${module_enabled[ip_openvpn]:-false}" = "true" ]; then
     fi
 fi
 
-if [ "${module_enabled[ip_udp_base]:-false}" = "true" ] || [ "${module_enabled[ip_packet_validation]:-false}" = "true" ] || [ "${module_enabled[ip_a2s_filters]:-false}" = "true" ]; then
+if [ "${module_enabled[ip_l4d2_udp_base]:-false}" = "true" ] || [ "${module_enabled[ip_l4d2_packet_validation]:-false}" = "true" ] || [ "${module_enabled[ip_l4d2_a2s_filters]:-false}" = "true" ]; then
+    if [ "${module_enabled[ip_l4d2_udp_base]:-false}" = "true" ]; then
+        enable_l4d2_udp_base="true"
+    fi
+    if [ "${module_enabled[ip_l4d2_packet_validation]:-false}" = "true" ]; then
+        enable_l4d2_packet_validation="true"
+    fi
+    if [ "${module_enabled[ip_l4d2_a2s_filters]:-false}" = "true" ]; then
+        enable_l4d2_a2s_filters="true"
+    fi
+
     say_section "Servicios de juego (UDP)"
-    game_ports="$(ask_with_context \
-        "GAMESERVERPORTS" \
+    l4d2_game_ports="$(ask_with_context \
+        "L4D2_GAMESERVER_PORTS" \
         "Puertos UDP principales del GameServer." \
-        "docs/modules/19_ip_50_udp_base.md" \
-        "GAMESERVERPORTS (ej: 27015 o 27015:27020)" \
-        "$game_ports" \
+        "docs/modules/09_l4d2_udp_base.md" \
+        "L4D2_GAMESERVER_PORTS (ej: 27015 o 27015:27020)" \
+        "$l4d2_game_ports" \
         "is_required_ports_expr" \
         "Formato inválido. Usa puertos/rangos separados por coma (ej: 27015 o 27015:27020).")"
 
-    tv_ports="$(ask_with_context \
-        "TVSERVERPORTS" \
+    l4d2_tv_ports="$(ask_with_context \
+        "L4D2_TV_PORTS" \
         "Puertos SourceTV/separados para espectadores." \
-        "docs/modules/19_ip_50_udp_base.md" \
-        "TVSERVERPORTS (ej: 27020 o 27115:27120)" \
+        "docs/modules/09_l4d2_udp_base.md" \
+        "L4D2_TV_PORTS (ej: 27020 o 27115:27120)" \
         "27020" \
         "is_required_ports_expr" \
         "Formato inválido. Usa puertos/rangos separados por coma (ej: 27020 o 27115:27120).")"
 
-    cmd_limit="$(ask_with_context \
-        "CMD_LIMIT" \
+    l4d2_cmd_limit="$(ask_with_context \
+        "L4D2_CMD_LIMIT" \
         "Controla los límites dinámicos de UDP; recomendado según tickrate." \
-        "docs/modules/19_ip_50_udp_base.md" \
-        "CMD_LIMIT" \
+        "docs/modules/09_l4d2_udp_base.md" \
+        "L4D2_CMD_LIMIT" \
         "100" \
         "is_cmd_limit" \
-        "CMD_LIMIT debe ser numérico entre 10 y 10000.")"
+        "L4D2_CMD_LIMIT debe ser numérico entre 10 y 10000.")"
 else
     say_info "Módulos de juego no incluidos: se mantienen defaults mínimos (sin activar protección de juego)."
 fi
@@ -538,7 +552,7 @@ say_section "Compatibilidad Docker"
 docker_input_compat_raw="$(ask_with_context \
     "DOCKER_INPUT_COMPAT" \
     "Si TYPECHAIN=0, preserva flujo Docker sin romper FORWARD/NAT." \
-    "docs/modules/12_ip_chain_setup.md" \
+    "docs/modules/03_chain_setup.md" \
     "DOCKER_INPUT_COMPAT (true/false)" \
     "false" \
     "is_bool" \
@@ -548,7 +562,7 @@ docker_input_compat="${docker_input_compat_raw,,}"
 docker_chain_autorecover_raw="$(ask_with_context \
     "DOCKER_CHAIN_AUTORECOVER" \
     "Intenta recuperar cadenas Docker si faltan." \
-    "docs/modules/12_ip_chain_setup.md" \
+    "docs/modules/03_chain_setup.md" \
     "DOCKER_CHAIN_AUTORECOVER (true/false)" \
     "true" \
     "is_bool" \
@@ -570,12 +584,16 @@ MODULES_EXCLUDE="${modules_exclude}"
 TYPECHAIN=${typechain}
 DOCKER_INPUT_COMPAT=${docker_input_compat}
 DOCKER_CHAIN_AUTORECOVER=${docker_chain_autorecover}
-ENABLE_TCP_PROTECT=${enable_tcp_protect}
 ENABLE_HTTP_PROTECT=${enable_http_protect}
+ENABLE_L4D2_TCP_PROTECT=${enable_l4d2_tcp_protect}
+ENABLE_L4D2_UDP_BASE=${enable_l4d2_udp_base}
+ENABLE_L4D2_PACKET_VALIDATION=${enable_l4d2_packet_validation}
+ENABLE_L4D2_A2S_FILTERS=${enable_l4d2_a2s_filters}
+L4D2_GAMESERVER_PORTS="${l4d2_game_ports}"
+L4D2_TV_PORTS="${l4d2_tv_ports}"
+L4D2_CMD_LIMIT=${l4d2_cmd_limit}
+L4D2_TCP_PROTECTION="${l4d2_tcp_protection}"
 
-GAMESERVERPORTS="${game_ports}"
-TVSERVERPORTS="${tv_ports}"
-CMD_LIMIT=${cmd_limit}
 SSH_PORT="${ssh_ports}"
 SSH_REQUIRE_WHITELIST=${ssh_require_whitelist}
 WHITELISTED_IPS="${whitelist}"
@@ -628,12 +646,15 @@ echo "  MODULE_MODE=$module_mode" >&2
 echo "  MODULES_ONLY=$modules_only" >&2
 echo "  MODULES_EXCLUDE=$modules_exclude" >&2
 echo "  TYPECHAIN=$typechain" >&2
-echo "  GAMESERVERPORTS=$game_ports" >&2
-echo "  TVSERVERPORTS=$tv_ports" >&2
-echo "  CMD_LIMIT=$cmd_limit" >&2
+echo "  L4D2_GAMESERVER_PORTS=$l4d2_game_ports" >&2
+echo "  L4D2_TV_PORTS=$l4d2_tv_ports" >&2
+echo "  L4D2_CMD_LIMIT=$l4d2_cmd_limit" >&2
 echo "  SSH_PORT=$ssh_ports" >&2
 echo "  SSH_REQUIRE_WHITELIST=$ssh_require_whitelist" >&2
-echo "  ENABLE_TCP_PROTECT=$enable_tcp_protect" >&2
+echo "  ENABLE_L4D2_TCP_PROTECT=$enable_l4d2_tcp_protect" >&2
+echo "  ENABLE_L4D2_UDP_BASE=$enable_l4d2_udp_base" >&2
+echo "  ENABLE_L4D2_PACKET_VALIDATION=$enable_l4d2_packet_validation" >&2
+echo "  ENABLE_L4D2_A2S_FILTERS=$enable_l4d2_a2s_filters" >&2
 echo "  ENABLE_HTTP_PROTECT=$enable_http_protect" >&2
 echo "  WHITELISTED_DOMAINS=$whitelist_domains" >&2
 echo "  VPN_ENABLED=$vpn_enabled" >&2

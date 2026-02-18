@@ -104,11 +104,11 @@ Edita el archivo `.env` según tu configuración:
 TYPECHAIN=0
 
 # Puertos de tu servidor L4D2
-GAMESERVERPORTS="27015"
-TVSERVERPORTS="27020"
+L4D2_GAMESERVER_PORTS="27015"
+L4D2_TV_PORTS="27020"
 
 # Protección TCP RCON
-ENABLE_TCP_PROTECT=true
+ENABLE_L4D2_TCP_PROTECT=true
 
 # SSH: no exponer públicamente cuando sea true
 SSH_PORT="2222,22220:22229"
@@ -245,25 +245,25 @@ Comando rápido:
 ```bash
 # .env configuration
 TYPECHAIN=0
-GAMESERVERPORTS="27015"
-TVSERVERPORTS="27020"
-ENABLE_TCP_PROTECT=true
+L4D2_GAMESERVER_PORTS="27015"
+L4D2_TV_PORTS="27020"
+ENABLE_L4D2_TCP_PROTECT=true
 ```
 
 ### Múltiples Servidores
 ```bash
 # .env configuration
 TYPECHAIN=0
-GAMESERVERPORTS="27015:27030"  # 16 servidores
-TVSERVERPORTS="27115:27130"    # 16 SourceTV
-ENABLE_TCP_PROTECT=true
+L4D2_GAMESERVER_PORTS="27015:27030"  # 16 servidores
+L4D2_TV_PORTS="27115:27130"          # 16 SourceTV
+ENABLE_L4D2_TCP_PROTECT=true
 ```
 
 ### Servidores en Docker
 ```bash
 # .env configuration
 TYPECHAIN=1  # Solo Docker
-GAMESERVERPORTS="27015:27018"
+L4D2_GAMESERVER_PORTS="27015:27018"
 TCP_DOCKER="80,443"  # Puertos adicionales
 SSH_DOCKER="2222"
 ```
@@ -272,10 +272,10 @@ SSH_DOCKER="2222"
 ```bash
 # .env configuration
 TYPECHAIN=2  # Nativo + Docker
-GAMESERVERPORTS="27015:27020"
-TVSERVERPORTS="27115:27120"
+L4D2_GAMESERVER_PORTS="27015:27020"
+L4D2_TV_PORTS="27115:27120"
 TCP_DOCKER="80,443,8080"
-ENABLE_TCP_PROTECT=true
+ENABLE_L4D2_TCP_PROTECT=true
 ```
 
 ## 📊 Tipos de Ataques Detectados
