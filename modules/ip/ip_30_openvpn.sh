@@ -18,9 +18,9 @@ ip_30_openvpn_metadata() {
     cat << 'EOF'
 ID=ip_openvpn
 DESCRIPTION=Applies OpenVPN rules in the iptables backend (host/DOCKER-USER)
-REQUIRED_VARS=TYPECHAIN VPN_ENABLED
+REQUIRED_VARS=TYPECHAIN VPN_PORT VPN_SUBNET VPN_INTERFACE
 OPTIONAL_VARS=VPN_PROTO VPN_PORT VPN_SUBNET VPN_INTERFACE VPN_DOCKER_INTERFACE VPN_LAN_SUBNET VPN_LAN_INTERFACE VPN_ENABLE_NAT VPN_LOG_ENABLED VPN_LOG_PREFIX VPN_ROUTER_REAL_IP VPN_ROUTER_ALIAS_IP
-DEFAULTS=TYPECHAIN=0 VPN_ENABLED=false VPN_PROTO=udp VPN_PORT=1194 VPN_SUBNET=10.8.0.0/24 VPN_INTERFACE=tun0 VPN_DOCKER_INTERFACE= VPN_LAN_SUBNET=192.168.1.0/24 VPN_LAN_INTERFACE= VPN_ENABLE_NAT=false VPN_LOG_ENABLED=false VPN_LOG_PREFIX=VPN_TRAFFIC: VPN_ROUTER_REAL_IP= VPN_ROUTER_ALIAS_IP=
+DEFAULTS=TYPECHAIN=0 VPN_PROTO=udp VPN_PORT=1194 VPN_SUBNET=10.8.0.0/24 VPN_INTERFACE=tun0 VPN_DOCKER_INTERFACE= VPN_LAN_SUBNET=192.168.1.0/24 VPN_LAN_INTERFACE= VPN_ENABLE_NAT=false VPN_LOG_ENABLED=false VPN_LOG_PREFIX=VPN_TRAFFIC: VPN_ROUTER_REAL_IP= VPN_ROUTER_ALIAS_IP=
 EOF
 }
 
@@ -33,32 +33,17 @@ ip_30_openvpn_validate() {
             ;;
     esac
 
-    case "${VPN_ENABLED:-false}" in
-        true|false) ;;
-        *)
-            echo "ERROR: ip_openvpn: VPN_ENABLED must be true or false"
-            return 2
-            ;;
-    esac
-
-    if [ "${VPN_ENABLED}" = "true" ]; then
-        if ! [[ "${VPN_PORT}" =~ ^[0-9]+$ ]]; then
-            echo "ERROR: ip_openvpn: VPN_PORT must be numeric"
-            return 2
-        fi
-        if [ -z "${VPN_SUBNET:-}" ] || [ -z "${VPN_INTERFACE:-}" ]; then
-            echo "ERROR: ip_openvpn: VPN_SUBNET and VPN_INTERFACE are required when VPN_ENABLED=true"
-            return 2
-        fi
+    if ! [[ "${VPN_PORT}" =~ ^[0-9]+$ ]]; then
+        echo "ERROR: ip_openvpn: VPN_PORT must be numeric"
+        return 2
+    fi
+    if [ -z "${VPN_SUBNET:-}" ] || [ -z "${VPN_INTERFACE:-}" ]; then
+        echo "ERROR: ip_openvpn: VPN_SUBNET and VPN_INTERFACE are required"
+        return 2
     fi
 }
 
 ip_30_openvpn_apply() {
-    if [ "${VPN_ENABLED}" != "true" ]; then
-        echo "INFO: ip_openvpn: VPN disabled, skipping"
-        return 0
-    fi
-
     VPN_PROTO="$(echo "${VPN_PROTO}" | tr 'A-Z' 'a-z')"
 
     if [ "$TYPECHAIN" -eq 1 ] || [ "$TYPECHAIN" -eq 2 ]; then

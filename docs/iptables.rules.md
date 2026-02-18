@@ -122,7 +122,6 @@ El script puede abrir el puerto de OpenVPN, permitir acceso desde el tun hacia e
 
 **Variables principales:**
 ```bash
-VPN_ENABLED=true
 VPN_PROTO="udp"
 VPN_PORT=1194
 VPN_SUBNET="10.8.0.0/24"

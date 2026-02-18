@@ -8,9 +8,13 @@ Permitir entrada de OpenVPN y conectividad VPN↔LAN según configuración.
 - nftables: `modules/nf/nf_30_openvpn.sh` (`ID=nf_openvpn`)
 
 ## Variables
-- `TYPECHAIN`, `VPN_ENABLED`, `VPN_PROTO`, `VPN_PORT`
+- `TYPECHAIN`, `VPN_PROTO`, `VPN_PORT`
 - `VPN_SUBNET`, `VPN_INTERFACE`, `VPN_LAN_SUBNET`
 - extras en `ip`: `VPN_DOCKER_INTERFACE`, `VPN_ENABLE_NAT`, `VPN_LAN_INTERFACE`, `VPN_LOG_*`, `VPN_ROUTER_*`
+
+## Activación
+- El módulo se activa por inclusión en `MODULES_ONLY`/`MODULES_EXCLUDE`.
+- `VPN_ENABLED` queda deprecada y ya no se usa.
 
 ## Diferencias
 - `ip` incluye más opciones avanzadas (NAT/log/DNAT).

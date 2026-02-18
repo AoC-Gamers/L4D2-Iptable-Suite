@@ -24,6 +24,12 @@ ip_10_whitelist_apply() {
     local effective_whitelist domain resolved_count ip has_static_whitelist
 
     effective_whitelist="${WHITELISTED_IPS:-}"
+
+    # Normalize separators from env/custom input (space/comma/semicolon/newline)
+    effective_whitelist="${effective_whitelist//,/ }"
+    effective_whitelist="${effective_whitelist//;/ }"
+    effective_whitelist="${effective_whitelist//$'\n'/ }"
+
     has_static_whitelist=false
     if [ -n "${WHITELISTED_IPS:-}" ]; then
         has_static_whitelist=true

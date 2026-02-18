@@ -7,9 +7,9 @@ nf_30_openvpn_metadata() {
     cat << 'EOF'
 ID=nf_openvpn
 DESCRIPTION=Applies base OpenVPN rules in the nftables backend
-REQUIRED_VARS=TYPECHAIN VPN_ENABLED
+REQUIRED_VARS=TYPECHAIN VPN_PORT VPN_SUBNET VPN_INTERFACE
 OPTIONAL_VARS=VPN_PROTO VPN_PORT VPN_SUBNET VPN_INTERFACE VPN_LAN_SUBNET
-DEFAULTS=TYPECHAIN=0 VPN_ENABLED=false VPN_PROTO=udp VPN_PORT=1194 VPN_SUBNET=10.8.0.0/24 VPN_INTERFACE=tun0 VPN_LAN_SUBNET=192.168.1.0/24
+DEFAULTS=TYPECHAIN=0 VPN_PROTO=udp VPN_PORT=1194 VPN_SUBNET=10.8.0.0/24 VPN_INTERFACE=tun0 VPN_LAN_SUBNET=192.168.1.0/24
 EOF
 }
 
@@ -22,30 +22,18 @@ nf_30_openvpn_validate() {
             ;;
     esac
 
-    case "${VPN_ENABLED:-}" in
-        true|false) ;;
-        *)
-            echo "ERROR: nf_openvpn: VPN_ENABLED must be true or false"
-            return 2
-            ;;
-    esac
+    if ! [[ "${VPN_PORT}" =~ ^[0-9]+$ ]]; then
+        echo "ERROR: nf_openvpn: VPN_PORT must be numeric"
+        return 2
+    fi
 
-    if [ "${VPN_ENABLED}" = "true" ]; then
-        if ! [[ "${VPN_PORT}" =~ ^[0-9]+$ ]]; then
-            echo "ERROR: nf_openvpn: VPN_PORT must be numeric"
-            return 2
-        fi
-
-        if [ -z "${VPN_SUBNET:-}" ] || [ -z "${VPN_INTERFACE:-}" ]; then
-            echo "ERROR: nf_openvpn: VPN_SUBNET and VPN_INTERFACE are required when VPN_ENABLED=true"
-            return 2
-        fi
+    if [ -z "${VPN_SUBNET:-}" ] || [ -z "${VPN_INTERFACE:-}" ]; then
+        echo "ERROR: nf_openvpn: VPN_SUBNET and VPN_INTERFACE are required"
+        return 2
     fi
 }
 
 nf_30_openvpn_apply() {
-    [ "$VPN_ENABLED" != "true" ] && return 0
-
     VPN_PROTO="$(echo "$VPN_PROTO" | tr 'A-Z' 'a-z')"
 
     if nf_chain_enabled input; then

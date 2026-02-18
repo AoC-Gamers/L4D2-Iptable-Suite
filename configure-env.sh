@@ -89,13 +89,6 @@ is_interface_name() {
     [[ "$1" =~ ^[a-zA-Z0-9._:+-]+$ ]]
 }
 
-is_module_mode() {
-    case "${1,,}" in
-        whitelist|blacklist) return 0 ;;
-        *) return 1 ;;
-    esac
-}
-
 is_rate_expr() {
     [[ "$1" =~ ^[0-9]+/(sec|min|hour|day)$ ]]
 }
@@ -177,6 +170,89 @@ module_default_include() {
     esac
 }
 
+module_backend_variants() {
+    case "$1" in
+        ip_chain_setup) echo "ip_chain_setup nf_chain_setup" ;;
+        ip_finalize) echo "ip_finalize nf_finalize" ;;
+        ip_whitelist) echo "ip_whitelist nf_whitelist" ;;
+        ip_allowlist_ports) echo "ip_allowlist_ports nf_allowlist_ports" ;;
+        ip_openvpn) echo "ip_openvpn nf_openvpn" ;;
+        ip_tcp_ssh) echo "ip_tcp_ssh nf_tcp_ssh" ;;
+        ip_http_https_protect) echo "ip_http_https_protect nf_http_https_protect" ;;
+        ip_l4d2_udp_base) echo "ip_l4d2_udp_base nf_l4d2_udp_base" ;;
+        ip_l4d2_packet_validation) echo "ip_l4d2_packet_validation nf_l4d2_packet_validation" ;;
+        ip_l4d2_a2s_filters) echo "ip_l4d2_a2s_filters nf_l4d2_a2s_filters" ;;
+        ip_loopback|ip_tcpfilter_chain) echo "$1" ;;
+        *) echo "$1" ;;
+    esac
+}
+
+append_module_variants() {
+    local module_id="$1"
+    local __target_array_name="$2"
+    local variant
+
+    for variant in $(module_backend_variants "$module_id"); do
+        eval "$__target_array_name+=(\"$variant\")"
+    done
+}
+
+module_id_to_file() {
+    local module_id="$1"
+    local search_dir candidate
+
+    case "$module_id" in
+        ip_chain_setup|nf_chain_setup|ip_finalize|nf_finalize)
+            echo "$project_root/modules/${module_id}.sh"
+            ;;
+        ip_*)
+            search_dir="$project_root/modules/ip"
+            ;;
+        nf_*)
+            search_dir="$project_root/modules/nf"
+            ;;
+        *)
+            echo ""
+            return 0
+            ;;
+    esac
+
+    if [ -n "${search_dir:-}" ] && [ -d "$search_dir" ]; then
+        for candidate in "$search_dir"/*.sh; do
+            [ -f "$candidate" ] || continue
+            if grep -q "^ID=${module_id}$" "$candidate" 2>/dev/null; then
+                echo "$candidate"
+                return 0
+            fi
+        done
+    fi
+
+    echo ""
+}
+
+collect_required_vars_for_module() {
+    local module_id="$1"
+    local target_assoc_name="$2"
+    local module_file required_raw var
+
+    module_file="$(module_id_to_file "$module_id")"
+    [ -n "$module_file" ] || return 0
+    [ -f "$module_file" ] || return 0
+
+    required_raw="$(grep -m1 '^REQUIRED_VARS=' "$module_file" | cut -d= -f2- || true)"
+    [ -n "$required_raw" ] || return 0
+
+    for var in $required_raw; do
+        [ -n "$var" ] || continue
+        eval "$target_assoc_name[\"$var\"]=true"
+    done
+}
+
+needs_var() {
+    local var_name="$1"
+    [ "${selected_required_vars[$var_name]:-false}" = "true" ]
+}
+
 build_csv() {
     local sep=""
     local out=""
@@ -221,12 +297,8 @@ typechain="$(ask_with_context \
     "TYPECHAIN debe ser 0, 1 o 2.")"
 
 say_section "Selección de módulos"
-module_mode="$(ask_validated \
-    "Modo de selección de módulos (whitelist=solo incluidos, blacklist=excluir algunos)" \
-    "whitelist" \
-    "is_module_mode" \
-    "El modo debe ser whitelist o blacklist")"
-module_mode="${module_mode,,}"
+module_mode="whitelist"
+say_info "Modo fijo: whitelist (solo módulos incluidos)."
 
 module_enabled[ip_chain_setup]="true"
 module_enabled[ip_finalize]="true"
@@ -245,56 +317,37 @@ declare -a selectable_modules=(
 )
 
 declare -a selected_only=()
-declare -a selected_exclude=()
-selected_only+=("ip_chain_setup")
+append_module_variants "ip_chain_setup" selected_only
 
-say_info "Módulos fijos: ip_chain_setup e ip_finalize siempre incluidos"
+say_info "Módulos fijos: chain_setup/finalize siempre incluidos (ip y nf)"
 
 for module_info in "${selectable_modules[@]}"; do
     module_id="${module_info%%|*}"
     module_desc="${module_info#*|}"
     default_include="$(module_default_include "$module_id")"
 
-    if [ "$module_mode" = "whitelist" ]; then
-        answer="$(ask_yes_no "¿Incluir $module_id ($module_desc)?" "$default_include")"
-        module_enabled[$module_id]="$answer"
-    else
-        default_exclude="false"
-        if [ "$default_include" = "false" ]; then
-            default_exclude="true"
-        fi
-        answer="$(ask_yes_no "¿Excluir $module_id ($module_desc)?" "$default_exclude")"
-        if [ "$answer" = "true" ]; then
-            module_enabled[$module_id]="false"
-        else
-            module_enabled[$module_id]="true"
-        fi
-    fi
+    answer="$(ask_yes_no "¿Incluir $module_id ($module_desc)?" "$default_include")"
+    module_enabled[$module_id]="$answer"
 
     if [ "${module_enabled[$module_id]}" = "true" ]; then
         say_info "$module_id => incluido"
-        selected_only+=("$module_id")
+        append_module_variants "$module_id" selected_only
     else
         say_warn "$module_id => excluido"
-        selected_exclude+=("$module_id")
     fi
 done
 
-selected_only+=("ip_finalize")
+append_module_variants "ip_finalize" selected_only
 
 modules_only=""
 modules_exclude=""
-if [ "$module_mode" = "whitelist" ]; then
-    modules_only="$(build_csv "${selected_only[@]}")"
-else
-    modules_exclude="$(build_csv "${selected_exclude[@]}")"
-fi
+modules_only="$(build_csv "${selected_only[@]}")"
+say_info "MODULES_ONLY=$modules_only"
 
-if [ "$module_mode" = "whitelist" ]; then
-    say_info "MODULES_ONLY=$modules_only"
-else
-    say_info "MODULES_EXCLUDE=$modules_exclude"
-fi
+declare -A selected_required_vars=()
+for selected_module in "${selected_only[@]}"; do
+    collect_required_vars_for_module "$selected_module" selected_required_vars
+done
 
 l4d2_game_ports="27015"
 l4d2_tv_ports="27020"
@@ -314,45 +367,50 @@ http_https_ports="80,443"
 http_https_docker="80,443"
 http_https_rate="180/min"
 http_https_burst="360"
-vpn_enabled="false"
 vpn_port="1195"
 vpn_subnet="10.8.0.0/24"
 vpn_interface="tun0"
 vpn_proto="udp"
 l4d2_tcp_protection=""
 
-if [ "${module_enabled[ip_tcp_ssh]:-false}" = "true" ]; then
+if needs_var "SSH_PORT" || needs_var "ENABLE_L4D2_TCP_PROTECT"; then
     say_section "SSH/TCP"
-    ssh_ports="$(ask_with_context \
-        "SSH_PORT" \
-        "Puertos SSH permitidos; admite lista/rango." \
-        "docs/modules/07_tcp_ssh.md" \
-        "SSH_PORT (ej: 22 o 423,4230:4239)" \
-        "22" \
-        "is_required_ports_expr" \
-        "Formato inválido para SSH_PORT.")"
+    if needs_var "SSH_PORT"; then
+        ssh_ports="$(ask_with_context \
+            "SSH_PORT" \
+            "Puertos SSH permitidos; admite lista/rango." \
+            "docs/modules/07_tcp_ssh.md" \
+            "SSH_PORT (ej: 22 o 423,4230:4239)" \
+            "22" \
+            "is_required_ports_expr" \
+            "Formato inválido para SSH_PORT.")"
+    fi
 
-    ssh_require_whitelist_raw="$(ask_with_context \
-        "SSH_REQUIRE_WHITELIST" \
-        "Si es true, SSH_PORT no se abre públicamente y solo entra vía whitelist." \
-        "docs/modules/07_tcp_ssh.md" \
-        "SSH_REQUIRE_WHITELIST (true/false)" \
-        "true" \
-        "is_bool" \
-        "SSH_REQUIRE_WHITELIST debe ser true o false.")"
-    ssh_require_whitelist="${ssh_require_whitelist_raw,,}"
+    if needs_var "SSH_REQUIRE_WHITELIST"; then
+        ssh_require_whitelist_raw="$(ask_with_context \
+            "SSH_REQUIRE_WHITELIST" \
+            "Si es true, SSH_PORT no se abre públicamente y solo entra vía whitelist." \
+            "docs/modules/07_tcp_ssh.md" \
+            "SSH_REQUIRE_WHITELIST (true/false)" \
+            "true" \
+            "is_bool" \
+            "SSH_REQUIRE_WHITELIST debe ser true o false.")"
+        ssh_require_whitelist="${ssh_require_whitelist_raw,,}"
+    fi
 
-    enable_l4d2_tcp_protect_raw="$(ask_with_context \
-        "ENABLE_L4D2_TCP_PROTECT" \
-        "Activa bloqueo/protección anti-spam TCP (RCON/juego)." \
-        "docs/modules/07_tcp_ssh.md" \
-        "ENABLE_L4D2_TCP_PROTECT (true/false)" \
-        "false" \
-        "is_bool" \
-        "ENABLE_L4D2_TCP_PROTECT debe ser true o false.")"
-    enable_l4d2_tcp_protect="${enable_l4d2_tcp_protect_raw,,}"
+    if needs_var "ENABLE_L4D2_TCP_PROTECT"; then
+        enable_l4d2_tcp_protect_raw="$(ask_with_context \
+            "ENABLE_L4D2_TCP_PROTECT" \
+            "Activa bloqueo/protección anti-spam TCP (RCON/juego)." \
+            "docs/modules/07_tcp_ssh.md" \
+            "ENABLE_L4D2_TCP_PROTECT (true/false)" \
+            "false" \
+            "is_bool" \
+            "ENABLE_L4D2_TCP_PROTECT debe ser true o false.")"
+        enable_l4d2_tcp_protect="${enable_l4d2_tcp_protect_raw,,}"
+    fi
 
-    if [ "$enable_l4d2_tcp_protect" = "true" ]; then
+    if [ "$enable_l4d2_tcp_protect" = "true" ] && needs_var "L4D2_GAMESERVER_PORTS"; then
         l4d2_game_ports="$(ask_with_context \
             "L4D2_GAMESERVER_PORTS" \
             "Puertos usados para protección TCP de juego/RCON." \
@@ -390,7 +448,7 @@ if [ "$ssh_require_whitelist" = "true" ] && [ -z "$whitelist" ] && [ -z "$whitel
     ssh_require_whitelist="false"
 fi
 
-if [ "${module_enabled[ip_allowlist_ports]:-false}" = "true" ]; then
+if needs_var "UDP_ALLOW_PORTS" || needs_var "TCP_ALLOW_PORTS"; then
     say_section "Allowlist de puertos"
     udp_allow="$(ask_with_context \
         "UDP_ALLOW_PORTS" \
@@ -411,7 +469,7 @@ if [ "${module_enabled[ip_allowlist_ports]:-false}" = "true" ]; then
         "Formato inválido para TCP_ALLOW_PORTS.")"
 fi
 
-if [ "${module_enabled[ip_http_https_protect]:-false}" = "true" ]; then
+if needs_var "ENABLE_HTTP_PROTECT"; then
     say_section "Web HTTP/HTTPS"
     enable_http_protect_raw="$(ask_with_context \
         "ENABLE_HTTP_PROTECT" \
@@ -462,51 +520,37 @@ if [ "${module_enabled[ip_http_https_protect]:-false}" = "true" ]; then
     fi
 fi
 
-if [ "${module_enabled[ip_openvpn]:-false}" = "true" ]; then
+if needs_var "VPN_PORT" || needs_var "VPN_SUBNET" || needs_var "VPN_INTERFACE"; then
     say_section "OpenVPN"
-    vpn_enabled_raw="$(ask_with_context \
-        "VPN_ENABLED" \
-        "Habilita reglas OpenVPN (host/gateway)." \
+    vpn_port="$(ask_with_context \
+        "VPN_PORT" \
+        "Puerto de escucha de OpenVPN (1-65535)." \
         "docs/modules/06_openvpn.md" \
-        "VPN_ENABLED (true/false)" \
-        "true" \
-        "is_bool" \
-        "VPN_ENABLED debe ser true o false.")"
-    vpn_enabled="${vpn_enabled_raw,,}"
+        "VPN_PORT" \
+        "1195" \
+        "is_port_number" \
+        "VPN_PORT debe ser numérico entre 1 y 65535.")"
 
-    if [ "$vpn_enabled" = "true" ]; then
-        vpn_port="$(ask_with_context \
-            "VPN_PORT" \
-            "Puerto de escucha de OpenVPN (1-65535)." \
-            "docs/modules/06_openvpn.md" \
-            "VPN_PORT" \
-            "1195" \
-            "is_port_number" \
-            "VPN_PORT debe ser numérico entre 1 y 65535.")"
+    vpn_subnet="$(ask_with_context \
+        "VPN_SUBNET" \
+        "Subred del túnel en formato CIDR IPv4 (ej: 10.8.0.0/24)." \
+        "docs/modules/06_openvpn.md" \
+        "VPN_SUBNET" \
+        "10.8.0.0/24" \
+        "is_ipv4_cidr" \
+        "VPN_SUBNET debe tener formato CIDR IPv4 válido (ej: 10.8.0.0/24).")"
 
-        vpn_subnet="$(ask_with_context \
-            "VPN_SUBNET" \
-            "Subred del túnel en formato CIDR IPv4 (ej: 10.8.0.0/24)." \
-            "docs/modules/06_openvpn.md" \
-            "VPN_SUBNET" \
-            "10.8.0.0/24" \
-            "is_ipv4_cidr" \
-            "VPN_SUBNET debe tener formato CIDR IPv4 válido (ej: 10.8.0.0/24).")"
-
-        vpn_interface="$(ask_with_context \
-            "VPN_INTERFACE" \
-            "Interfaz del túnel OpenVPN (ej: tun0)." \
-            "docs/modules/06_openvpn.md" \
-            "VPN_INTERFACE" \
-            "tun0" \
-            "is_interface_name" \
-            "VPN_INTERFACE contiene caracteres no válidos.")"
-    else
-        say_info "Módulo OpenVPN incluido pero VPN_ENABLED=false (quedará sin aplicar reglas VPN)."
-    fi
+    vpn_interface="$(ask_with_context \
+        "VPN_INTERFACE" \
+        "Interfaz del túnel OpenVPN (ej: tun0)." \
+        "docs/modules/06_openvpn.md" \
+        "VPN_INTERFACE" \
+        "tun0" \
+        "is_interface_name" \
+        "VPN_INTERFACE contiene caracteres no válidos.")"
 fi
 
-if [ "${module_enabled[ip_l4d2_udp_base]:-false}" = "true" ] || [ "${module_enabled[ip_l4d2_packet_validation]:-false}" = "true" ] || [ "${module_enabled[ip_l4d2_a2s_filters]:-false}" = "true" ]; then
+if needs_var "ENABLE_L4D2_UDP_BASE" || needs_var "ENABLE_L4D2_PACKET_VALIDATION" || needs_var "ENABLE_L4D2_A2S_FILTERS" || needs_var "L4D2_TV_PORTS" || needs_var "L4D2_CMD_LIMIT"; then
     if [ "${module_enabled[ip_l4d2_udp_base]:-false}" = "true" ]; then
         enable_l4d2_udp_base="true"
     fi
@@ -573,6 +617,26 @@ if [ "$typechain" = "0" ]; then
     say_warn "TYPECHAIN=0 protege INPUT host. Para servidores dockerizados usa 1 o 2."
 fi
 
+has_l4d2_udp_modules="false"
+if needs_var "ENABLE_L4D2_UDP_BASE" || needs_var "ENABLE_L4D2_PACKET_VALIDATION" || needs_var "ENABLE_L4D2_A2S_FILTERS"; then
+    has_l4d2_udp_modules="true"
+fi
+
+has_l4d2_tcp_modules="false"
+if needs_var "ENABLE_L4D2_TCP_PROTECT" || needs_var "L4D2_TCP_PROTECTION"; then
+    has_l4d2_tcp_modules="true"
+fi
+
+has_l4d2_ports_needed="false"
+if needs_var "L4D2_GAMESERVER_PORTS"; then
+    has_l4d2_ports_needed="true"
+fi
+
+has_openvpn_module="false"
+if needs_var "VPN_PORT" || needs_var "VPN_SUBNET" || needs_var "VPN_INTERFACE"; then
+    has_openvpn_module="true"
+fi
+
 cat > "$output_file" <<EOF
 # Generated by configure-env.sh
 MODULES_ROOT_DIR=""
@@ -585,14 +649,6 @@ TYPECHAIN=${typechain}
 DOCKER_INPUT_COMPAT=${docker_input_compat}
 DOCKER_CHAIN_AUTORECOVER=${docker_chain_autorecover}
 ENABLE_HTTP_PROTECT=${enable_http_protect}
-ENABLE_L4D2_TCP_PROTECT=${enable_l4d2_tcp_protect}
-ENABLE_L4D2_UDP_BASE=${enable_l4d2_udp_base}
-ENABLE_L4D2_PACKET_VALIDATION=${enable_l4d2_packet_validation}
-ENABLE_L4D2_A2S_FILTERS=${enable_l4d2_a2s_filters}
-L4D2_GAMESERVER_PORTS="${l4d2_game_ports}"
-L4D2_TV_PORTS="${l4d2_tv_ports}"
-L4D2_CMD_LIMIT=${l4d2_cmd_limit}
-L4D2_TCP_PROTECTION="${l4d2_tcp_protection}"
 
 SSH_PORT="${ssh_ports}"
 SSH_REQUIRE_WHITELIST=${ssh_require_whitelist}
@@ -606,20 +662,32 @@ HTTP_HTTPS_DOCKER="${http_https_docker}"
 HTTP_HTTPS_RATE="${http_https_rate}"
 HTTP_HTTPS_BURST=${http_https_burst}
 LOG_PREFIX_HTTP_HTTPS_ABUSE="HTTP_HTTPS_ABUSE: "
+EOF
 
-VPN_ENABLED=${vpn_enabled}
-VPN_PROTO="${vpn_proto}"
-VPN_PORT=${vpn_port}
-VPN_SUBNET="${vpn_subnet}"
-VPN_INTERFACE="${vpn_interface}"
-VPN_DOCKER_INTERFACE=""
-VPN_LAN_SUBNET="192.168.1.0/24"
-VPN_LAN_INTERFACE=""
-VPN_ENABLE_NAT=false
-VPN_ROUTER_REAL_IP=""
-VPN_ROUTER_ALIAS_IP=""
-VPN_LOG_ENABLED=false
-VPN_LOG_PREFIX="VPN_TRAFFIC: "
+if [ "$has_l4d2_tcp_modules" = "true" ]; then
+cat >> "$output_file" <<EOF
+ENABLE_L4D2_TCP_PROTECT=${enable_l4d2_tcp_protect}
+L4D2_TCP_PROTECTION="${l4d2_tcp_protection}"
+EOF
+fi
+
+if [ "$has_l4d2_ports_needed" = "true" ]; then
+cat >> "$output_file" <<EOF
+L4D2_GAMESERVER_PORTS="${l4d2_game_ports}"
+EOF
+fi
+
+if [ "$has_l4d2_udp_modules" = "true" ]; then
+cat >> "$output_file" <<EOF
+ENABLE_L4D2_UDP_BASE=${enable_l4d2_udp_base}
+ENABLE_L4D2_PACKET_VALIDATION=${enable_l4d2_packet_validation}
+ENABLE_L4D2_A2S_FILTERS=${enable_l4d2_a2s_filters}
+L4D2_TV_PORTS="${l4d2_tv_ports}"
+L4D2_CMD_LIMIT=${l4d2_cmd_limit}
+EOF
+fi
+
+cat >> "$output_file" <<EOF
 
 LOG_PREFIX_INVALID_SIZE="INVALID_SIZE: "
 LOG_PREFIX_MALFORMED="MALFORMED: "
@@ -633,6 +701,27 @@ LOG_PREFIX_UDP_NEW_LIMIT="UDP_NEW_LIMIT: "
 LOG_PREFIX_UDP_EST_LIMIT="UDP_EST_LIMIT: "
 LOG_PREFIX_TCP_RCON_BLOCK="TCP_RCON_BLOCK: "
 LOG_PREFIX_ICMP_FLOOD="ICMP_FLOOD: "
+EOF
+
+if [ "$has_openvpn_module" = "true" ]; then
+cat >> "$output_file" <<EOF
+
+VPN_PROTO="${vpn_proto}"
+VPN_PORT=${vpn_port}
+VPN_SUBNET="${vpn_subnet}"
+VPN_INTERFACE="${vpn_interface}"
+VPN_DOCKER_INTERFACE=""
+VPN_LAN_SUBNET="192.168.1.0/24"
+VPN_LAN_INTERFACE=""
+VPN_ENABLE_NAT=false
+VPN_ROUTER_REAL_IP=""
+VPN_ROUTER_ALIAS_IP=""
+VPN_LOG_ENABLED=false
+VPN_LOG_PREFIX="VPN_TRAFFIC: "
+EOF
+fi
+
+cat >> "$output_file" <<EOF
 
 LOGFILE=/var/log/l4d2-iptables.log
 RSYSLOG_CONF=/etc/rsyslog.d/l4d2-iptables.conf
@@ -646,20 +735,31 @@ echo "  MODULE_MODE=$module_mode" >&2
 echo "  MODULES_ONLY=$modules_only" >&2
 echo "  MODULES_EXCLUDE=$modules_exclude" >&2
 echo "  TYPECHAIN=$typechain" >&2
-echo "  L4D2_GAMESERVER_PORTS=$l4d2_game_ports" >&2
-echo "  L4D2_TV_PORTS=$l4d2_tv_ports" >&2
-echo "  L4D2_CMD_LIMIT=$l4d2_cmd_limit" >&2
 echo "  SSH_PORT=$ssh_ports" >&2
 echo "  SSH_REQUIRE_WHITELIST=$ssh_require_whitelist" >&2
-echo "  ENABLE_L4D2_TCP_PROTECT=$enable_l4d2_tcp_protect" >&2
-echo "  ENABLE_L4D2_UDP_BASE=$enable_l4d2_udp_base" >&2
-echo "  ENABLE_L4D2_PACKET_VALIDATION=$enable_l4d2_packet_validation" >&2
-echo "  ENABLE_L4D2_A2S_FILTERS=$enable_l4d2_a2s_filters" >&2
 echo "  ENABLE_HTTP_PROTECT=$enable_http_protect" >&2
 echo "  WHITELISTED_DOMAINS=$whitelist_domains" >&2
-echo "  VPN_ENABLED=$vpn_enabled" >&2
+echo "  DOCKER_INPUT_COMPAT=$docker_input_compat" >&2
+echo "  DOCKER_CHAIN_AUTORECOVER=$docker_chain_autorecover" >&2
+
+if [ "$has_openvpn_module" = "true" ]; then
 echo "  VPN_PORT=$vpn_port" >&2
 echo "  VPN_SUBNET=$vpn_subnet" >&2
 echo "  VPN_INTERFACE=$vpn_interface" >&2
-echo "  DOCKER_INPUT_COMPAT=$docker_input_compat" >&2
-echo "  DOCKER_CHAIN_AUTORECOVER=$docker_chain_autorecover" >&2
+fi
+
+if [ "$has_l4d2_ports_needed" = "true" ]; then
+echo "  L4D2_GAMESERVER_PORTS=$l4d2_game_ports" >&2
+fi
+
+if [ "$has_l4d2_tcp_modules" = "true" ]; then
+echo "  ENABLE_L4D2_TCP_PROTECT=$enable_l4d2_tcp_protect" >&2
+fi
+
+if [ "$has_l4d2_udp_modules" = "true" ]; then
+echo "  L4D2_TV_PORTS=$l4d2_tv_ports" >&2
+echo "  L4D2_CMD_LIMIT=$l4d2_cmd_limit" >&2
+echo "  ENABLE_L4D2_UDP_BASE=$enable_l4d2_udp_base" >&2
+echo "  ENABLE_L4D2_PACKET_VALIDATION=$enable_l4d2_packet_validation" >&2
+echo "  ENABLE_L4D2_A2S_FILTERS=$enable_l4d2_a2s_filters" >&2
+fi

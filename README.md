@@ -119,7 +119,7 @@ WHITELISTED_IPS="198.51.100.10 203.0.113.5"
 WHITELISTED_DOMAINS="admin-gateway.example.net"
 
 # OpenVPN (host o Docker)
-VPN_ENABLED=false
+# Se configura solo si incluyes el módulo ip_openvpn/nf_openvpn
 VPN_PORT=1194
 VPN_PROTO="udp"
 VPN_SUBNET="10.8.0.0/24"

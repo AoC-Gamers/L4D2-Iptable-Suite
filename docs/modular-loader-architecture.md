@@ -95,7 +95,7 @@ ip_openvpn_metadata() {
   cat << 'EOF'
 ID=ip_openvpn
 DESCRIPTION=Reglas OpenVPN para backend iptables
-REQUIRED_VARS=VPN_ENABLED VPN_PORT VPN_PROTO
+REQUIRED_VARS=VPN_PORT VPN_PROTO
 OPTIONAL_VARS=VPN_SUBNET VPN_INTERFACE VPN_ENABLE_NAT
 DEFAULTS=VPN_ENABLE_NAT=false VPN_INTERFACE=tun0
 EOF
@@ -271,7 +271,7 @@ sudo ./nftables.rules.sh
 Con overrides por CLI (aplica en ambos backends):
 
 ```bash
-sudo ./nftables.rules.sh --set TYPECHAIN=2 --set VPN_ENABLED=true --set VPN_PORT=1194
+sudo ./nftables.rules.sh --set TYPECHAIN=2 --set VPN_PORT=1194
 ```
 
 ---
@@ -352,7 +352,7 @@ Esperado:
 
 Ejecutar para ambos backends (mismo `.env`):
 - `TYPECHAIN=0`, `TYPECHAIN=1`, `TYPECHAIN=2`.
-- `VPN_ENABLED=false` y `VPN_ENABLED=true`.
+- Inclusión/exclusión del módulo `*_openvpn`.
 - `ENABLE_L4D2_TCP_PROTECT=false` y `ENABLE_L4D2_TCP_PROTECT=true`.
 - Con y sin `WHITELISTED_IPS`.
 
