@@ -13,5 +13,5 @@ Limitar abuso de conexiones nuevas HTTP/HTTPS.
 - `HTTP_HTTPS_RATE`, `HTTP_HTTPS_BURST`
 - `LOG_PREFIX_HTTP_HTTPS_ABUSE`
 
-## Diferencias
+## Diferencias por backend
 - `nf` normaliza `sec/min` a formato nativo (`second/minute`) cuando corresponde.

@@ -45,6 +45,7 @@ Ambos deben cargar módulos dinámicamente desde modules sin conocer de antemano
 │  │  ├─ ip_30_openvpn.sh
 │  │  ├─ ip_35_tcpfilter_chain.sh
 │  │  ├─ ip_40_tcp_ssh.sh
+│  │  ├─ ip_42_l4d2_tcp_protect.sh
 │  │  ├─ ip_45_http_https_protect.sh
 │  │  ├─ ip_50_l4d2_udp_base.sh
 │  │  ├─ ip_60_l4d2_packet_validation.sh
@@ -54,6 +55,7 @@ Ambos deben cargar módulos dinámicamente desde modules sin conocer de antemano
 │     ├─ nf_20_allowlist_ports.sh
 │     ├─ nf_30_openvpn.sh
 │     ├─ nf_40_tcp_ssh.sh
+│     ├─ nf_42_l4d2_tcp_protect.sh
 │     ├─ nf_45_http_https_protect.sh
 │     ├─ nf_50_l4d2_udp_base.sh
 │     ├─ nf_60_l4d2_packet_validation.sh
@@ -285,8 +287,9 @@ sudo ./nftables.rules.sh --set TYPECHAIN=2 --set VPN_PORT=1194
 | Whitelist IP | `ip_10_whitelist` | `nf_10_whitelist` | ✅ Implementado |
 | Allowlist de puertos | `ip_20_allowlist_ports` | `nf_20_allowlist_ports` | ✅ Implementado |
 | OpenVPN base | `ip_30_openvpn` | `nf_30_openvpn` | ✅ Implementado |
-| Cadena TCP anti-spam | `ip_35_tcpfilter_chain` | Integrado en `nf_40_tcp_ssh` | ✅ Equivalente funcional |
-| TCP/SSH protección | `ip_40_tcp_ssh` | `nf_40_tcp_ssh` | ✅ Implementado |
+| Cadena TCP anti-spam | `ip_35_tcpfilter_chain` | Sin equivalente 1:1 | ✅ Implementado |
+| SSH base | `ip_40_tcp_ssh` | `nf_40_tcp_ssh` | ✅ Implementado |
+| Protección TCP L4D2 | `ip_l4d2_tcp_protect` | `nf_l4d2_tcp_protect` | ✅ Implementado |
 | UDP base y límites | `ip_l4d2_udp_base` | `nf_l4d2_udp_base` | ✅ Implementado |
 | Validación de tamaños UDP | `ip_l4d2_packet_validation` | `nf_l4d2_packet_validation` | ✅ Implementado |
 | Filtros A2S / Steam / login | `ip_l4d2_a2s_filters` | `nf_l4d2_a2s_filters` | ✅ Implementado |
@@ -353,7 +356,7 @@ Esperado:
 Ejecutar para ambos backends (mismo `.env`):
 - `TYPECHAIN=0`, `TYPECHAIN=1`, `TYPECHAIN=2`.
 - Inclusión/exclusión del módulo `*_openvpn`.
-- `ENABLE_L4D2_TCP_PROTECT=false` y `ENABLE_L4D2_TCP_PROTECT=true`.
+- Inclusión/exclusión de `*_l4d2_tcp_protect` y prueba con `ENABLE_L4D2_TCP_PROTECT=true/false`.
 - Con y sin `WHITELISTED_IPS`.
 
 Esperado:

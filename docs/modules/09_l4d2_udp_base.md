@@ -12,5 +12,5 @@ Aplicar base de control UDP para tráfico de juego (NEW/ESTABLISHED) e ICMP.
 - `L4D2_GAMESERVER_PORTS`, `L4D2_TV_PORTS`, `L4D2_CMD_LIMIT`
 - `LOG_PREFIX_UDP_NEW_LIMIT`, `LOG_PREFIX_UDP_EST_LIMIT`, `LOG_PREFIX_ICMP_FLOOD`
 
-## Nota
+## Nota operativa
 Desactivar en nodos sin juegos (`ENABLE_L4D2_UDP_BASE=false`).

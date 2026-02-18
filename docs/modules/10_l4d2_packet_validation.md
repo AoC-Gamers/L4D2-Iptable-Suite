@@ -11,3 +11,9 @@ Bloquear tamaños UDP inválidos/malformados típicos de abuso sobre puertos de 
 - `ENABLE_L4D2_PACKET_VALIDATION`
 - `L4D2_GAMESERVER_PORTS`, `L4D2_TV_PORTS`
 - `LOG_PREFIX_INVALID_SIZE`, `LOG_PREFIX_MALFORMED`
+
+## Diferencias por backend
+- Ambos aplican validación de tamaños inválidos/malformados sobre puertos de juego.
+
+## Nota operativa
+- Mantener desactivado en nodos sin tráfico L4D2 para minimizar reglas innecesarias.

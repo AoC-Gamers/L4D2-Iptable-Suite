@@ -16,6 +16,6 @@ Permitir entrada de OpenVPN y conectividad VPN↔LAN según configuración.
 - El módulo se activa por inclusión en `MODULES_ONLY`/`MODULES_EXCLUDE`.
 - `VPN_ENABLED` queda deprecada y ya no se usa.
 
-## Diferencias
+## Diferencias por backend
 - `ip` incluye más opciones avanzadas (NAT/log/DNAT).
 - `nf` mantiene implementación más directa para input/forward.

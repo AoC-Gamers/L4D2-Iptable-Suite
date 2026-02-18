@@ -161,7 +161,7 @@ module_default_include() {
         ip_loopback|ip_whitelist|ip_allowlist_ports|ip_openvpn|ip_tcp_ssh|ip_http_https_protect)
             echo "true"
             ;;
-        ip_tcpfilter_chain|ip_l4d2_udp_base|ip_l4d2_packet_validation|ip_l4d2_a2s_filters)
+        ip_tcpfilter_chain|ip_l4d2_tcp_protect|ip_l4d2_udp_base|ip_l4d2_packet_validation|ip_l4d2_a2s_filters)
             echo "false"
             ;;
         *)
@@ -178,6 +178,7 @@ module_backend_variants() {
         ip_allowlist_ports) echo "ip_allowlist_ports nf_allowlist_ports" ;;
         ip_openvpn) echo "ip_openvpn nf_openvpn" ;;
         ip_tcp_ssh) echo "ip_tcp_ssh nf_tcp_ssh" ;;
+        ip_l4d2_tcp_protect) echo "ip_l4d2_tcp_protect nf_l4d2_tcp_protect" ;;
         ip_http_https_protect) echo "ip_http_https_protect nf_http_https_protect" ;;
         ip_l4d2_udp_base) echo "ip_l4d2_udp_base nf_l4d2_udp_base" ;;
         ip_l4d2_packet_validation) echo "ip_l4d2_packet_validation nf_l4d2_packet_validation" ;;
@@ -233,16 +234,20 @@ module_id_to_file() {
 collect_required_vars_for_module() {
     local module_id="$1"
     local target_assoc_name="$2"
-    local module_file required_raw var
+    local module_file required_raw optional_raw var
 
     module_file="$(module_id_to_file "$module_id")"
     [ -n "$module_file" ] || return 0
     [ -f "$module_file" ] || return 0
 
     required_raw="$(grep -m1 '^REQUIRED_VARS=' "$module_file" | cut -d= -f2- || true)"
-    [ -n "$required_raw" ] || return 0
-
     for var in $required_raw; do
+        [ -n "$var" ] || continue
+        eval "$target_assoc_name[\"$var\"]=true"
+    done
+
+    optional_raw="$(grep -m1 '^OPTIONAL_VARS=' "$module_file" | cut -d= -f2- || true)"
+    for var in $optional_raw; do
         [ -n "$var" ] || continue
         eval "$target_assoc_name[\"$var\"]=true"
     done
@@ -308,7 +313,8 @@ declare -a selectable_modules=(
     "ip_whitelist|Whitelist por IP/dominio"
     "ip_allowlist_ports|Allowlist de puertos manual"
     "ip_openvpn|Reglas OpenVPN"
-    "ip_tcp_ssh|Acceso SSH y TCP"
+    "ip_tcp_ssh|Acceso SSH base"
+    "ip_l4d2_tcp_protect|Protección TCP L4D2"
     "ip_http_https_protect|Protección HTTP/HTTPS"
     "ip_tcpfilter_chain|Cadena TCPfilter"
     "ip_l4d2_udp_base|Base UDP GameServer"
@@ -373,8 +379,8 @@ vpn_interface="tun0"
 vpn_proto="udp"
 l4d2_tcp_protection=""
 
-if needs_var "SSH_PORT" || needs_var "ENABLE_L4D2_TCP_PROTECT"; then
-    say_section "SSH/TCP"
+if needs_var "SSH_PORT" || needs_var "SSH_REQUIRE_WHITELIST"; then
+    say_section "SSH"
     if needs_var "SSH_PORT"; then
         ssh_ports="$(ask_with_context \
             "SSH_PORT" \
@@ -398,11 +404,16 @@ if needs_var "SSH_PORT" || needs_var "ENABLE_L4D2_TCP_PROTECT"; then
         ssh_require_whitelist="${ssh_require_whitelist_raw,,}"
     fi
 
+fi
+
+if needs_var "ENABLE_L4D2_TCP_PROTECT" || needs_var "L4D2_TCP_PROTECTION"; then
+    say_section "TCP L4D2"
+
     if needs_var "ENABLE_L4D2_TCP_PROTECT"; then
         enable_l4d2_tcp_protect_raw="$(ask_with_context \
             "ENABLE_L4D2_TCP_PROTECT" \
             "Activa bloqueo/protección anti-spam TCP (RCON/juego)." \
-            "docs/modules/07_tcp_ssh.md" \
+            "docs/modules/15_l4d2_tcp_protect.md" \
             "ENABLE_L4D2_TCP_PROTECT (true/false)" \
             "false" \
             "is_bool" \
@@ -410,11 +421,22 @@ if needs_var "SSH_PORT" || needs_var "ENABLE_L4D2_TCP_PROTECT"; then
         enable_l4d2_tcp_protect="${enable_l4d2_tcp_protect_raw,,}"
     fi
 
-    if [ "$enable_l4d2_tcp_protect" = "true" ] && needs_var "L4D2_GAMESERVER_PORTS"; then
+    if needs_var "L4D2_TCP_PROTECTION"; then
+        l4d2_tcp_protection="$(ask_with_context \
+            "L4D2_TCP_PROTECTION" \
+            "Puertos TCP específicos a proteger (opcional). Vacío=usa L4D2_GAMESERVER_PORTS." \
+            "docs/modules/15_l4d2_tcp_protect.md" \
+            "L4D2_TCP_PROTECTION (optional, ej: 27015 o 27015:27020)" \
+            "" \
+            "is_optional_ports_expr" \
+            "Formato inválido. Usa puertos/rangos separados por coma.")"
+    fi
+
+    if [ "$enable_l4d2_tcp_protect" = "true" ] && [ -z "$l4d2_tcp_protection" ] && needs_var "L4D2_GAMESERVER_PORTS"; then
         l4d2_game_ports="$(ask_with_context \
             "L4D2_GAMESERVER_PORTS" \
             "Puertos usados para protección TCP de juego/RCON." \
-            "docs/modules/07_tcp_ssh.md" \
+            "docs/modules/15_l4d2_tcp_protect.md" \
             "L4D2_GAMESERVER_PORTS (ej: 27015 o 27015:27020)" \
             "27015" \
             "is_required_ports_expr" \
@@ -628,7 +650,9 @@ if needs_var "ENABLE_L4D2_TCP_PROTECT" || needs_var "L4D2_TCP_PROTECTION"; then
 fi
 
 has_l4d2_ports_needed="false"
-if needs_var "L4D2_GAMESERVER_PORTS"; then
+if [ "$has_l4d2_udp_modules" = "true" ]; then
+    has_l4d2_ports_needed="true"
+elif [ "$has_l4d2_tcp_modules" = "true" ] && [ "$enable_l4d2_tcp_protect" = "true" ] && [ -z "$l4d2_tcp_protection" ] && needs_var "L4D2_GAMESERVER_PORTS"; then
     has_l4d2_ports_needed="true"
 fi
 
@@ -661,14 +685,22 @@ HTTP_HTTPS_PORTS="${http_https_ports}"
 HTTP_HTTPS_DOCKER="${http_https_docker}"
 HTTP_HTTPS_RATE="${http_https_rate}"
 HTTP_HTTPS_BURST=${http_https_burst}
-LOG_PREFIX_HTTP_HTTPS_ABUSE="HTTP_HTTPS_ABUSE: "
 EOF
 
 if [ "$has_l4d2_tcp_modules" = "true" ]; then
 cat >> "$output_file" <<EOF
-ENABLE_L4D2_TCP_PROTECT=${enable_l4d2_tcp_protect}
+EOF
+    if [ "$enable_l4d2_tcp_protect" = "true" ]; then
+cat >> "$output_file" <<EOF
+ENABLE_L4D2_TCP_PROTECT=true
+EOF
+    fi
+
+    if [ -n "$l4d2_tcp_protection" ]; then
+cat >> "$output_file" <<EOF
 L4D2_TCP_PROTECTION="${l4d2_tcp_protection}"
 EOF
+    fi
 fi
 
 if [ "$has_l4d2_ports_needed" = "true" ]; then
@@ -687,21 +719,90 @@ L4D2_CMD_LIMIT=${l4d2_cmd_limit}
 EOF
 fi
 
+if needs_var "LOG_PREFIX_HTTP_HTTPS_ABUSE" || needs_var "LOG_PREFIX_INVALID_SIZE" || needs_var "LOG_PREFIX_MALFORMED" || needs_var "LOG_PREFIX_A2S_INFO" || needs_var "LOG_PREFIX_A2S_PLAYERS" || needs_var "LOG_PREFIX_A2S_RULES" || needs_var "LOG_PREFIX_STEAM_GROUP" || needs_var "LOG_PREFIX_L4D2_CONNECT" || needs_var "LOG_PREFIX_L4D2_RESERVE" || needs_var "LOG_PREFIX_UDP_NEW_LIMIT" || needs_var "LOG_PREFIX_UDP_EST_LIMIT" || needs_var "LOG_PREFIX_TCP_RCON_BLOCK" || needs_var "LOG_PREFIX_ICMP_FLOOD"; then
 cat >> "$output_file" <<EOF
 
+# Log prefixes (emitidos según metadata de módulos seleccionados)
+EOF
+fi
+
+if needs_var "LOG_PREFIX_HTTP_HTTPS_ABUSE"; then
+cat >> "$output_file" <<EOF
+LOG_PREFIX_HTTP_HTTPS_ABUSE="HTTP_HTTPS_ABUSE: "
+EOF
+fi
+
+if needs_var "LOG_PREFIX_INVALID_SIZE"; then
+cat >> "$output_file" <<EOF
 LOG_PREFIX_INVALID_SIZE="INVALID_SIZE: "
+EOF
+fi
+
+if needs_var "LOG_PREFIX_MALFORMED"; then
+cat >> "$output_file" <<EOF
 LOG_PREFIX_MALFORMED="MALFORMED: "
+EOF
+fi
+
+if needs_var "LOG_PREFIX_A2S_INFO"; then
+cat >> "$output_file" <<EOF
 LOG_PREFIX_A2S_INFO="A2S_INFO_FLOOD: "
+EOF
+fi
+
+if needs_var "LOG_PREFIX_A2S_PLAYERS"; then
+cat >> "$output_file" <<EOF
 LOG_PREFIX_A2S_PLAYERS="A2S_PLAYERS_FLOOD: "
+EOF
+fi
+
+if needs_var "LOG_PREFIX_A2S_RULES"; then
+cat >> "$output_file" <<EOF
 LOG_PREFIX_A2S_RULES="A2S_RULES_FLOOD: "
+EOF
+fi
+
+if needs_var "LOG_PREFIX_STEAM_GROUP"; then
+cat >> "$output_file" <<EOF
 LOG_PREFIX_STEAM_GROUP="STEAM_GROUP_FLOOD: "
+EOF
+fi
+
+if needs_var "LOG_PREFIX_L4D2_CONNECT"; then
+cat >> "$output_file" <<EOF
 LOG_PREFIX_L4D2_CONNECT="L4D2_CONNECT_FLOOD: "
+EOF
+fi
+
+if needs_var "LOG_PREFIX_L4D2_RESERVE"; then
+cat >> "$output_file" <<EOF
 LOG_PREFIX_L4D2_RESERVE="L4D2_RESERVE_FLOOD: "
+EOF
+fi
+
+if needs_var "LOG_PREFIX_UDP_NEW_LIMIT"; then
+cat >> "$output_file" <<EOF
 LOG_PREFIX_UDP_NEW_LIMIT="UDP_NEW_LIMIT: "
+EOF
+fi
+
+if needs_var "LOG_PREFIX_UDP_EST_LIMIT"; then
+cat >> "$output_file" <<EOF
 LOG_PREFIX_UDP_EST_LIMIT="UDP_EST_LIMIT: "
+EOF
+fi
+
+if needs_var "LOG_PREFIX_TCP_RCON_BLOCK"; then
+cat >> "$output_file" <<EOF
 LOG_PREFIX_TCP_RCON_BLOCK="TCP_RCON_BLOCK: "
+EOF
+fi
+
+if needs_var "LOG_PREFIX_ICMP_FLOOD"; then
+cat >> "$output_file" <<EOF
 LOG_PREFIX_ICMP_FLOOD="ICMP_FLOOD: "
 EOF
+fi
 
 if [ "$has_openvpn_module" = "true" ]; then
 cat >> "$output_file" <<EOF

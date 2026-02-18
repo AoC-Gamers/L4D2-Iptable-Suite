@@ -7,10 +7,13 @@ Inicializar cadenas/tablas base y políticas por defecto antes de módulos funci
 - iptables: `modules/ip_chain_setup.sh` (`ID=ip_chain_setup`)
 - nftables: `modules/nf_chain_setup.sh` (`ID=nf_chain_setup`)
 
-## Variables relevantes
+## Variables
 - `TYPECHAIN` (`0=input`, `1=docker/forward`, `2=ambos`)
 - `DOCKER_INPUT_COMPAT`, `DOCKER_CHAIN_AUTORECOVER` (principalmente `ip`)
-- `ENABLE_L4D2_TCP_PROTECT`, `L4D2_TCP_PROTECTION`, `TCP_DOCKER` (solo `ip`, para crear `TCPfilter` cuando aplica)
+
+## Alcance
+- `chain_setup` no gestiona políticas de dominio L4D2.
+- La protección TCP L4D2 se maneja en `l4d2_tcp_protect` y la cadena `TCPfilter` en `ip_tcpfilter_chain`.
 
 ## Diferencias por backend
 - `ip`: limpieza amplia de tablas/cadenas y compatibilidad Docker opcional.

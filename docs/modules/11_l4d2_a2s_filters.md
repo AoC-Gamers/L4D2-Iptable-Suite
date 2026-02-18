@@ -12,3 +12,9 @@ Mitigar flood de consultas A2S/Steam Group y patrones de login (`connect/reserve
 - `L4D2_GAMESERVER_PORTS`
 - `LOG_PREFIX_A2S_INFO`, `LOG_PREFIX_A2S_PLAYERS`, `LOG_PREFIX_A2S_RULES`
 - `LOG_PREFIX_STEAM_GROUP`, `LOG_PREFIX_L4D2_CONNECT`, `LOG_PREFIX_L4D2_RESERVE`
+
+## Diferencias por backend
+- Ambos aplican mitigaciones A2S/Steam y patrones de login equivalentes por área.
+
+## Nota operativa
+- Desactivar en nodos sin servicios de juego para reducir complejidad de reglas.

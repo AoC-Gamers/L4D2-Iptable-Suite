@@ -5,8 +5,8 @@ ip_chain_setup_metadata() {
 ID=ip_chain_setup
 DESCRIPTION=Sets up cleanup, base policies, and required chains for the iptables backend
 REQUIRED_VARS=TYPECHAIN DOCKER_INPUT_COMPAT DOCKER_CHAIN_AUTORECOVER
-OPTIONAL_VARS=ENABLE_L4D2_TCP_PROTECT L4D2_TCP_PROTECTION TCP_DOCKER
-DEFAULTS=TYPECHAIN=0 DOCKER_INPUT_COMPAT=false DOCKER_CHAIN_AUTORECOVER=true ENABLE_L4D2_TCP_PROTECT=false L4D2_TCP_PROTECTION= TCP_DOCKER=
+OPTIONAL_VARS=
+DEFAULTS=TYPECHAIN=0 DOCKER_INPUT_COMPAT=false DOCKER_CHAIN_AUTORECOVER=true
 EOF
 }
 
@@ -117,10 +117,6 @@ ip_chain_setup_apply() {
     iptables -N A2S_RULES_LIMITS 2>/dev/null || true
     iptables -N STEAM_GROUP_LIMITS 2>/dev/null || true
     iptables -N l4d2loginfilter 2>/dev/null || true
-
-    if [ "$ENABLE_L4D2_TCP_PROTECT" = "true" ] || [ -n "$L4D2_TCP_PROTECTION" ] || [ -n "$TCP_DOCKER" ]; then
-        iptables -N TCPfilter 2>/dev/null || true
-    fi
 
     if [ "$TYPECHAIN" -eq 1 ] || [ "$TYPECHAIN" -eq 2 ]; then
         iptables -N DOCKER-USER 2>/dev/null || true

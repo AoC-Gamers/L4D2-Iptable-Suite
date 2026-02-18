@@ -321,6 +321,18 @@ modules/
 └─ nf/   # módulos nf_*.sh
 ```
 
+### Mapa de módulos (split TCP)
+
+- **SSH base**
+  - `ip_tcp_ssh` / `nf_tcp_ssh`
+  - Variables: `SSH_PORT`, `SSH_REQUIRE_WHITELIST`, `WHITELISTED_IPS`, `WHITELISTED_DOMAINS`
+- **Protección TCP L4D2 (separada)**
+  - `ip_l4d2_tcp_protect` / `nf_l4d2_tcp_protect`
+  - Variables: `ENABLE_L4D2_TCP_PROTECT`, `L4D2_GAMESERVER_PORTS`, `L4D2_TCP_PROTECTION`, `LOG_PREFIX_TCP_RCON_BLOCK`
+- **Cadena anti-spam TCP (ip específico)**
+  - `ip_tcpfilter_chain`
+  - En `nftables` no hay equivalente 1:1 de cadena.
+
 ### 1. Instalación Inicial
 ```bash
 # Configurar reglas básicas

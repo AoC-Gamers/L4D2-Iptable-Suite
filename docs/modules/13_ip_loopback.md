@@ -6,5 +6,5 @@
 ## Objetivo
 Permitir tráfico local `lo` en backend `iptables`.
 
-## Nota
+## Nota operativa
 En `nft`, este comportamiento se integra en `nf_chain_setup`.
