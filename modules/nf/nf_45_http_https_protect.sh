@@ -8,9 +8,9 @@ nf_45_http_https_protect_metadata() {
 ID=nf_http_https_protect
 ALIASES=http_https_protect
 DESCRIPTION=Applies basic anti-abuse controls for HTTP/HTTPS ports
-REQUIRED_VARS=TYPECHAIN ENABLE_HTTP_PROTECT HTTP_HTTPS_PORTS HTTP_HTTPS_RATE HTTP_HTTPS_BURST LOG_PREFIX_HTTP_HTTPS_ABUSE
+REQUIRED_VARS=TYPECHAIN HTTP_HTTPS_PORTS HTTP_HTTPS_RATE HTTP_HTTPS_BURST LOG_PREFIX_HTTP_HTTPS_ABUSE
 OPTIONAL_VARS=
-DEFAULTS=TYPECHAIN=0 ENABLE_HTTP_PROTECT=false HTTP_HTTPS_PORTS=80,443 HTTP_HTTPS_RATE=180/minute HTTP_HTTPS_BURST=360 LOG_PREFIX_HTTP_HTTPS_ABUSE=HTTP_HTTPS_ABUSE:
+DEFAULTS=TYPECHAIN=0 HTTP_HTTPS_PORTS=80,443 HTTP_HTTPS_RATE=180/minute HTTP_HTTPS_BURST=360 LOG_PREFIX_HTTP_HTTPS_ABUSE=HTTP_HTTPS_ABUSE:
 EOF
 }
 
@@ -29,14 +29,6 @@ nf_45_http_https_protect_validate() {
         0|1|2) ;;
         *)
             echo "ERROR: nf_http_https_protect: TYPECHAIN must be 0, 1 or 2"
-            return 2
-            ;;
-    esac
-
-    case "${ENABLE_HTTP_PROTECT:-false}" in
-        true|false) ;;
-        *)
-            echo "ERROR: nf_http_https_protect: ENABLE_HTTP_PROTECT must be true or false"
             return 2
             ;;
     esac
@@ -60,11 +52,6 @@ nf_45_http_https_protect_validate() {
 
 nf_45_http_https_protect_apply() {
     local chain ports_expr normalized_rate
-
-    if [ "${ENABLE_HTTP_PROTECT}" != "true" ]; then
-        echo "INFO: nf_http_https_protect: disabled, skipping"
-        return 0
-    fi
 
     ports_expr="$(nf_ports_set_expr "$HTTP_HTTPS_PORTS")"
     normalized_rate="$(nf_45_http_https_protect_normalize_rate "$HTTP_HTTPS_RATE")"

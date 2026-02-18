@@ -5,9 +5,9 @@ ip_60_l4d2_packet_validation_metadata() {
 ID=ip_l4d2_packet_validation
 ALIASES=l4d2_packet_validation
 DESCRIPTION=Validates invalid/malformed UDP packet sizes for GameServer and SourceTV
-REQUIRED_VARS=TYPECHAIN ENABLE_L4D2_PACKET_VALIDATION L4D2_GAMESERVER_PORTS L4D2_TV_PORTS LOG_PREFIX_INVALID_SIZE LOG_PREFIX_MALFORMED
+REQUIRED_VARS=TYPECHAIN L4D2_GAMESERVER_PORTS L4D2_TV_PORTS LOG_PREFIX_INVALID_SIZE LOG_PREFIX_MALFORMED
 OPTIONAL_VARS=
-DEFAULTS=TYPECHAIN=0 ENABLE_L4D2_PACKET_VALIDATION=true L4D2_GAMESERVER_PORTS=27015 L4D2_TV_PORTS=27020 LOG_PREFIX_INVALID_SIZE=INVALID_SIZE: LOG_PREFIX_MALFORMED=MALFORMED:
+DEFAULTS=TYPECHAIN=0 L4D2_GAMESERVER_PORTS=27015 L4D2_TV_PORTS=27020 LOG_PREFIX_INVALID_SIZE=INVALID_SIZE: LOG_PREFIX_MALFORMED=MALFORMED:
 EOF
 }
 
@@ -20,13 +20,6 @@ ip_60_l4d2_packet_validation_validate() {
             ;;
     esac
 
-    case "${ENABLE_L4D2_PACKET_VALIDATION:-}" in
-        true|false) ;;
-        *)
-            echo "ERROR: ip_l4d2_packet_validation: ENABLE_L4D2_PACKET_VALIDATION must be true or false"
-            return 2
-            ;;
-    esac
 }
 
 ip_60_l4d2_packet_validation_apply_for_chain() {
@@ -50,11 +43,6 @@ ip_60_l4d2_packet_validation_apply_for_chain() {
 }
 
 ip_60_l4d2_packet_validation_apply() {
-    if [ "$ENABLE_L4D2_PACKET_VALIDATION" != "true" ]; then
-        echo "INFO: ip_l4d2_packet_validation: disabled (ENABLE_L4D2_PACKET_VALIDATION=false), skipping"
-        return 0
-    fi
-
     if [ "$TYPECHAIN" -eq 0 ] || [ "$TYPECHAIN" -eq 2 ]; then
         ip_60_l4d2_packet_validation_apply_for_chain INPUT "$L4D2_GAMESERVER_PORTS"
         ip_60_l4d2_packet_validation_apply_for_chain INPUT "$L4D2_TV_PORTS"

@@ -8,9 +8,9 @@ nf_60_l4d2_packet_validation_metadata() {
 ID=nf_l4d2_packet_validation
 ALIASES=l4d2_packet_validation
 DESCRIPTION=Validates invalid/malformed UDP packet sizes in the nftables backend
-REQUIRED_VARS=TYPECHAIN ENABLE_L4D2_PACKET_VALIDATION L4D2_GAMESERVER_PORTS L4D2_TV_PORTS LOG_PREFIX_INVALID_SIZE LOG_PREFIX_MALFORMED
+REQUIRED_VARS=TYPECHAIN L4D2_GAMESERVER_PORTS L4D2_TV_PORTS LOG_PREFIX_INVALID_SIZE LOG_PREFIX_MALFORMED
 OPTIONAL_VARS=
-DEFAULTS=TYPECHAIN=0 ENABLE_L4D2_PACKET_VALIDATION=true L4D2_GAMESERVER_PORTS=27015 L4D2_TV_PORTS=27020 LOG_PREFIX_INVALID_SIZE=INVALID_SIZE: LOG_PREFIX_MALFORMED=MALFORMED:
+DEFAULTS=TYPECHAIN=0 L4D2_GAMESERVER_PORTS=27015 L4D2_TV_PORTS=27020 LOG_PREFIX_INVALID_SIZE=INVALID_SIZE: LOG_PREFIX_MALFORMED=MALFORMED:
 EOF
 }
 
@@ -19,14 +19,6 @@ nf_60_l4d2_packet_validation_validate() {
         0|1|2) ;;
         *)
             echo "ERROR: nf_l4d2_packet_validation: TYPECHAIN must be 0, 1 or 2"
-            return 2
-            ;;
-    esac
-
-    case "${ENABLE_L4D2_PACKET_VALIDATION:-true}" in
-        true|false) ;;
-        *)
-            echo "ERROR: nf_l4d2_packet_validation: ENABLE_L4D2_PACKET_VALIDATION must be true or false"
             return 2
             ;;
     esac
@@ -57,11 +49,6 @@ nf_60_l4d2_packet_validation_apply_chain() {
 
 nf_60_l4d2_packet_validation_apply() {
     local chain game_ports_expr tv_ports_expr
-
-    if [ "${ENABLE_L4D2_PACKET_VALIDATION:-true}" != "true" ]; then
-        echo "INFO: nf_l4d2_packet_validation: disabled (ENABLE_L4D2_PACKET_VALIDATION=false), skipping"
-        return 0
-    fi
 
     game_ports_expr="$(nf_ports_set_expr "$L4D2_GAMESERVER_PORTS")"
     tv_ports_expr="$(nf_ports_set_expr "$L4D2_TV_PORTS")"

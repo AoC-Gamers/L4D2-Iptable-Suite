@@ -11,9 +11,9 @@ ip_45_http_https_protect_metadata() {
 ID=ip_http_https_protect
 ALIASES=http_https_protect
 DESCRIPTION=Applies basic anti-abuse controls for HTTP/HTTPS ports
-REQUIRED_VARS=TYPECHAIN ENABLE_HTTP_PROTECT HTTP_HTTPS_PORTS HTTP_HTTPS_RATE HTTP_HTTPS_BURST LOG_PREFIX_HTTP_HTTPS_ABUSE
+REQUIRED_VARS=TYPECHAIN HTTP_HTTPS_PORTS HTTP_HTTPS_RATE HTTP_HTTPS_BURST LOG_PREFIX_HTTP_HTTPS_ABUSE
 OPTIONAL_VARS=HTTP_HTTPS_DOCKER
-DEFAULTS=TYPECHAIN=0 ENABLE_HTTP_PROTECT=false HTTP_HTTPS_PORTS=80,443 HTTP_HTTPS_RATE=180/min HTTP_HTTPS_BURST=360 HTTP_HTTPS_DOCKER=80,443 LOG_PREFIX_HTTP_HTTPS_ABUSE=HTTP_HTTPS_ABUSE:
+DEFAULTS=TYPECHAIN=0 HTTP_HTTPS_PORTS=80,443 HTTP_HTTPS_RATE=180/min HTTP_HTTPS_BURST=360 HTTP_HTTPS_DOCKER=80,443 LOG_PREFIX_HTTP_HTTPS_ABUSE=HTTP_HTTPS_ABUSE:
 EOF
 }
 
@@ -22,14 +22,6 @@ ip_45_http_https_protect_validate() {
         0|1|2) ;;
         *)
             echo "ERROR: ip_http_https_protect: TYPECHAIN must be 0, 1 or 2"
-            return 2
-            ;;
-    esac
-
-    case "${ENABLE_HTTP_PROTECT:-false}" in
-        true|false) ;;
-        *)
-            echo "ERROR: ip_http_https_protect: ENABLE_HTTP_PROTECT must be true or false"
             return 2
             ;;
     esac
@@ -73,11 +65,6 @@ ip_45_http_https_protect_apply_chain() {
 }
 
 ip_45_http_https_protect_apply() {
-    if [ "${ENABLE_HTTP_PROTECT}" != "true" ]; then
-        echo "INFO: ip_http_https_protect: disabled, skipping"
-        return 0
-    fi
-
     if [ "$TYPECHAIN" -eq 0 ] || [ "$TYPECHAIN" -eq 2 ]; then
         ip_45_http_https_protect_apply_chain INPUT "$HTTP_HTTPS_PORTS" HTTPHTTPSNEW
     fi

@@ -380,11 +380,6 @@ whitelist=""
 whitelist_domains=""
 udp_allow=""
 tcp_allow=""
-enable_l4d2_tcp_protect="false"
-enable_l4d2_udp_base="false"
-enable_l4d2_packet_validation="false"
-enable_l4d2_a2s_filters="false"
-enable_http_protect="false"
 http_https_ports="80,443"
 http_https_docker="80,443"
 http_https_rate="180/min"
@@ -422,20 +417,8 @@ if needs_var "SSH_PORT" || needs_var "SSH_REQUIRE_WHITELIST"; then
 
 fi
 
-if needs_var "ENABLE_L4D2_TCP_PROTECT" || needs_var "L4D2_TCP_PROTECTION"; then
+if needs_var "L4D2_TCP_PROTECTION" || needs_var "L4D2_GAMESERVER_PORTS"; then
     say_section "TCP L4D2"
-
-    if needs_var "ENABLE_L4D2_TCP_PROTECT"; then
-        enable_l4d2_tcp_protect_raw="$(ask_with_context \
-            "ENABLE_L4D2_TCP_PROTECT" \
-            "Activa bloqueo/protección anti-spam TCP (RCON/juego)." \
-            "docs/modules/15_l4d2_tcp_protect.md" \
-            "ENABLE_L4D2_TCP_PROTECT (true/false)" \
-            "false" \
-            "is_bool" \
-            "ENABLE_L4D2_TCP_PROTECT debe ser true o false.")"
-        enable_l4d2_tcp_protect="${enable_l4d2_tcp_protect_raw,,}"
-    fi
 
     if needs_var "L4D2_TCP_PROTECTION"; then
         l4d2_tcp_protection="$(ask_with_context \
@@ -448,7 +431,7 @@ if needs_var "ENABLE_L4D2_TCP_PROTECT" || needs_var "L4D2_TCP_PROTECTION"; then
             "Formato inválido. Usa puertos/rangos separados por coma.")"
     fi
 
-    if [ "$enable_l4d2_tcp_protect" = "true" ] && [ -z "$l4d2_tcp_protection" ] && needs_var "L4D2_GAMESERVER_PORTS"; then
+    if [ -z "$l4d2_tcp_protection" ] && needs_var "L4D2_GAMESERVER_PORTS"; then
         l4d2_game_ports="$(ask_with_context \
             "L4D2_GAMESERVER_PORTS" \
             "Puertos usados para protección TCP de juego/RCON." \
@@ -507,55 +490,43 @@ if needs_var "UDP_ALLOW_PORTS" || needs_var "TCP_ALLOW_PORTS"; then
         "Formato inválido para TCP_ALLOW_PORTS.")"
 fi
 
-if needs_var "ENABLE_HTTP_PROTECT"; then
+if needs_var "HTTP_HTTPS_PORTS" || needs_var "HTTP_HTTPS_RATE" || needs_var "HTTP_HTTPS_BURST" || needs_var "HTTP_HTTPS_DOCKER"; then
     say_section "Web HTTP/HTTPS"
-    enable_http_protect_raw="$(ask_with_context \
-        "ENABLE_HTTP_PROTECT" \
-        "Activa protección anti-abuso para puertos web." \
+    http_https_ports="$(ask_with_context \
+        "HTTP_HTTPS_PORTS" \
+        "Puertos web en INPUT (host)." \
         "docs/modules/08_http_https_protect.md" \
-        "ENABLE_HTTP_PROTECT (true/false)" \
-        "true" \
-        "is_bool" \
-        "ENABLE_HTTP_PROTECT debe ser true o false.")"
-    enable_http_protect="${enable_http_protect_raw,,}"
+        "HTTP_HTTPS_PORTS (ej: 80,443)" \
+        "80,443" \
+        "is_required_ports_expr" \
+        "Formato inválido para HTTP_HTTPS_PORTS.")"
 
-    if [ "$enable_http_protect" = "true" ]; then
-        http_https_ports="$(ask_with_context \
-            "HTTP_HTTPS_PORTS" \
-            "Puertos web en INPUT (host)." \
-            "docs/modules/08_http_https_protect.md" \
-            "HTTP_HTTPS_PORTS (ej: 80,443)" \
-            "80,443" \
-            "is_required_ports_expr" \
-            "Formato inválido para HTTP_HTTPS_PORTS.")"
+    http_https_docker="$(ask_with_context \
+        "HTTP_HTTPS_DOCKER" \
+        "Puertos web en DOCKER-USER (opcional)." \
+        "docs/modules/08_http_https_protect.md" \
+        "HTTP_HTTPS_DOCKER (ej: 80,443)" \
+        "80,443" \
+        "is_required_ports_expr" \
+        "Formato inválido para HTTP_HTTPS_DOCKER.")"
 
-        http_https_docker="$(ask_with_context \
-            "HTTP_HTTPS_DOCKER" \
-            "Puertos web en DOCKER-USER (opcional)." \
-            "docs/modules/08_http_https_protect.md" \
-            "HTTP_HTTPS_DOCKER (ej: 80,443)" \
-            "80,443" \
-            "is_required_ports_expr" \
-            "Formato inválido para HTTP_HTTPS_DOCKER.")"
+    http_https_rate="$(ask_with_context \
+        "HTTP_HTTPS_RATE" \
+        "Límite de conexiones nuevas por origen (formato num/unidad)." \
+        "docs/modules/08_http_https_protect.md" \
+        "HTTP_HTTPS_RATE (ej: 180/min)" \
+        "180/min" \
+        "is_rate_expr" \
+        "Formato inválido. Usa <num>/(sec|min|hour|day).")"
 
-        http_https_rate="$(ask_with_context \
-            "HTTP_HTTPS_RATE" \
-            "Límite de conexiones nuevas por origen (formato num/unidad)." \
-            "docs/modules/08_http_https_protect.md" \
-            "HTTP_HTTPS_RATE (ej: 180/min)" \
-            "180/min" \
-            "is_rate_expr" \
-            "Formato inválido. Usa <num>/(sec|min|hour|day).")"
-
-        http_https_burst="$(ask_with_context \
-            "HTTP_HTTPS_BURST" \
-            "Ráfaga permitida antes de bloquear." \
-            "docs/modules/08_http_https_protect.md" \
-            "HTTP_HTTPS_BURST" \
-            "360" \
-            "is_cmd_limit" \
-            "HTTP_HTTPS_BURST debe ser numérico.")"
-    fi
+    http_https_burst="$(ask_with_context \
+        "HTTP_HTTPS_BURST" \
+        "Ráfaga permitida antes de bloquear." \
+        "docs/modules/08_http_https_protect.md" \
+        "HTTP_HTTPS_BURST" \
+        "360" \
+        "is_cmd_limit" \
+        "HTTP_HTTPS_BURST debe ser numérico.")"
 fi
 
 if needs_var "VPN_PORT" || needs_var "VPN_SUBNET" || needs_var "VPN_INTERFACE"; then
@@ -588,17 +559,7 @@ if needs_var "VPN_PORT" || needs_var "VPN_SUBNET" || needs_var "VPN_INTERFACE"; 
         "VPN_INTERFACE contiene caracteres no válidos.")"
 fi
 
-if needs_var "ENABLE_L4D2_UDP_BASE" || needs_var "ENABLE_L4D2_PACKET_VALIDATION" || needs_var "ENABLE_L4D2_A2S_FILTERS" || needs_var "L4D2_TV_PORTS" || needs_var "L4D2_CMD_LIMIT"; then
-    if [ "${module_enabled[ip_l4d2_udp_base]:-false}" = "true" ]; then
-        enable_l4d2_udp_base="true"
-    fi
-    if [ "${module_enabled[ip_l4d2_packet_validation]:-false}" = "true" ]; then
-        enable_l4d2_packet_validation="true"
-    fi
-    if [ "${module_enabled[ip_l4d2_a2s_filters]:-false}" = "true" ]; then
-        enable_l4d2_a2s_filters="true"
-    fi
-
+if [ "${module_enabled[ip_l4d2_udp_base]:-false}" = "true" ] || [ "${module_enabled[ip_l4d2_packet_validation]:-false}" = "true" ] || [ "${module_enabled[ip_l4d2_a2s_filters]:-false}" = "true" ]; then
     say_section "Servicios de juego (UDP)"
     l4d2_game_ports="$(ask_with_context \
         "L4D2_GAMESERVER_PORTS" \
@@ -656,19 +617,19 @@ if [ "$typechain" = "0" ]; then
 fi
 
 has_l4d2_udp_modules="false"
-if needs_var "ENABLE_L4D2_UDP_BASE" || needs_var "ENABLE_L4D2_PACKET_VALIDATION" || needs_var "ENABLE_L4D2_A2S_FILTERS"; then
+if [ "${module_enabled[ip_l4d2_udp_base]:-false}" = "true" ] || [ "${module_enabled[ip_l4d2_packet_validation]:-false}" = "true" ] || [ "${module_enabled[ip_l4d2_a2s_filters]:-false}" = "true" ]; then
     has_l4d2_udp_modules="true"
 fi
 
 has_l4d2_tcp_modules="false"
-if needs_var "ENABLE_L4D2_TCP_PROTECT" || needs_var "L4D2_TCP_PROTECTION"; then
+if [ "${module_enabled[ip_l4d2_tcp_protect]:-false}" = "true" ] || [ "${module_enabled[ip_l4d2_tcpfilter_chain]:-false}" = "true" ]; then
     has_l4d2_tcp_modules="true"
 fi
 
 has_l4d2_ports_needed="false"
 if [ "$has_l4d2_udp_modules" = "true" ]; then
     has_l4d2_ports_needed="true"
-elif [ "$has_l4d2_tcp_modules" = "true" ] && [ "$enable_l4d2_tcp_protect" = "true" ] && [ -z "$l4d2_tcp_protection" ] && needs_var "L4D2_GAMESERVER_PORTS"; then
+elif [ "$has_l4d2_tcp_modules" = "true" ] && [ -z "$l4d2_tcp_protection" ] && needs_var "L4D2_GAMESERVER_PORTS"; then
     has_l4d2_ports_needed="true"
 fi
 
@@ -688,7 +649,6 @@ MODULES_EXCLUDE="${modules_exclude}"
 TYPECHAIN=${typechain}
 DOCKER_INPUT_COMPAT=${docker_input_compat}
 DOCKER_CHAIN_AUTORECOVER=${docker_chain_autorecover}
-ENABLE_HTTP_PROTECT=${enable_http_protect}
 
 SSH_PORT="${ssh_ports}"
 SSH_REQUIRE_WHITELIST=${ssh_require_whitelist}
@@ -706,12 +666,6 @@ EOF
 if [ "$has_l4d2_tcp_modules" = "true" ]; then
 cat >> "$output_file" <<EOF
 EOF
-    if [ "$enable_l4d2_tcp_protect" = "true" ]; then
-cat >> "$output_file" <<EOF
-ENABLE_L4D2_TCP_PROTECT=true
-EOF
-    fi
-
     if [ -n "$l4d2_tcp_protection" ]; then
 cat >> "$output_file" <<EOF
 L4D2_TCP_PROTECTION="${l4d2_tcp_protection}"
@@ -727,9 +681,6 @@ fi
 
 if [ "$has_l4d2_udp_modules" = "true" ]; then
 cat >> "$output_file" <<EOF
-ENABLE_L4D2_UDP_BASE=${enable_l4d2_udp_base}
-ENABLE_L4D2_PACKET_VALIDATION=${enable_l4d2_packet_validation}
-ENABLE_L4D2_A2S_FILTERS=${enable_l4d2_a2s_filters}
 L4D2_TV_PORTS="${l4d2_tv_ports}"
 L4D2_CMD_LIMIT=${l4d2_cmd_limit}
 EOF
@@ -854,7 +805,6 @@ echo "  MODULES_EXCLUDE=$modules_exclude" >&2
 echo "  TYPECHAIN=$typechain" >&2
 echo "  SSH_PORT=$ssh_ports" >&2
 echo "  SSH_REQUIRE_WHITELIST=$ssh_require_whitelist" >&2
-echo "  ENABLE_HTTP_PROTECT=$enable_http_protect" >&2
 echo "  WHITELISTED_DOMAINS=$whitelist_domains" >&2
 echo "  DOCKER_INPUT_COMPAT=$docker_input_compat" >&2
 echo "  DOCKER_CHAIN_AUTORECOVER=$docker_chain_autorecover" >&2
@@ -869,14 +819,7 @@ if [ "$has_l4d2_ports_needed" = "true" ]; then
 echo "  L4D2_GAMESERVER_PORTS=$l4d2_game_ports" >&2
 fi
 
-if [ "$has_l4d2_tcp_modules" = "true" ]; then
-echo "  ENABLE_L4D2_TCP_PROTECT=$enable_l4d2_tcp_protect" >&2
-fi
-
 if [ "$has_l4d2_udp_modules" = "true" ]; then
 echo "  L4D2_TV_PORTS=$l4d2_tv_ports" >&2
 echo "  L4D2_CMD_LIMIT=$l4d2_cmd_limit" >&2
-echo "  ENABLE_L4D2_UDP_BASE=$enable_l4d2_udp_base" >&2
-echo "  ENABLE_L4D2_PACKET_VALIDATION=$enable_l4d2_packet_validation" >&2
-echo "  ENABLE_L4D2_A2S_FILTERS=$enable_l4d2_a2s_filters" >&2
 fi

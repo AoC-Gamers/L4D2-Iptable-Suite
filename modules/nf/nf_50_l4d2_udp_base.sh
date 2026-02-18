@@ -8,9 +8,9 @@ nf_50_l4d2_udp_base_metadata() {
 ID=nf_l4d2_udp_base
 ALIASES=l4d2_udp_base
 DESCRIPTION=Applies base UDP/state/ICMP rules in the nftables backend
-REQUIRED_VARS=TYPECHAIN ENABLE_L4D2_UDP_BASE L4D2_GAMESERVER_PORTS L4D2_TV_PORTS L4D2_CMD_LIMIT LOG_PREFIX_UDP_NEW_LIMIT LOG_PREFIX_UDP_EST_LIMIT LOG_PREFIX_ICMP_FLOOD
+REQUIRED_VARS=TYPECHAIN L4D2_GAMESERVER_PORTS L4D2_TV_PORTS L4D2_CMD_LIMIT LOG_PREFIX_UDP_NEW_LIMIT LOG_PREFIX_UDP_EST_LIMIT LOG_PREFIX_ICMP_FLOOD
 OPTIONAL_VARS=
-DEFAULTS=TYPECHAIN=0 ENABLE_L4D2_UDP_BASE=true L4D2_GAMESERVER_PORTS=27015 L4D2_TV_PORTS=27020 L4D2_CMD_LIMIT=100 LOG_PREFIX_UDP_NEW_LIMIT=UDP_NEW_LIMIT: LOG_PREFIX_UDP_EST_LIMIT=UDP_EST_LIMIT: LOG_PREFIX_ICMP_FLOOD=ICMP_FLOOD:
+DEFAULTS=TYPECHAIN=0 L4D2_GAMESERVER_PORTS=27015 L4D2_TV_PORTS=27020 L4D2_CMD_LIMIT=100 LOG_PREFIX_UDP_NEW_LIMIT=UDP_NEW_LIMIT: LOG_PREFIX_UDP_EST_LIMIT=UDP_EST_LIMIT: LOG_PREFIX_ICMP_FLOOD=ICMP_FLOOD:
 EOF
 }
 
@@ -19,14 +19,6 @@ nf_50_l4d2_udp_base_validate() {
         0|1|2) ;;
         *)
             echo "ERROR: nf_l4d2_udp_base: TYPECHAIN must be 0, 1 or 2"
-            return 2
-            ;;
-    esac
-
-    case "${ENABLE_L4D2_UDP_BASE:-true}" in
-        true|false) ;;
-        *)
-            echo "ERROR: nf_l4d2_udp_base: ENABLE_L4D2_UDP_BASE must be true or false"
             return 2
             ;;
     esac
@@ -48,11 +40,6 @@ nf_50_l4d2_udp_base_validate() {
 nf_50_l4d2_udp_base_apply() {
     local cmd_limit_leeway cmd_limit_upper
     local game_ports_expr tv_ports_expr all_udp_ports_expr chain
-
-    if [ "${ENABLE_L4D2_UDP_BASE:-true}" != "true" ]; then
-        echo "INFO: nf_l4d2_udp_base: disabled (ENABLE_L4D2_UDP_BASE=false), skipping"
-        return 0
-    fi
 
     cmd_limit_leeway=$((L4D2_CMD_LIMIT + 10))
     cmd_limit_upper=$((L4D2_CMD_LIMIT + 30))

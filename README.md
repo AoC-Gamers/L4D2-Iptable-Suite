@@ -108,7 +108,7 @@ L4D2_GAMESERVER_PORTS="27015"
 L4D2_TV_PORTS="27020"
 
 # Protección TCP RCON
-ENABLE_L4D2_TCP_PROTECT=true
+# Incluir l4d2_tcp_protect en MODULES_ONLY para activar
 
 # SSH: no exponer públicamente cuando sea true
 SSH_PORT="2222,22220:22229"
@@ -247,7 +247,7 @@ Comando rápido:
 TYPECHAIN=0
 L4D2_GAMESERVER_PORTS="27015"
 L4D2_TV_PORTS="27020"
-ENABLE_L4D2_TCP_PROTECT=true
+# Activación TCP protect por módulo: incluir l4d2_tcp_protect en MODULES_ONLY
 ```
 
 ### Múltiples Servidores
@@ -256,7 +256,7 @@ ENABLE_L4D2_TCP_PROTECT=true
 TYPECHAIN=0
 L4D2_GAMESERVER_PORTS="27015:27030"  # 16 servidores
 L4D2_TV_PORTS="27115:27130"          # 16 SourceTV
-ENABLE_L4D2_TCP_PROTECT=true
+# Activación TCP protect por módulo: incluir l4d2_tcp_protect en MODULES_ONLY
 ```
 
 ### Servidores en Docker
@@ -275,7 +275,7 @@ TYPECHAIN=2  # Nativo + Docker
 L4D2_GAMESERVER_PORTS="27015:27020"
 L4D2_TV_PORTS="27115:27120"
 TCP_DOCKER="80,443,8080"
-ENABLE_L4D2_TCP_PROTECT=true
+# Activación TCP protect por módulo: incluir l4d2_tcp_protect en MODULES_ONLY
 ```
 
 ## 📊 Tipos de Ataques Detectados
@@ -328,7 +328,7 @@ modules/
   - Variables: `SSH_PORT`, `SSH_REQUIRE_WHITELIST`, `WHITELISTED_IPS`, `WHITELISTED_DOMAINS`
 - **Protección TCP L4D2 (separada)**
   - `ip_l4d2_tcp_protect` / `nf_l4d2_tcp_protect`
-  - Variables: `ENABLE_L4D2_TCP_PROTECT`, `L4D2_GAMESERVER_PORTS`, `L4D2_TCP_PROTECTION`, `LOG_PREFIX_TCP_RCON_BLOCK`
+  - Variables: `L4D2_GAMESERVER_PORTS`, `L4D2_TCP_PROTECTION`, `LOG_PREFIX_TCP_RCON_BLOCK`
 - **Cadena anti-spam TCP (ip específico)**
   - `ip_l4d2_tcpfilter_chain` / `nf_l4d2_tcpfilter_chain` (compatibilidad)
   - En `nftables`, la protección efectiva la aplica `nf_l4d2_tcp_protect`.

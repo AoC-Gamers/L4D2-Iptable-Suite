@@ -36,8 +36,8 @@ ip_finalize_apply() {
     if [ -n "${L4D2_TV_PORTS:-}" ]; then
         echo "   - SourceTV separated: Ports $L4D2_TV_PORTS"
     fi
-    if [ -n "${ENABLE_L4D2_TCP_PROTECT:-}" ]; then
-        echo "   - TCP Protection: $ENABLE_L4D2_TCP_PROTECT"
+    if [ -n "${L4D2_TCP_PROTECTION:-}" ]; then
+        echo "   - TCP Protection ports: $L4D2_TCP_PROTECTION"
     fi
     echo "   - Chain type: $TYPECHAIN (0=INPUT, 1=DOCKER-USER, 2=BOTH)"
     echo "   - Docker INPUT compatibility: $DOCKER_INPUT_COMPAT"
