@@ -12,8 +12,8 @@ ID=ip_http_https_protect
 ALIASES=http_https_protect
 DESCRIPTION=Applies basic anti-abuse controls for HTTP/HTTPS ports
 REQUIRED_VARS=TYPECHAIN HTTP_HTTPS_PORTS HTTP_HTTPS_RATE HTTP_HTTPS_BURST LOG_PREFIX_HTTP_HTTPS_ABUSE
-OPTIONAL_VARS=HTTP_HTTPS_DOCKER
-DEFAULTS=TYPECHAIN=0 HTTP_HTTPS_PORTS=80,443 HTTP_HTTPS_RATE=180/min HTTP_HTTPS_BURST=360 HTTP_HTTPS_DOCKER=80,443 LOG_PREFIX_HTTP_HTTPS_ABUSE=HTTP_HTTPS_ABUSE:
+OPTIONAL_VARS=
+DEFAULTS=TYPECHAIN=0 HTTP_HTTPS_PORTS=80,443 HTTP_HTTPS_RATE=180/min HTTP_HTTPS_BURST=360 LOG_PREFIX_HTTP_HTTPS_ABUSE=HTTP_HTTPS_ABUSE:
 EOF
 }
 
@@ -28,11 +28,6 @@ ip_45_http_https_protect_validate() {
 
     if [ -n "${HTTP_HTTPS_PORTS:-}" ] && ! [[ "${HTTP_HTTPS_PORTS}" =~ ^[0-9]+(:[0-9]+)?(,[0-9]+(:[0-9]+)?)*$ ]]; then
         echo "ERROR: ip_http_https_protect: invalid HTTP_HTTPS_PORTS format"
-        return 2
-    fi
-
-    if [ -n "${HTTP_HTTPS_DOCKER:-}" ] && ! [[ "${HTTP_HTTPS_DOCKER}" =~ ^[0-9]+(:[0-9]+)?(,[0-9]+(:[0-9]+)?)*$ ]]; then
-        echo "ERROR: ip_http_https_protect: invalid HTTP_HTTPS_DOCKER format"
         return 2
     fi
 
@@ -71,11 +66,11 @@ ip_45_http_https_protect_apply() {
 
     if [ "$TYPECHAIN" -eq 1 ] || [ "$TYPECHAIN" -eq 2 ]; then
         iptables -N DOCKER-USER 2>/dev/null || true
-        ip_45_http_https_protect_apply_chain DOCKER-USER "$HTTP_HTTPS_DOCKER" HTTPHTTPSNEWDOCKER
+        ip_45_http_https_protect_apply_chain DOCKER-USER "$HTTP_HTTPS_PORTS" HTTPHTTPSNEWDOCKER
         return 0
     fi
 
     if iptables -S DOCKER-USER >/dev/null 2>&1; then
-        ip_45_http_https_protect_apply_chain DOCKER-USER "$HTTP_HTTPS_DOCKER" HTTPHTTPSNEWDOCKER
+        ip_45_http_https_protect_apply_chain DOCKER-USER "$HTTP_HTTPS_PORTS" HTTPHTTPSNEWDOCKER
     fi
 }

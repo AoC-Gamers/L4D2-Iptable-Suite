@@ -375,6 +375,7 @@ l4d2_game_ports="27015"
 l4d2_tv_ports="27020"
 l4d2_cmd_limit="100"
 ssh_ports="22"
+ssh_docker=""
 ssh_rate="60/min"
 ssh_burst="20"
 whitelist=""
@@ -382,7 +383,6 @@ whitelist_domains=""
 udp_allow=""
 tcp_allow=""
 http_https_ports="80,443"
-http_https_docker="80,443"
 http_https_rate="180/min"
 http_https_burst="360"
 vpn_port="1195"
@@ -402,6 +402,17 @@ if needs_var "SSH_PORT"; then
             "22" \
             "is_required_ports_expr" \
             "Formato inválido para SSH_PORT.")"
+    fi
+
+    if needs_var "SSH_DOCKER"; then
+        ssh_docker="$(ask_with_context \
+            "SSH_DOCKER" \
+            "Puertos SSH expuestos por contenedores (DOCKER-USER), opcional." \
+            "docs/modules/07_tcp_ssh.md" \
+            "SSH_DOCKER (optional, ej: 2222 o 2222,22220:22229)" \
+            "" \
+            "is_optional_ports_expr" \
+            "Formato inválido para SSH_DOCKER.")"
     fi
 
 fi
@@ -474,7 +485,7 @@ if needs_var "UDP_ALLOW_PORTS" || needs_var "TCP_ALLOW_PORTS"; then
         "Formato inválido para TCP_ALLOW_PORTS.")"
 fi
 
-if needs_var "HTTP_HTTPS_PORTS" || needs_var "HTTP_HTTPS_RATE" || needs_var "HTTP_HTTPS_BURST" || needs_var "HTTP_HTTPS_DOCKER"; then
+if needs_var "HTTP_HTTPS_PORTS" || needs_var "HTTP_HTTPS_RATE" || needs_var "HTTP_HTTPS_BURST"; then
     say_section "Web HTTP/HTTPS"
     http_https_ports="$(ask_with_context \
         "HTTP_HTTPS_PORTS" \
@@ -484,15 +495,6 @@ if needs_var "HTTP_HTTPS_PORTS" || needs_var "HTTP_HTTPS_RATE" || needs_var "HTT
         "80,443" \
         "is_required_ports_expr" \
         "Formato inválido para HTTP_HTTPS_PORTS.")"
-
-    http_https_docker="$(ask_with_context \
-        "HTTP_HTTPS_DOCKER" \
-        "Puertos web en DOCKER-USER (opcional)." \
-        "docs/modules/08_http_https_protect.md" \
-        "HTTP_HTTPS_DOCKER (ej: 80,443)" \
-        "80,443" \
-        "is_required_ports_expr" \
-        "Formato inválido para HTTP_HTTPS_DOCKER.")"
 
     http_https_rate="$(ask_with_context \
         "HTTP_HTTPS_RATE" \
@@ -644,7 +646,6 @@ WHITELISTED_DOMAINS="${whitelist_domains}"
 UDP_ALLOW_PORTS="${udp_allow}"
 TCP_ALLOW_PORTS="${tcp_allow}"
 HTTP_HTTPS_PORTS="${http_https_ports}"
-HTTP_HTTPS_DOCKER="${http_https_docker}"
 HTTP_HTTPS_RATE="${http_https_rate}"
 HTTP_HTTPS_BURST=${http_https_burst}
 EOF
@@ -652,6 +653,7 @@ EOF
 if [ "$has_ssh_module" = "true" ]; then
 cat >> "$output_file" <<EOF
 SSH_PORT="${ssh_ports}"
+SSH_DOCKER="${ssh_docker}"
 SSH_RATE="${ssh_rate}"
 SSH_BURST=${ssh_burst}
 EOF
@@ -809,6 +811,7 @@ echo "  DOCKER_CHAIN_AUTORECOVER=$docker_chain_autorecover" >&2
 
 if [ "$has_ssh_module" = "true" ]; then
 echo "  SSH_PORT=$ssh_ports" >&2
+echo "  SSH_DOCKER=$ssh_docker" >&2
 echo "  SSH_RATE=$ssh_rate" >&2
 echo "  SSH_BURST=$ssh_burst" >&2
 fi

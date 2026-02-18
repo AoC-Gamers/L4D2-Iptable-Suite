@@ -8,7 +8,7 @@ Gestionar acceso SSH base (sin lógica específica de L4D2).
 - nftables: `modules/nf/nf_40_tcp_ssh.sh` (`ID=nf_tcp_ssh`)
 
 ## Variables
-- SSH: `SSH_PORT`
+- SSH: `SSH_PORT`, `SSH_DOCKER`
 - Protección: `SSH_RATE`, `SSH_BURST`, `LOG_PREFIX_SSH_ABUSE`
 
 ## Nota operativa
