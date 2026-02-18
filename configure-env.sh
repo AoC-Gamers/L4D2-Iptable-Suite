@@ -791,8 +791,8 @@ fi
 
 cat >> "$output_file" <<EOF
 
-LOGFILE=/var/log/l4d2-iptables.log
-RSYSLOG_CONF=/etc/rsyslog.d/l4d2-iptables.conf
+LOGFILE=/var/log/firewall-suite.log
+RSYSLOG_CONF=/etc/rsyslog.d/firewall-suite.conf
 EOF
 
 echo "OK: .env generated at $output_file" >&2

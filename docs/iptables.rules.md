@@ -1071,7 +1071,7 @@ iptables -L UDP_GAME_NEW_LIMIT -n -v -x
 ls /proc/net/ipt_hashlimit/
 
 # Buscar IPs específicas en logs
-grep "IP_PROBLEMA" /var/log/l4d2-iptables.log
+grep "IP_PROBLEMA" /var/log/firewall-suite.log
 ```
 
 **Soluciones**:
@@ -1136,7 +1136,7 @@ cat .env | grep -v "^#" | grep -v "^$"
 netstat -ulnp | grep :27015
 
 # 4. Verificar logs se generan
-sudo tail -f /var/log/l4d2-iptables.log
+sudo tail -f /var/log/firewall-suite.log
 ```
 
 **Soluciones**:
@@ -1196,14 +1196,14 @@ docker ps --format "table {{.Names}}\t{{.Ports}}"
 **Diagnóstico**:
 ```bash
 # Verificar configuración rsyslog
-sudo cat /etc/rsyslog.d/l4d2-iptables.conf
+sudo cat /etc/rsyslog.d/firewall-suite.conf
 
 # Estado del servicio
 sudo systemctl status rsyslog
 
 # Test manual de logging
 sudo logger -p kern.warning "TEST: Manual iptables log"
-tail /var/log/l4d2-iptables.log
+tail /var/log/firewall-suite.log
 ```
 
 **Soluciones**:
@@ -1215,8 +1215,8 @@ sudo python3 iptable.loggin.py  # Opción 1
 sudo systemctl restart rsyslog
 
 # Verificar permisos de archivos
-sudo ls -la /var/log/l4d2-iptables.log
-sudo chmod 644 /var/log/l4d2-iptables.log
+sudo ls -la /var/log/firewall-suite.log
+sudo chmod 644 /var/log/firewall-suite.log
 ```
 
 ### Herramientas de Debugging
@@ -1269,12 +1269,12 @@ netstat -ulnp | grep ":27" | sed 's/^/     /'
 echo
 
 echo "6. LOGS"
-if [ -f "/var/log/l4d2-iptables.log" ]; then
-    log_lines=$(wc -l < /var/log/l4d2-iptables.log)
+if [ -f "/var/log/firewall-suite.log" ]; then
+    log_lines=$(wc -l < /var/log/firewall-suite.log)
     echo "   ✅ Log existe ($log_lines líneas)"
     if [ $log_lines -gt 0 ]; then
         echo "   - Últimos eventos:"
-        tail -3 /var/log/l4d2-iptables.log | sed 's/^/     /'
+        tail -3 /var/log/firewall-suite.log | sed 's/^/     /'
     fi
 else
     echo "   ❌ Log NO existe"
@@ -1295,7 +1295,7 @@ echo "Presiona Ctrl+C para salir"
 echo
 
 # Monitor de logs
-tail -f /var/log/l4d2-iptables.log | while read line; do
+tail -f /var/log/firewall-suite.log | while read line; do
     timestamp=$(echo "$line" | awk '{print $1, $2, $3}')
     attack_type=$(echo "$line" | grep -o '[A-Z_]*_FLOOD\|[A-Z_]*_LIMIT\|[A-Z_]*_BLOCK' | head -1)
     src_ip=$(echo "$line" | grep -o 'SRC=[0-9.]*' | cut -d= -f2)

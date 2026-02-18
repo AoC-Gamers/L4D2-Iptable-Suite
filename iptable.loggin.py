@@ -54,8 +54,8 @@ GENERATED FILES:
 
 INPUT FILES:
     - .env: Configuration file with LOG_PREFIX_* variables and system paths
-    - /var/log/l4d2-iptables.log: Main log file (configurable via LOGFILE in .env)
-    - /etc/rsyslog.d/l4d2-iptables.conf: Rsyslog configuration (auto-generated)
+    - /var/log/firewall-suite.log: Main log file (configurable via LOGFILE in .env)
+    - /etc/rsyslog.d/firewall-suite.conf: Rsyslog configuration (auto-generated)
 
 ATTACK TYPES SUPPORTED:
     INVALID_SIZE, MALFORMED, A2S_INFO_FLOOD, A2S_PLAYERS_FLOOD, A2S_RULES_FLOOD,
@@ -80,8 +80,8 @@ ISO_TIMESTAMP_FORMAT = "%Y-%m-%dT%H:%M:%S"
 ANALYSIS_YEAR = None
 
 # Default values - will be overridden by .env file
-LOGFILE = "/var/log/l4d2-iptables.log"
-RSYSLOG_CONF = "/etc/rsyslog.d/l4d2-iptables.conf"
+LOGFILE = "/var/log/firewall-suite.log"
+RSYSLOG_CONF = "/etc/rsyslog.d/firewall-suite.conf"
 
 # Specific log prefixes for different attack types
 LOG_PREFIXES = {
