@@ -13,7 +13,7 @@ Permitir entrada de OpenVPN y conectividad VPN↔LAN según configuración.
 - extras en `ip`: `VPN_DOCKER_INTERFACE`, `VPN_ENABLE_NAT`, `VPN_LAN_INTERFACE`, `VPN_LOG_*`, `VPN_ROUTER_*`
 
 ## Activación
-- El módulo se activa por inclusión en `MODULES_ONLY`/`MODULES_EXCLUDE`.
+- El módulo se activa por inclusión en `MODULES_ONLY`.
 - `VPN_ENABLED` queda deprecada y ya no se usa.
 
 ## Diferencias por backend
