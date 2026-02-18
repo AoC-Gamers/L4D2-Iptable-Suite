@@ -105,7 +105,6 @@ L4D2_TCP_PROTECTION=""          # Puertos TCP de juego específicos (vacío = L4
 
 # === ACCESO ADMINISTRATIVO ===
 SSH_PORT="22"                   # Puertos SSH del sistema
-SSH_REQUIRE_WHITELIST=false      # true = no abre SSH públicamente; solo whitelist
 WHITELISTED_IPS=""              # IPs con acceso completo al sistema (⚠️ TODOS los puertos)
 WHITELISTED_DOMAINS=""          # Dominios resueltos a IPv4 y fusionados con WHITELISTED_IPS
 
@@ -191,16 +190,9 @@ Notas operativas:
 - Si DNS no resuelve y existe `WHITELISTED_IPS`, la suite continúa usando fallback por IP.
 - Si DNS cambia, reaplica reglas para refrescar IPs resueltas.
 
-#### SSH privado solo por whitelist
+#### SSH y whitelist
 
-Cuando `SSH_REQUIRE_WHITELIST=true`, la suite **no** crea regla pública para `SSH_PORT`; el acceso queda restringido a lo que pase por `WHITELISTED_IPS`/`WHITELISTED_DOMAINS`.
-
-```bash
-SSH_PORT="2222,22220:22229"
-SSH_REQUIRE_WHITELIST=true
-WHITELISTED_IPS="192.0.2.0/24"
-WHITELISTED_DOMAINS="admin-gateway.example.net"
-```
+`SSH_PORT` se expone al incluir el módulo `tcp_ssh`. La whitelist sigue otorgando bypass global (todos los puertos) para IPs/dominios confiables.
 ```
 
 ### Ejecución

@@ -110,9 +110,8 @@ L4D2_TV_PORTS="27020"
 # Protección TCP RCON
 # Incluir l4d2_tcp_protect en MODULES_ONLY para activar
 
-# SSH: no exponer públicamente cuando sea true
+# SSH: puertos expuestos al incluir módulo tcp_ssh
 SSH_PORT="2222,22220:22229"
-SSH_REQUIRE_WHITELIST=true
 
 # IPs de confianza (acceso completo al sistema - ⚠️ TODOS los puertos)
 WHITELISTED_IPS="198.51.100.10 203.0.113.5"
@@ -325,7 +324,7 @@ modules/
 
 - **SSH base**
   - `ip_tcp_ssh` / `nf_tcp_ssh`
-  - Variables: `SSH_PORT`, `SSH_REQUIRE_WHITELIST`, `WHITELISTED_IPS`, `WHITELISTED_DOMAINS`
+  - Variables: `SSH_PORT`, `SSH_RATE`, `SSH_BURST`, `LOG_PREFIX_SSH_ABUSE`
 - **Protección TCP L4D2 (separada)**
   - `ip_l4d2_tcp_protect` / `nf_l4d2_tcp_protect`
   - Variables: `L4D2_GAMESERVER_PORTS`, `L4D2_TCP_PROTECTION`, `LOG_PREFIX_TCP_RCON_BLOCK`

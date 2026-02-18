@@ -9,9 +9,19 @@ ID=nf_tcp_ssh
 ALIASES=tcp_ssh
 DESCRIPTION=Applies base SSH rules in the nftables backend
 REQUIRED_VARS=TYPECHAIN SSH_PORT
-OPTIONAL_VARS=SSH_DOCKER SSH_REQUIRE_WHITELIST WHITELISTED_IPS WHITELISTED_DOMAINS
-DEFAULTS=TYPECHAIN=0 SSH_PORT=22 SSH_DOCKER= SSH_REQUIRE_WHITELIST=false WHITELISTED_IPS= WHITELISTED_DOMAINS=
+OPTIONAL_VARS=SSH_DOCKER SSH_RATE SSH_BURST LOG_PREFIX_SSH_ABUSE
+DEFAULTS=TYPECHAIN=0 SSH_PORT=22 SSH_DOCKER= SSH_RATE=60/minute SSH_BURST=20 LOG_PREFIX_SSH_ABUSE=SSH_ABUSE:
 EOF
+}
+
+nf_40_tcp_ssh_normalize_rate() {
+    local raw_rate="$1"
+    case "$raw_rate" in
+        */sec) echo "${raw_rate%/sec}/second" ;;
+        */min) echo "${raw_rate%/min}/minute" ;;
+        */hour|*/day|*/second|*/minute) echo "$raw_rate" ;;
+        *) echo "$raw_rate" ;;
+    esac
 }
 
 nf_40_tcp_ssh_validate() {
@@ -23,34 +33,30 @@ nf_40_tcp_ssh_validate() {
             ;;
     esac
 
-    case "${SSH_REQUIRE_WHITELIST:-false}" in
-        true|false) ;;
-        *)
-            echo "ERROR: nf_tcp_ssh: SSH_REQUIRE_WHITELIST must be true or false"
-            return 2
-            ;;
-    esac
-
-    if [ "${SSH_REQUIRE_WHITELIST:-false}" = "true" ] && [ -z "${WHITELISTED_IPS:-}" ] && [ -z "${WHITELISTED_DOMAINS:-}" ]; then
-        echo "ERROR: nf_tcp_ssh: SSH_REQUIRE_WHITELIST=true requires WHITELISTED_IPS and/or WHITELISTED_DOMAINS"
+    local normalized_rate
+    normalized_rate="$(nf_40_tcp_ssh_normalize_rate "${SSH_RATE:-}")"
+    if ! [[ "$normalized_rate" =~ ^[0-9]+/(second|minute|hour|day)$ ]]; then
+        echo "ERROR: nf_tcp_ssh: SSH_RATE must match '<num>/(sec|min|second|minute|hour|day)'"
         return 2
     fi
+
+    if ! [[ "${SSH_BURST:-}" =~ ^[0-9]+$ ]]; then
+        echo "ERROR: nf_tcp_ssh: SSH_BURST must be numeric"
+        return 2
+    fi
+
 }
 
 nf_40_tcp_ssh_apply() {
-    local chain ssh_ports_expr allow_public_ssh
+    local chain ssh_ports_expr normalized_rate
 
     ssh_ports_expr="$(nf_ports_set_expr "$SSH_PORT")"
-    allow_public_ssh=true
-
-    if [ "${SSH_REQUIRE_WHITELIST:-false}" = "true" ]; then
-        allow_public_ssh=false
-        echo "SSH protection: public SSH disabled, only WHITELISTED_IPS/WHITELISTED_DOMAINS can access"
-    fi
+    normalized_rate="$(nf_40_tcp_ssh_normalize_rate "$SSH_RATE")"
 
     for chain in $(nf_get_target_chains); do
-        if [ "$allow_public_ssh" = "true" ]; then
-            nf_add_rule "$chain" tcp dport "$ssh_ports_expr" accept
-        fi
+        nf_add_rule "$chain" tcp dport "$ssh_ports_expr" ct state new limit rate "$normalized_rate" burst "$SSH_BURST" packets accept
+        nf_add_rule "$chain" tcp dport "$ssh_ports_expr" ct state new limit rate over 30/minute burst 10 packets log prefix "\"$LOG_PREFIX_SSH_ABUSE \""
+        nf_add_rule "$chain" tcp dport "$ssh_ports_expr" ct state new drop
+        nf_add_rule "$chain" tcp dport "$ssh_ports_expr" ct state established,related accept
     done
 }

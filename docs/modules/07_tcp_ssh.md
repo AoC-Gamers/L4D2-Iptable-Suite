@@ -8,12 +8,12 @@ Gestionar acceso SSH base (sin lógica específica de L4D2).
 - nftables: `modules/nf/nf_40_tcp_ssh.sh` (`ID=nf_tcp_ssh`)
 
 ## Variables
-- SSH: `SSH_PORT`, `SSH_REQUIRE_WHITELIST`, `WHITELISTED_IPS`, `WHITELISTED_DOMAINS`
+- SSH: `SSH_PORT`
+- Protección: `SSH_RATE`, `SSH_BURST`, `LOG_PREFIX_SSH_ABUSE`
 
 ## Nota operativa
 - La protección TCP de dominio L4D2 ahora vive en el módulo dedicado `l4d2_tcp_protect`.
-- Este módulo `tcp_ssh` se enfoca en exposición SSH y su política de whitelist.
+- Este módulo `tcp_ssh` expone SSH y aplica limitación anti-abuso de nuevas conexiones.
 
 ## Diferencias por backend
-- `SSH_REQUIRE_WHITELIST=true` evita apertura pública SSH en este módulo.
 - La cobertura real depende de `TYPECHAIN` (`input`, `forward` o ambos).
