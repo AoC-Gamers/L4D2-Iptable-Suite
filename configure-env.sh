@@ -682,13 +682,6 @@ L4D2_CMD_LIMIT=${l4d2_cmd_limit}
 EOF
 fi
 
-if needs_var "LOG_PREFIX_HTTP_HTTPS_ABUSE" || needs_var "LOG_PREFIX_INVALID_SIZE" || needs_var "LOG_PREFIX_MALFORMED" || needs_var "LOG_PREFIX_A2S_INFO" || needs_var "LOG_PREFIX_A2S_PLAYERS" || needs_var "LOG_PREFIX_A2S_RULES" || needs_var "LOG_PREFIX_STEAM_GROUP" || needs_var "LOG_PREFIX_L4D2_CONNECT" || needs_var "LOG_PREFIX_L4D2_RESERVE" || needs_var "LOG_PREFIX_UDP_NEW_LIMIT" || needs_var "LOG_PREFIX_UDP_EST_LIMIT" || needs_var "LOG_PREFIX_TCP_RCON_BLOCK" || needs_var "LOG_PREFIX_ICMP_FLOOD" || needs_var "LOG_PREFIX_SSH_ABUSE"; then
-cat >> "$output_file" <<EOF
-
-# Log prefixes (emitidos según metadata de módulos seleccionados)
-EOF
-fi
-
 if needs_var "LOG_PREFIX_HTTP_HTTPS_ABUSE"; then
 cat >> "$output_file" <<EOF
 LOG_PREFIX_HTTP_HTTPS_ABUSE="HTTP_HTTPS_ABUSE: "
