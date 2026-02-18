@@ -6,6 +6,7 @@
 nf_chain_setup_metadata() {
     cat << 'EOF'
 ID=nf_chain_setup
+ALIASES=chain_setup
 DESCRIPTION=Sets up the nftables ruleset and base chains for L4D2
 REQUIRED_VARS=TYPECHAIN
 OPTIONAL_VARS=

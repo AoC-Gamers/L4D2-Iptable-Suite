@@ -3,6 +3,7 @@
 ip_finalize_metadata() {
     cat << 'EOF'
 ID=ip_finalize
+ALIASES=finalize
 DESCRIPTION=Applies final policies and prints a summary for the iptables backend
 REQUIRED_VARS=TYPECHAIN DOCKER_INPUT_COMPAT DOCKER_CHAIN_AUTORECOVER
 OPTIONAL_VARS=ENABLE_L4D2_TCP_PROTECT L4D2_TV_PORTS

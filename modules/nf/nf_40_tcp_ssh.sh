@@ -6,6 +6,7 @@
 nf_40_tcp_ssh_metadata() {
     cat << 'EOF'
 ID=nf_tcp_ssh
+ALIASES=tcp_ssh
 DESCRIPTION=Applies base SSH rules in the nftables backend
 REQUIRED_VARS=TYPECHAIN SSH_PORT
 OPTIONAL_VARS=SSH_DOCKER SSH_REQUIRE_WHITELIST WHITELISTED_IPS WHITELISTED_DOMAINS

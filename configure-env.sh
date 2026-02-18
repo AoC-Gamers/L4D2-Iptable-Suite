@@ -170,32 +170,45 @@ module_default_include() {
     esac
 }
 
-module_backend_variants() {
+module_generic_token() {
     case "$1" in
-        ip_chain_setup) echo "ip_chain_setup nf_chain_setup" ;;
-        ip_finalize) echo "ip_finalize nf_finalize" ;;
-        ip_whitelist) echo "ip_whitelist nf_whitelist" ;;
-        ip_allowlist_ports) echo "ip_allowlist_ports nf_allowlist_ports" ;;
-        ip_openvpn) echo "ip_openvpn nf_openvpn" ;;
-        ip_tcp_ssh) echo "ip_tcp_ssh nf_tcp_ssh" ;;
-        ip_l4d2_tcp_protect) echo "ip_l4d2_tcp_protect nf_l4d2_tcp_protect" ;;
-        ip_http_https_protect) echo "ip_http_https_protect nf_http_https_protect" ;;
-        ip_l4d2_udp_base) echo "ip_l4d2_udp_base nf_l4d2_udp_base" ;;
-        ip_l4d2_packet_validation) echo "ip_l4d2_packet_validation nf_l4d2_packet_validation" ;;
-        ip_l4d2_a2s_filters) echo "ip_l4d2_a2s_filters nf_l4d2_a2s_filters" ;;
-        ip_loopback|ip_tcpfilter_chain) echo "$1" ;;
+        ip_chain_setup|nf_chain_setup) echo "chain_setup" ;;
+        ip_finalize|nf_finalize) echo "finalize" ;;
+        ip_*) echo "${1#ip_}" ;;
+        nf_*) echo "${1#nf_}" ;;
         *) echo "$1" ;;
     esac
 }
 
-append_module_variants() {
+module_token_to_module_ids() {
+    local token="$1"
+
+    case "$token" in
+        chain_setup) echo "ip_chain_setup nf_chain_setup" ;;
+        finalize) echo "ip_finalize nf_finalize" ;;
+        whitelist) echo "ip_whitelist nf_whitelist" ;;
+        allowlist_ports) echo "ip_allowlist_ports nf_allowlist_ports" ;;
+        openvpn) echo "ip_openvpn nf_openvpn" ;;
+        tcp_ssh) echo "ip_tcp_ssh nf_tcp_ssh" ;;
+        l4d2_tcp_protect) echo "ip_l4d2_tcp_protect nf_l4d2_tcp_protect" ;;
+        http_https_protect) echo "ip_http_https_protect nf_http_https_protect" ;;
+        l4d2_udp_base) echo "ip_l4d2_udp_base nf_l4d2_udp_base" ;;
+        l4d2_packet_validation) echo "ip_l4d2_packet_validation nf_l4d2_packet_validation" ;;
+        l4d2_a2s_filters) echo "ip_l4d2_a2s_filters nf_l4d2_a2s_filters" ;;
+        loopback) echo "ip_loopback" ;;
+        tcpfilter_chain) echo "ip_tcpfilter_chain" ;;
+        ip_*|nf_*) echo "$token" ;;
+        *) echo "$token" ;;
+    esac
+}
+
+append_module_token() {
     local module_id="$1"
     local __target_array_name="$2"
-    local variant
+    local token
 
-    for variant in $(module_backend_variants "$module_id"); do
-        eval "$__target_array_name+=(\"$variant\")"
-    done
+    token="$(module_generic_token "$module_id")"
+    eval "$__target_array_name+=(\"$token\")"
 }
 
 module_id_to_file() {
@@ -323,7 +336,7 @@ declare -a selectable_modules=(
 )
 
 declare -a selected_only=()
-append_module_variants "ip_chain_setup" selected_only
+append_module_token "ip_chain_setup" selected_only
 
 say_info "Módulos fijos: chain_setup/finalize siempre incluidos (ip y nf)"
 
@@ -337,22 +350,25 @@ for module_info in "${selectable_modules[@]}"; do
 
     if [ "${module_enabled[$module_id]}" = "true" ]; then
         say_info "$module_id => incluido"
-        append_module_variants "$module_id" selected_only
+        append_module_token "$module_id" selected_only
     else
         say_warn "$module_id => excluido"
     fi
 done
 
-append_module_variants "ip_finalize" selected_only
+append_module_token "ip_finalize" selected_only
 
 modules_only=""
 modules_exclude=""
 modules_only="$(build_csv "${selected_only[@]}")"
+
 say_info "MODULES_ONLY=$modules_only"
 
 declare -A selected_required_vars=()
 for selected_module in "${selected_only[@]}"; do
-    collect_required_vars_for_module "$selected_module" selected_required_vars
+    for module_id in $(module_token_to_module_ids "$selected_module"); do
+        collect_required_vars_for_module "$module_id" selected_required_vars
+    done
 done
 
 l4d2_game_ports="27015"

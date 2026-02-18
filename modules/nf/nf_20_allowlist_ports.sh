@@ -6,6 +6,7 @@
 nf_20_allowlist_ports_metadata() {
     cat << 'EOF'
 ID=nf_allowlist_ports
+ALIASES=allowlist_ports
 DESCRIPTION=Allows additional UDP/TCP ports in the nftables backend
 REQUIRED_VARS=TYPECHAIN
 OPTIONAL_VARS=UDP_ALLOW_PORTS TCP_ALLOW_PORTS

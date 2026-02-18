@@ -6,6 +6,7 @@
 nf_30_openvpn_metadata() {
     cat << 'EOF'
 ID=nf_openvpn
+ALIASES=openvpn
 DESCRIPTION=Applies base OpenVPN rules in the nftables backend
 REQUIRED_VARS=TYPECHAIN VPN_PORT VPN_SUBNET VPN_INTERFACE
 OPTIONAL_VARS=VPN_PROTO VPN_PORT VPN_SUBNET VPN_INTERFACE VPN_LAN_SUBNET

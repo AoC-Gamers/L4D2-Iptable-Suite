@@ -3,6 +3,7 @@
 ip_05_loopback_metadata() {
     cat << 'EOF'
 ID=ip_loopback
+ALIASES=loopback
 DESCRIPTION=Allows loopback traffic in INPUT and DOCKER-USER based on TYPECHAIN
 REQUIRED_VARS=TYPECHAIN
 OPTIONAL_VARS=

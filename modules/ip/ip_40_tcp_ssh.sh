@@ -3,6 +3,7 @@
 ip_40_tcp_ssh_metadata() {
     cat << 'EOF'
 ID=ip_tcp_ssh
+ALIASES=tcp_ssh
 DESCRIPTION=Applies base SSH rules in the iptables backend
 REQUIRED_VARS=TYPECHAIN SSH_PORT
 OPTIONAL_VARS=SSH_DOCKER SSH_REQUIRE_WHITELIST WHITELISTED_IPS WHITELISTED_DOMAINS

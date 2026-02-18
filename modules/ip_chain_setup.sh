@@ -3,6 +3,7 @@
 ip_chain_setup_metadata() {
     cat << 'EOF'
 ID=ip_chain_setup
+ALIASES=chain_setup
 DESCRIPTION=Sets up cleanup, base policies, and required chains for the iptables backend
 REQUIRED_VARS=TYPECHAIN DOCKER_INPUT_COMPAT DOCKER_CHAIN_AUTORECOVER
 OPTIONAL_VARS=

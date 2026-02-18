@@ -6,6 +6,7 @@
 nf_10_whitelist_metadata() {
     cat << 'EOF'
 ID=nf_whitelist
+ALIASES=whitelist
 DESCRIPTION=Allows full traffic from trusted IPs in the nftables backend
 REQUIRED_VARS=TYPECHAIN
 OPTIONAL_VARS=WHITELISTED_IPS WHITELISTED_DOMAINS

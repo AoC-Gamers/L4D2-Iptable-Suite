@@ -3,6 +3,7 @@
 ip_10_whitelist_metadata() {
     cat << 'EOF'
 ID=ip_whitelist
+ALIASES=whitelist
 DESCRIPTION=Allows full traffic from IPs listed in WHITELISTED_IPS
 REQUIRED_VARS=TYPECHAIN
 OPTIONAL_VARS=WHITELISTED_IPS WHITELISTED_DOMAINS

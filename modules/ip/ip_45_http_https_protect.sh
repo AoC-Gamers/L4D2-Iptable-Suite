@@ -9,6 +9,7 @@ ip_45_http_https_protect_add_rule() {
 ip_45_http_https_protect_metadata() {
     cat << 'EOF'
 ID=ip_http_https_protect
+ALIASES=http_https_protect
 DESCRIPTION=Applies basic anti-abuse controls for HTTP/HTTPS ports
 REQUIRED_VARS=TYPECHAIN ENABLE_HTTP_PROTECT HTTP_HTTPS_PORTS HTTP_HTTPS_RATE HTTP_HTTPS_BURST LOG_PREFIX_HTTP_HTTPS_ABUSE
 OPTIONAL_VARS=HTTP_HTTPS_DOCKER

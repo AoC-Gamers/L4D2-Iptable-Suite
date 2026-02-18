@@ -3,6 +3,7 @@
 ip_35_tcpfilter_chain_metadata() {
     cat << 'EOF'
 ID=ip_tcpfilter_chain
+ALIASES=tcpfilter_chain
 DESCRIPTION=Sets up the TCPfilter chain to control new TCP connections
 REQUIRED_VARS=
 OPTIONAL_VARS=ENABLE_L4D2_TCP_PROTECT LOG_PREFIX_TCP_RCON_BLOCK L4D2_TCP_PROTECTION TCP_DOCKER

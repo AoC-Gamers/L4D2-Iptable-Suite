@@ -6,6 +6,7 @@
 nf_42_l4d2_tcp_protect_metadata() {
     cat << 'EOF'
 ID=nf_l4d2_tcp_protect
+ALIASES=l4d2_tcp_protect
 DESCRIPTION=Applies L4D2 TCP protection (RCON/game ports) in the nftables backend
 REQUIRED_VARS=TYPECHAIN
 OPTIONAL_VARS=ENABLE_L4D2_TCP_PROTECT L4D2_GAMESERVER_PORTS L4D2_TCP_PROTECTION LOG_PREFIX_TCP_RCON_BLOCK
