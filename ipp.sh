@@ -262,7 +262,13 @@ save_rules() {
         msg_info "Total rules saved: $(grep -c '^-A' "$DIR_IPTABLES/rules.v4" 2>/dev/null || echo 0)"
     else
         msg_info "Saving current nftables rules..."
-        nft list ruleset > "$NFT_CONF_FILE"
+
+        if ! nft list table inet l4d2_filter >/dev/null 2>&1; then
+            msg_error "Table inet l4d2_filter not found. Apply nftables.rules.sh first."
+            return 1
+        fi
+
+        nft list table inet l4d2_filter > "$NFT_CONF_FILE"
         chmod 644 "$NFT_CONF_FILE"
         msg_ok "Rules saved to $NFT_CONF_FILE"
         msg_info "Total lines saved: $(wc -l < "$NFT_CONF_FILE" 2>/dev/null || echo 0)"
@@ -320,6 +326,10 @@ reload_rules() {
     else
         if [ -f "$NFT_CONF_FILE" ]; then
             msg_info "Reloading saved nftables rules..."
+
+            # Ensure idempotent reloads for our managed table only
+            nft delete table inet l4d2_filter 2>/dev/null || true
+
             nft -f "$NFT_CONF_FILE"
             msg_ok "Rules reloaded successfully"
         else
