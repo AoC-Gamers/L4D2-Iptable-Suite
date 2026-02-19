@@ -158,10 +158,10 @@ ask_yes_no() {
 
 module_default_include() {
     case "$1" in
-        ip_loopback|ip_whitelist|ip_allowlist_ports|ip_openvpn|ip_tcp_ssh|ip_http_https_protect)
+        ip_loopback|ip_whitelist|ip_allowlist_ports|ip_openvpn_server|ip_tcp_ssh|ip_http_https_protect)
             echo "true"
             ;;
-        ip_l4d2_tcpfilter_chain|ip_l4d2_tcp_protect|ip_l4d2_udp_base|ip_l4d2_packet_validation|ip_l4d2_a2s_filters)
+        ip_openvpn_sitetosite|ip_l4d2_tcpfilter_chain|ip_l4d2_tcp_protect|ip_l4d2_udp_base|ip_l4d2_packet_validation|ip_l4d2_a2s_filters)
             echo "false"
             ;;
         *)
@@ -188,7 +188,8 @@ module_token_to_module_ids() {
         finalize) echo "ip_finalize nf_finalize" ;;
         whitelist) echo "ip_whitelist nf_whitelist" ;;
         allowlist_ports) echo "ip_allowlist_ports nf_allowlist_ports" ;;
-        openvpn) echo "ip_openvpn nf_openvpn" ;;
+        openvpn_server) echo "ip_openvpn_server nf_openvpn_server" ;;
+        openvpn_sitetosite) echo "ip_openvpn_sitetosite nf_openvpn_sitetosite" ;;
         tcp_ssh) echo "ip_tcp_ssh nf_tcp_ssh" ;;
         l4d2_tcp_protect) echo "ip_l4d2_tcp_protect nf_l4d2_tcp_protect" ;;
         http_https_protect) echo "ip_http_https_protect nf_http_https_protect" ;;
@@ -325,7 +326,8 @@ declare -a selectable_modules=(
     "ip_loopback|Loopback local"
     "ip_whitelist|Whitelist por IP/dominio"
     "ip_allowlist_ports|Allowlist de puertos manual"
-    "ip_openvpn|Reglas OpenVPN"
+    "ip_openvpn_server|OpenVPN modo servidor (clientes remotos)"
+    "ip_openvpn_sitetosite|OpenVPN modo site-to-site"
     "ip_tcp_ssh|Acceso SSH base"
     "ip_l4d2_tcp_protect|Protección TCP L4D2"
     "ip_http_https_protect|Protección HTTP/HTTPS"
@@ -384,10 +386,13 @@ tcp_allow=""
 http_https_ports="80,443"
 http_https_rate="180/min"
 http_https_burst="360"
-vpn_port="1195"
-vpn_subnet="10.8.0.0/24"
-vpn_interface="tun0"
-vpn_proto="udp"
+ovpnsrv_port="1195"
+ovpnsrv_subnet="10.8.0.0/24"
+ovpnsrv_interface="tun0"
+ovpnsrv_proto="udp"
+ovpns2s_interface="tun0"
+ovpns2s_local_subnets="192.168.1.0/24"
+ovpns2s_remote_subnets=""
 l4d2_tcp_protection=""
 
 if needs_var "SSH_PORT"; then
@@ -514,34 +519,64 @@ if needs_var "HTTP_HTTPS_PORTS" || needs_var "HTTP_HTTPS_RATE" || needs_var "HTT
         "HTTP_HTTPS_BURST debe ser numérico.")"
 fi
 
-if needs_var "VPN_PORT" || needs_var "VPN_SUBNET" || needs_var "VPN_INTERFACE"; then
-    say_section "OpenVPN"
-    vpn_port="$(ask_with_context \
-        "VPN_PORT" \
+if needs_var "OVPNSRV_PORT" || needs_var "OVPNSRV_SUBNET" || needs_var "OVPNSRV_INTERFACE"; then
+    say_section "OpenVPN Server"
+    ovpnsrv_port="$(ask_with_context \
+        "OVPNSRV_PORT" \
         "Puerto de escucha de OpenVPN (1-65535)." \
         "docs/modules/06_openvpn.md" \
-        "VPN_PORT" \
+        "OVPNSRV_PORT" \
         "1195" \
         "is_port_number" \
-        "VPN_PORT debe ser numérico entre 1 y 65535.")"
+        "OVPNSRV_PORT debe ser numérico entre 1 y 65535.")"
 
-    vpn_subnet="$(ask_with_context \
-        "VPN_SUBNET" \
+    ovpnsrv_subnet="$(ask_with_context \
+        "OVPNSRV_SUBNET" \
         "Subred del túnel en formato CIDR IPv4 (ej: 10.8.0.0/24)." \
         "docs/modules/06_openvpn.md" \
-        "VPN_SUBNET" \
+        "OVPNSRV_SUBNET" \
         "10.8.0.0/24" \
         "is_ipv4_cidr" \
-        "VPN_SUBNET debe tener formato CIDR IPv4 válido (ej: 10.8.0.0/24).")"
+        "OVPNSRV_SUBNET debe tener formato CIDR IPv4 válido (ej: 10.8.0.0/24).")"
 
-    vpn_interface="$(ask_with_context \
-        "VPN_INTERFACE" \
+    ovpnsrv_interface="$(ask_with_context \
+        "OVPNSRV_INTERFACE" \
         "Interfaz del túnel OpenVPN (ej: tun0)." \
         "docs/modules/06_openvpn.md" \
-        "VPN_INTERFACE" \
+        "OVPNSRV_INTERFACE" \
         "tun0" \
         "is_interface_name" \
-        "VPN_INTERFACE contiene caracteres no válidos.")"
+        "OVPNSRV_INTERFACE contiene caracteres no válidos.")"
+fi
+
+if needs_var "OVPNS2S_INTERFACE" || needs_var "OVPNS2S_LOCAL_SUBNETS" || needs_var "OVPNS2S_REMOTE_SUBNETS"; then
+    say_section "OpenVPN Site-to-Site"
+    ovpns2s_interface="$(ask_with_context \
+        "OVPNS2S_INTERFACE" \
+        "Interfaz del túnel site-to-site (ej: tun0)." \
+        "docs/modules/06_openvpn.md" \
+        "OVPNS2S_INTERFACE" \
+        "tun0" \
+        "is_interface_name" \
+        "OVPNS2S_INTERFACE contiene caracteres no válidos.")"
+
+    ovpns2s_local_subnets="$(ask_with_context \
+        "OVPNS2S_LOCAL_SUBNETS" \
+        "Subred(es) locales publicadas por el sitio (CIDR, separadas por coma)." \
+        "docs/modules/06_openvpn.md" \
+        "OVPNS2S_LOCAL_SUBNETS" \
+        "192.168.1.0/24" \
+        "true" \
+        "")"
+
+    ovpns2s_remote_subnets="$(ask_with_context \
+        "OVPNS2S_REMOTE_SUBNETS" \
+        "Subred(es) remotas del peer (CIDR, separadas por coma)." \
+        "docs/modules/06_openvpn.md" \
+        "OVPNS2S_REMOTE_SUBNETS" \
+        "" \
+        "true" \
+        "")"
 fi
 
 if [ "${module_enabled[ip_l4d2_udp_base]:-false}" = "true" ] || [ "${module_enabled[ip_l4d2_packet_validation]:-false}" = "true" ] || [ "${module_enabled[ip_l4d2_a2s_filters]:-false}" = "true" ]; then
@@ -618,9 +653,14 @@ elif [ "$has_l4d2_tcp_modules" = "true" ] && [ -z "$l4d2_tcp_protection" ] && ne
     has_l4d2_ports_needed="true"
 fi
 
-has_openvpn_module="false"
-if needs_var "VPN_PORT" || needs_var "VPN_SUBNET" || needs_var "VPN_INTERFACE"; then
-    has_openvpn_module="true"
+has_openvpn_server_module="false"
+if needs_var "OVPNSRV_PORT" || needs_var "OVPNSRV_SUBNET" || needs_var "OVPNSRV_INTERFACE"; then
+    has_openvpn_server_module="true"
+fi
+
+has_openvpn_s2s_module="false"
+if needs_var "OVPNS2S_INTERFACE" || needs_var "OVPNS2S_LOCAL_SUBNETS" || needs_var "OVPNS2S_REMOTE_SUBNETS"; then
+    has_openvpn_s2s_module="true"
 fi
 
 has_ssh_module="false"
@@ -761,21 +801,34 @@ LOG_PREFIX_SSH_ABUSE="SSH_ABUSE: "
 EOF
 fi
 
-if [ "$has_openvpn_module" = "true" ]; then
+if [ "$has_openvpn_server_module" = "true" ]; then
 cat >> "$output_file" <<EOF
 
-VPN_PROTO="${vpn_proto}"
-VPN_PORT=${vpn_port}
-VPN_SUBNET="${vpn_subnet}"
-VPN_INTERFACE="${vpn_interface}"
-VPN_DOCKER_INTERFACE=""
-VPN_LAN_SUBNET="192.168.1.0/24"
-VPN_LAN_INTERFACE=""
-VPN_ENABLE_NAT=false
-VPN_ROUTER_REAL_IP=""
-VPN_ROUTER_ALIAS_IP=""
-VPN_LOG_ENABLED=false
-VPN_LOG_PREFIX="VPN_TRAFFIC: "
+OVPNSRV_PROTO="${ovpnsrv_proto}"
+OVPNSRV_PORT=${ovpnsrv_port}
+OVPNSRV_SUBNET="${ovpnsrv_subnet}"
+OVPNSRV_INTERFACE="${ovpnsrv_interface}"
+OVPNSRV_DOCKER_INTERFACE=""
+OVPNSRV_LAN_SUBNET="192.168.1.0/24"
+OVPNSRV_LAN_INTERFACE=""
+OVPNSRV_ENABLE_NAT=false
+OVPNSRV_ROUTER_REAL_IP=""
+OVPNSRV_ROUTER_ALIAS_IP=""
+OVPNSRV_LOG_ENABLED=false
+OVPNSRV_LOG_PREFIX="VPN_SERVER_TRAFFIC: "
+EOF
+fi
+
+if [ "$has_openvpn_s2s_module" = "true" ]; then
+cat >> "$output_file" <<EOF
+
+OVPNS2S_INTERFACE="${ovpns2s_interface}"
+OVPNS2S_LOCAL_SUBNETS="${ovpns2s_local_subnets}"
+OVPNS2S_REMOTE_SUBNETS="${ovpns2s_remote_subnets}"
+OVPNS2S_ENABLE_NAT=false
+OVPNS2S_LOCAL_INTERFACE=""
+OVPNS2S_LOG_ENABLED=false
+OVPNS2S_LOG_PREFIX="VPN_S2S_TRAFFIC: "
 EOF
 fi
 
@@ -803,10 +856,16 @@ echo "  SSH_RATE=$ssh_rate" >&2
 echo "  SSH_BURST=$ssh_burst" >&2
 fi
 
-if [ "$has_openvpn_module" = "true" ]; then
-echo "  VPN_PORT=$vpn_port" >&2
-echo "  VPN_SUBNET=$vpn_subnet" >&2
-echo "  VPN_INTERFACE=$vpn_interface" >&2
+if [ "$has_openvpn_server_module" = "true" ]; then
+echo "  OVPNSRV_PORT=$ovpnsrv_port" >&2
+echo "  OVPNSRV_SUBNET=$ovpnsrv_subnet" >&2
+echo "  OVPNSRV_INTERFACE=$ovpnsrv_interface" >&2
+fi
+
+if [ "$has_openvpn_s2s_module" = "true" ]; then
+echo "  OVPNS2S_INTERFACE=$ovpns2s_interface" >&2
+echo "  OVPNS2S_LOCAL_SUBNETS=$ovpns2s_local_subnets" >&2
+echo "  OVPNS2S_REMOTE_SUBNETS=$ovpns2s_remote_subnets" >&2
 fi
 
 if [ "$has_l4d2_ports_needed" = "true" ]; then

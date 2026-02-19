@@ -112,7 +112,7 @@ run_preload() {
     fi
 
     # MODULES_EXCLUDE supports comma-separated module IDs, e.g.:
-    # MODULES_EXCLUDE="ip_openvpn,ip_l4d2_a2s_filters,nf_openvpn"
+    # MODULES_EXCLUDE="ip_openvpn_server,ip_l4d2_a2s_filters,nf_openvpn_server"
     # It is merged with --skip entries.
     local modules_exclude_raw="${MODULES_EXCLUDE:-}"
     if [ -n "$modules_exclude_raw" ]; then
@@ -129,5 +129,27 @@ run_preload() {
     fi
 
     [ "$PRELOAD_VERBOSE" = "true" ] && echo "INFO: Preload ready for backend: $backend"
+
+    local has_openvpn_server=false
+    local has_openvpn_sitetosite=false
+    local selected
+
+    for selected in "${PRELOAD_ONLY_MODULES[@]}"; do
+        case "$selected" in
+            openvpn_server|ip_openvpn_server|nf_openvpn_server)
+                has_openvpn_server=true
+                ;;
+            openvpn_sitetosite|ip_openvpn_sitetosite|nf_openvpn_sitetosite)
+                has_openvpn_sitetosite=true
+                ;;
+        esac
+    done
+
+    if [ "$has_openvpn_server" = "true" ] && [ "$has_openvpn_sitetosite" = "true" ]; then
+        echo "ERROR: openvpn_server and openvpn_sitetosite are incompatible and cannot be used together."
+        echo "ERROR: Keep only one adaptation in MODULES_ONLY / --only."
+        return 2
+    fi
+
     return 0
 }

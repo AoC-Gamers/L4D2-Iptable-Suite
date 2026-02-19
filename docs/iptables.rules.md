@@ -115,34 +115,50 @@ LOG_PREFIX_A2S_INFO="A2S_INFO_FLOOD: "
 # ... [12 prefijos más para categorización]
 ```
 
-### Soporte OpenVPN (host o Docker)
+### Soporte OpenVPN Server (host o Docker)
 
 El script puede abrir el puerto de OpenVPN, permitir acceso desde el tun hacia el host y habilitar forwarding controlado hacia la LAN. Esto evita que el tráfico VPN pase por las cadenas de rate limiting del juego.
 
-**Variables principales:**
+**Variables principales (`openvpn_server`):**
 ```bash
-VPN_PROTO="udp"
-VPN_PORT=1194
-VPN_SUBNET="10.8.0.0/24"
-VPN_INTERFACE="tun0"          # o "tun+" para varios
-VPN_DOCKER_INTERFACE="docker0" # opcional (OpenVPN en Docker)
-VPN_LAN_SUBNET="192.168.1.0/24"
-VPN_LAN_INTERFACE="enp3s0"     # requerido si VPN_ENABLE_NAT=true
-VPN_ENABLE_NAT=false
-VPN_LOG_ENABLED=false
-VPN_LOG_PREFIX="VPN_TRAFFIC: "
+OVPNSRV_PROTO="udp"
+OVPNSRV_PORT=1194
+OVPNSRV_SUBNET="10.8.0.0/24"
+OVPNSRV_INTERFACE="tun0"          # o "tun+" para varios
+OVPNSRV_DOCKER_INTERFACE="docker0" # opcional (OpenVPN en Docker)
+OVPNSRV_LAN_SUBNET="192.168.1.0/24"
+OVPNSRV_LAN_INTERFACE="enp3s0"     # requerido si OVPNSRV_ENABLE_NAT=true
+OVPNSRV_ENABLE_NAT=false
+OVPNSRV_LOG_ENABLED=false
+OVPNSRV_LOG_PREFIX="VPN_SERVER_TRAFFIC: "
 ```
 
 **Reglas generadas (resumen):**
-- INPUT: permite handshake OpenVPN en `VPN_PORT` y acceso desde `VPN_SUBNET` por la interfaz VPN.
-- FORWARD: permite `VPN_SUBNET -> VPN_LAN_SUBNET` y retorno `ESTABLISHED,RELATED`.
-- NAT opcional: `MASQUERADE` para `VPN_SUBNET` cuando no existe ruta estática en el router.
+- INPUT: permite handshake OpenVPN en `OVPNSRV_PORT` y acceso desde `OVPNSRV_SUBNET` por la interfaz VPN.
+- FORWARD: permite `OVPNSRV_SUBNET -> OVPNSRV_LAN_SUBNET` y retorno `ESTABLISHED,RELATED`.
+- NAT opcional: `MASQUERADE` para `OVPNSRV_SUBNET` cuando no existe ruta estática en el router.
 - Logging opcional: limitado por rate limit para evitar spam.
 
 **Notas:**
-- Para OpenVPN en Docker con bridge, define `VPN_DOCKER_INTERFACE` (ej. `docker0` o `br+`).
+- Para OpenVPN en Docker con bridge, define `OVPNSRV_DOCKER_INTERFACE` (ej. `docker0` o `br+`).
 - Asegura `net.ipv4.ip_forward=1` si usas forwarding/NAT.
-- `VPN_INTERFACE="tun+"` usa wildcard de iptables; en algunas distros puede requerir compatibilidad `iptables-legacy`/`iptables-nft`.
+- `OVPNSRV_INTERFACE="tun+"` usa wildcard de iptables; en algunas distros puede requerir compatibilidad `iptables-legacy`/`iptables-nft`.
+
+### Soporte OpenVPN Site-to-Site
+
+Habilita enrutamiento entre subredes locales/remotas usando el módulo `openvpn_sitetosite`.
+
+```bash
+OVPNS2S_INTERFACE="tun0"
+OVPNS2S_LOCAL_SUBNETS="192.168.1.0/24"
+OVPNS2S_REMOTE_SUBNETS="10.20.0.0/24,10.30.0.0/24"
+OVPNS2S_ENABLE_NAT=false
+OVPNS2S_LOCAL_INTERFACE=""
+OVPNS2S_LOG_ENABLED=false
+OVPNS2S_LOG_PREFIX="VPN_S2S_TRAFFIC: "
+```
+
+`openvpn_server` y `openvpn_sitetosite` son incompatibles y no pueden ejecutarse juntos.
 
 **Modos Docker soportados (comportamiento esperado):**
 1. **OpenVPN host-native o container con `network_mode: host`**
@@ -205,10 +221,10 @@ sudo ./iptables.rules.sh --dry-run --verbose
 sudo ./iptables.rules.sh
 
 # Ejecutar subconjunto de módulos
-sudo ./iptables.rules.sh --only ip_whitelist --only ip_openvpn
+sudo ./iptables.rules.sh --only ip_whitelist --only ip_openvpn_server
 
 # Omitir módulos específicos
-sudo ./iptables.rules.sh --skip ip_openvpn
+sudo ./iptables.rules.sh --skip ip_openvpn_server
 
 # Verificar reglas aplicadas
 sudo iptables -L -n -v --line-numbers

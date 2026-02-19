@@ -117,26 +117,33 @@ SSH_PORT="2222,22220:22229"
 WHITELISTED_IPS="198.51.100.10 203.0.113.5"
 WHITELISTED_DOMAINS="admin-gateway.example.net"
 
-# OpenVPN (host o Docker)
-# Se configura solo si incluyes el módulo ip_openvpn/nf_openvpn
-VPN_PORT=1194
-VPN_PROTO="udp"
-VPN_SUBNET="10.8.0.0/24"
-VPN_INTERFACE="tun0"  # o "tun+" para múltiples
-VPN_DOCKER_INTERFACE="docker0"  # opcional para OpenVPN en Docker
-VPN_LAN_SUBNET="192.168.1.0/24"
-VPN_LAN_INTERFACE="enp3s0"  # requerido si VPN_ENABLE_NAT=true
-VPN_ENABLE_NAT=false
+# OpenVPN Server (host o Docker)
+# Se configura solo si incluyes el módulo openvpn_server
+OVPNSRV_PORT=1194
+OVPNSRV_PROTO="udp"
+OVPNSRV_SUBNET="10.8.0.0/24"
+OVPNSRV_INTERFACE="tun0"  # o "tun+" para múltiples
+OVPNSRV_DOCKER_INTERFACE="docker0"  # opcional para OpenVPN en Docker
+OVPNSRV_LAN_SUBNET="192.168.1.0/24"
+OVPNSRV_LAN_INTERFACE="enp3s0"  # requerido si OVPNSRV_ENABLE_NAT=true
+OVPNSRV_ENABLE_NAT=false
 
-# (Opcional) Alias del router/LAN vía VPN (DNAT) para evitar conflictos de subred en el cliente
-# Útil si el cliente VPN está en una red que también usa 192.168.1.0/24 y no puede acceder a 192.168.1.1.
-# Ejemplo: http://10.99.1.1  ->  Router real: 192.168.1.1
-# Si cualquiera de las variables está vacía, NO se crea el alias.
-VPN_ROUTER_REAL_IP=""
-VPN_ROUTER_ALIAS_IP=""
+# (Opcional) Alias del router/LAN vía VPN server (DNAT)
+OVPNSRV_ROUTER_REAL_IP=""
+OVPNSRV_ROUTER_ALIAS_IP=""
+OVPNSRV_LOG_ENABLED=false
+OVPNSRV_LOG_PREFIX="VPN_SERVER_TRAFFIC: "
 
-VPN_LOG_ENABLED=false
-VPN_LOG_PREFIX="VPN_TRAFFIC: "
+# OpenVPN Site-to-Site
+# Se configura solo si incluyes el módulo openvpn_sitetosite.
+# Incompatible con openvpn_server: no usar ambos a la vez.
+OVPNS2S_INTERFACE="tun0"
+OVPNS2S_LOCAL_SUBNETS="192.168.1.0/24"
+OVPNS2S_REMOTE_SUBNETS=""
+OVPNS2S_ENABLE_NAT=false
+OVPNS2S_LOCAL_INTERFACE=""
+OVPNS2S_LOG_ENABLED=false
+OVPNS2S_LOG_PREFIX="VPN_S2S_TRAFFIC: "
 
 # Puertos extra permitidos (servicios adicionales)
 # Formato: "puerto,puerto" o rangos "inicio:fin" (multiport)
