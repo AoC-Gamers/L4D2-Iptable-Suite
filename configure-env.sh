@@ -158,7 +158,7 @@ ask_yes_no() {
 
 module_default_include() {
     case "$1" in
-        ip_loopback|ip_whitelist|ip_allowlist_ports|ip_openvpn_server|ip_tcp_ssh|ip_http_https_protect)
+        ip_loopback|ip_whitelist|ip_allowlist_ports|ip_docker_dns_egress|ip_openvpn_server|ip_tcp_ssh|ip_http_https_protect)
             echo "true"
             ;;
         ip_openvpn_sitetosite|ip_l4d2_tcpfilter_chain|ip_l4d2_tcp_protect|ip_l4d2_udp_base|ip_l4d2_packet_validation|ip_l4d2_a2s_filters)
@@ -188,6 +188,7 @@ module_token_to_module_ids() {
         finalize) echo "ip_finalize nf_finalize" ;;
         whitelist) echo "ip_whitelist nf_whitelist" ;;
         allowlist_ports) echo "ip_allowlist_ports nf_allowlist_ports" ;;
+        docker_dns_egress) echo "ip_docker_dns_egress nf_docker_dns_egress" ;;
         openvpn_server) echo "ip_openvpn_server nf_openvpn_server" ;;
         openvpn_sitetosite) echo "ip_openvpn_sitetosite nf_openvpn_sitetosite" ;;
         tcp_ssh) echo "ip_tcp_ssh nf_tcp_ssh" ;;
@@ -201,6 +202,24 @@ module_token_to_module_ids() {
         ip_*|nf_*) echo "$token" ;;
         *) echo "$token" ;;
     esac
+}
+
+is_ipv4_cidr_csv() {
+    local raw="$1"
+    local item trimmed
+
+    [ -n "$raw" ] || return 1
+
+    IFS=',' read -r -a _items <<< "$raw"
+    for item in "${_items[@]}"; do
+        trimmed="$item"
+        trimmed="${trimmed#"${trimmed%%[![:space:]]*}"}"
+        trimmed="${trimmed%"${trimmed##*[![:space:]]}"}"
+        [ -n "$trimmed" ] || return 1
+        is_ipv4_cidr "$trimmed" || return 1
+    done
+
+    return 0
 }
 
 append_module_token() {
@@ -328,6 +347,7 @@ declare -a selectable_modules=(
     "ip_allowlist_ports|Allowlist de puertos manual"
     "ip_openvpn_server|OpenVPN modo servidor (clientes remotos)"
     "ip_openvpn_sitetosite|OpenVPN modo site-to-site"
+    "ip_docker_dns_egress|Egreso DNS para subredes Docker (ACME/resolución)"
     "ip_tcp_ssh|Acceso SSH base"
     "ip_l4d2_tcp_protect|Protección TCP L4D2"
     "ip_http_https_protect|Protección HTTP/HTTPS"
@@ -346,6 +366,8 @@ for module_info in "${selectable_modules[@]}"; do
     module_id="${module_info%%|*}"
     module_desc="${module_info#*|}"
     default_include="$(module_default_include "$module_id")"
+
+    echo >&2
 
     answer="$(ask_yes_no "¿Incluir $module_id ($module_desc)?" "$default_include")"
     module_enabled[$module_id]="$answer"
@@ -383,6 +405,7 @@ whitelist=""
 whitelist_domains=""
 udp_allow=""
 tcp_allow=""
+docker_dns_egress_subnets="172.16.0.0/12"
 http_https_ports="80,443"
 http_https_rate="180/min"
 http_https_burst="360"
@@ -469,6 +492,18 @@ if [ "${module_enabled[ip_whitelist]:-false}" = "true" ]; then
 fi
 
 if needs_var "UDP_ALLOW_PORTS" || needs_var "TCP_ALLOW_PORTS"; then
+
+    if [ "${module_enabled[ip_docker_dns_egress]:-false}" = "true" ]; then
+        say_section "DNS Docker egress"
+        docker_dns_egress_subnets="$(ask_with_context \
+            "DOCKER_DNS_EGRESS_SUBNETS" \
+            "CIDRs Docker permitidos para DNS saliente (UDP/TCP 53), separados por coma." \
+            "docs/modules/16_docker_dns_egress.md" \
+            "DOCKER_DNS_EGRESS_SUBNETS (ej: 172.16.0.0/12 o 172.18.0.0/16,172.19.0.0/16)" \
+            "172.16.0.0/12" \
+            "is_ipv4_cidr_csv" \
+            "Formato inválido. Usa CIDR IPv4 separados por coma.")"
+    fi
     say_section "Allowlist de puertos"
     udp_allow="$(ask_with_context \
         "UDP_ALLOW_PORTS" \
@@ -685,6 +720,12 @@ HTTP_HTTPS_RATE="${http_https_rate}"
 HTTP_HTTPS_BURST=${http_https_burst}
 EOF
 
+if [ "${module_enabled[ip_docker_dns_egress]:-false}" = "true" ]; then
+cat >> "$output_file" <<EOF
+DOCKER_DNS_EGRESS_SUBNETS="${docker_dns_egress_subnets}"
+EOF
+fi
+
 if [ "$has_ssh_module" = "true" ]; then
 cat >> "$output_file" <<EOF
 SSH_PORT="${ssh_ports}"
@@ -848,6 +889,10 @@ echo "  TYPECHAIN=$typechain" >&2
 echo "  WHITELISTED_DOMAINS=$whitelist_domains" >&2
 echo "  DOCKER_INPUT_COMPAT=$docker_input_compat" >&2
 echo "  DOCKER_CHAIN_AUTORECOVER=$docker_chain_autorecover" >&2
+
+if [ "${module_enabled[ip_docker_dns_egress]:-false}" = "true" ]; then
+echo "  DOCKER_DNS_EGRESS_SUBNETS=$docker_dns_egress_subnets" >&2
+fi
 
 if [ "$has_ssh_module" = "true" ]; then
 echo "  SSH_PORT=$ssh_ports" >&2
