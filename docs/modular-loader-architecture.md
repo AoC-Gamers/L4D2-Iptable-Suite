@@ -42,7 +42,9 @@ Ambos deben cargar módulos dinámicamente desde modules sin conocer de antemano
 │  │  ├─ ip_05_loopback.sh
 │  │  ├─ ip_10_whitelist.sh
 │  │  ├─ ip_20_allowlist_ports.sh
-│  │  ├─ ip_30_openvpn.sh
+│  │  ├─ ip_22_docker_dns_egress.sh
+│  │  ├─ ip_30_openvpn_server.sh
+│  │  ├─ ip_31_openvpn_sitetosite.sh
 │  │  ├─ ip_35_tcpfilter_chain.sh
 │  │  ├─ ip_40_tcp_ssh.sh
 │  │  ├─ ip_42_l4d2_tcp_protect.sh
@@ -54,7 +56,9 @@ Ambos deben cargar módulos dinámicamente desde modules sin conocer de antemano
 │     ├─ nf_35_l4d2_tcpfilter_chain.sh
 │     ├─ nf_10_whitelist.sh
 │     ├─ nf_20_allowlist_ports.sh
-│     ├─ nf_30_openvpn.sh
+│     ├─ nf_22_docker_dns_egress.sh
+│     ├─ nf_30_openvpn_server.sh
+│     ├─ nf_31_openvpn_sitetosite.sh
 │     ├─ nf_40_tcp_ssh.sh
 │     ├─ nf_42_l4d2_tcp_protect.sh
 │     ├─ nf_45_http_https_protect.sh
@@ -77,17 +81,17 @@ Notas:
 
 Cada módulo debe implementar funciones con namespace del módulo para evitar colisiones.
 
-Ejemplo para modules/ip/ip_30_openvpn.sh:
+Ejemplo para modules/ip/ip_30_openvpn_server.sh:
 
-- ip_30_openvpn_metadata
-- ip_30_openvpn_validate
-- ip_30_openvpn_apply
+- ip_30_openvpn_server_metadata
+- ip_30_openvpn_server_validate
+- ip_30_openvpn_server_apply
 
-Ejemplo para modules/nf/nf_30_openvpn.sh:
+Ejemplo para modules/nf/nf_30_openvpn_server.sh:
 
-- nf_30_openvpn_metadata
-- nf_30_openvpn_validate
-- nf_30_openvpn_apply
+- nf_30_openvpn_server_metadata
+- nf_30_openvpn_server_validate
+- nf_30_openvpn_server_apply
 
 ### Formato de metadata (salida KEY=VALUE)
 
@@ -236,10 +240,10 @@ Recomendaciones:
 
 1. iptables.rules.sh invoca preload.
 2. Descubre `ip_*.sh` en `modules/ip` + `modules/`.
-3. Carga ip_30_openvpn.sh.
+3. Carga ip_30_openvpn_server.sh.
 4. Lee metadata y resuelve VPN_PORT por CLI/.env/default.
-5. Ejecuta ip_30_openvpn_validate.
-6. Ejecuta ip_30_openvpn_apply.
+5. Ejecuta ip_30_openvpn_server_validate.
+6. Ejecuta ip_30_openvpn_server_apply.
 7. Repite con el resto de módulos.
 8. Ejecuta postload con resumen final.
 
@@ -286,7 +290,9 @@ sudo ./nftables.rules.sh --set TYPECHAIN=2 --set VPN_PORT=1194
 | Loopback | `ip_05_loopback` | Integrado en `nf_chain_setup` | ✅ Equivalente funcional |
 | Whitelist IP | `ip_10_whitelist` | `nf_10_whitelist` | ✅ Implementado |
 | Allowlist de puertos | `ip_20_allowlist_ports` | `nf_20_allowlist_ports` | ✅ Implementado |
-| OpenVPN base | `ip_30_openvpn` | `nf_30_openvpn` | ✅ Implementado |
+| DNS egress Docker | `ip_22_docker_dns_egress` | `nf_22_docker_dns_egress` | ✅ Implementado |
+| OpenVPN server | `ip_30_openvpn_server` | `nf_30_openvpn_server` | ✅ Implementado |
+| OpenVPN site-to-site | `ip_31_openvpn_sitetosite` | `nf_31_openvpn_sitetosite` | ✅ Implementado |
 | Cadena TCP anti-spam | `ip_l4d2_tcpfilter_chain` | `nf_l4d2_tcpfilter_chain` (compat/no-op) | ✅ Implementado |
 | SSH base | `ip_40_tcp_ssh` | `nf_40_tcp_ssh` | ✅ Implementado |
 | Protección TCP L4D2 | `ip_l4d2_tcp_protect` | `nf_l4d2_tcp_protect` | ✅ Implementado |

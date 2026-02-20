@@ -50,7 +50,9 @@ modules/
     ├─ ip_05_loopback.sh
     ├─ ip_10_whitelist.sh
     ├─ ip_20_allowlist_ports.sh
-    ├─ ip_30_openvpn.sh
+    ├─ ip_22_docker_dns_egress.sh
+    ├─ ip_30_openvpn_server.sh
+    ├─ ip_31_openvpn_sitetosite.sh
     ├─ ip_35_tcpfilter_chain.sh
     ├─ ip_40_tcp_ssh.sh
     ├─ ip_45_http_https_protect.sh
@@ -107,6 +109,9 @@ L4D2_TCP_PROTECTION=""          # Puertos TCP de juego específicos (vacío = L4
 SSH_PORT="22"                   # Puertos SSH del sistema
 WHITELISTED_IPS=""              # IPs con acceso completo al sistema (⚠️ TODOS los puertos)
 WHITELISTED_DOMAINS=""          # Dominios resueltos a IPv4 y fusionados con WHITELISTED_IPS
+
+# DNS saliente para contenedores Docker (ACME / resolución interna)
+DOCKER_DNS_EGRESS_SUBNETS="172.16.0.0/12"
 
 # === LOGGING DETALLADO ===
 LOG_PREFIX_INVALID_SIZE="INVALID_SIZE: "
@@ -222,6 +227,9 @@ sudo ./iptables.rules.sh
 
 # Ejecutar subconjunto de módulos
 sudo ./iptables.rules.sh --only ip_whitelist --only ip_openvpn_server
+
+# Ejecutar módulo DNS egress Docker
+sudo ./iptables.rules.sh --only ip_docker_dns_egress
 
 # Omitir módulos específicos
 sudo ./iptables.rules.sh --skip ip_openvpn_server

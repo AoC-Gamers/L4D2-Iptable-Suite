@@ -17,3 +17,4 @@ Breve índice de la documentación de cada módulo. Cada entrada enlaza al fiche
 - [13_ip_loopback.md](13_ip_loopback.md) — Módulo específico `ip`.
 - [14_ip_l4d2_tcpfilter_chain.md](14_ip_l4d2_tcpfilter_chain.md) — Módulo específico `ip` (`ip_l4d2_tcpfilter_chain`).
 - [15_l4d2_tcp_protect.md](15_l4d2_tcp_protect.md) — Protección TCP L4D2 (ip/nf).
+- [16_docker_dns_egress.md](16_docker_dns_egress.md) — Egreso DNS para subredes Docker (ip/nf).
