@@ -554,7 +554,7 @@ if needs_var "HTTP_HTTPS_PORTS" || needs_var "HTTP_HTTPS_RATE" || needs_var "HTT
         "HTTP_HTTPS_BURST debe ser numérico.")"
 fi
 
-if needs_var "OVPNSRV_PORT" || needs_var "OVPNSRV_SUBNET" || needs_var "OVPNSRV_INTERFACE"; then
+if [ "${module_enabled[ip_openvpn_server]:-false}" = "true" ] || needs_var "OVPNSRV_PORT" || needs_var "OVPNSRV_SUBNET" || needs_var "OVPNSRV_INTERFACE"; then
     say_section "OpenVPN Server"
     ovpnsrv_port="$(ask_with_context \
         "OVPNSRV_PORT" \
@@ -584,7 +584,7 @@ if needs_var "OVPNSRV_PORT" || needs_var "OVPNSRV_SUBNET" || needs_var "OVPNSRV_
         "OVPNSRV_INTERFACE contiene caracteres no válidos.")"
 fi
 
-if needs_var "OVPNS2S_INTERFACE" || needs_var "OVPNS2S_LOCAL_SUBNETS" || needs_var "OVPNS2S_REMOTE_SUBNETS"; then
+if [ "${module_enabled[ip_openvpn_sitetosite]:-false}" = "true" ] || needs_var "OVPNS2S_INTERFACE" || needs_var "OVPNS2S_LOCAL_SUBNETS" || needs_var "OVPNS2S_REMOTE_SUBNETS"; then
     say_section "OpenVPN Site-to-Site"
     ovpns2s_interface="$(ask_with_context \
         "OVPNS2S_INTERFACE" \
@@ -601,17 +601,17 @@ if needs_var "OVPNS2S_INTERFACE" || needs_var "OVPNS2S_LOCAL_SUBNETS" || needs_v
         "docs/modules/06_openvpn.md" \
         "OVPNS2S_LOCAL_SUBNETS" \
         "192.168.1.0/24" \
-        "true" \
-        "")"
+        "is_ipv4_cidr_csv" \
+        "Formato inválido. Usa CIDR IPv4 separados por coma (ej: 192.168.1.0/24).")"
 
     ovpns2s_remote_subnets="$(ask_with_context \
         "OVPNS2S_REMOTE_SUBNETS" \
         "Subred(es) remotas del peer (CIDR, separadas por coma)." \
         "docs/modules/06_openvpn.md" \
         "OVPNS2S_REMOTE_SUBNETS" \
-        "" \
-        "true" \
-        "")"
+        "10.8.0.0/24,10.0.0.0/16" \
+        "is_ipv4_cidr_csv" \
+        "Formato inválido. Usa CIDR IPv4 separados por coma (ej: 10.8.0.0/24,10.0.0.0/16).")"
 fi
 
 if [ "${module_enabled[ip_l4d2_udp_base]:-false}" = "true" ] || [ "${module_enabled[ip_l4d2_packet_validation]:-false}" = "true" ] || [ "${module_enabled[ip_l4d2_a2s_filters]:-false}" = "true" ]; then
