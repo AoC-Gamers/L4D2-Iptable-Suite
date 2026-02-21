@@ -3,6 +3,7 @@
 ## Tabla de Contenidos
 
 - [Descripción General](#descripción-general)
+- [Alcance por Backend](#alcance-por-backend)
 - [Instalación y Requisitos](#instalación-y-requisitos)
 - [Uso del Script](#uso-del-script)
 - [Funcionalidades del Menú](#funcionalidades-del-menú)
@@ -23,6 +24,15 @@
 - **Diagnóstico del sistema** con información detallada del estado
 - **Confirmaciones de seguridad** para operaciones destructivas
 - **Soporte completo** para reglas IPv4 (IPv6 deshabilitado por defecto)
+
+## Alcance por Backend
+
+`ipp.sh` gestiona la persistencia de reglas para el backend **iptables**.
+
+- ✅ Compatible con `iptables.rules.sh`
+- ⚠️ No administra persistencia nativa de `nftables.rules.sh`
+
+Si operas con backend `nftables`, puedes seguir usando la suite modular para aplicar reglas, pero la persistencia debe gestionarse con mecanismos propios de `nft`/sistema (fuera de `ipp.sh`).
 
 ## Instalación y Requisitos
 
@@ -317,6 +327,21 @@ sudo ./ipp.sh
 # → Seleccionar: 0 (Exit)
 ```
 
+### Operación con Backend NFTables
+
+**Escenario**: Quieres usar el backend moderno sin mezclar persistencia de iptables.
+
+```bash
+# 1. Aplicar backend nftables
+sudo ./nftables.rules.sh
+
+# 2. Validar reglas activas nft
+sudo nft list ruleset
+
+# 3. (Opcional) Usar ipp.sh solo si también operas iptables
+sudo ./ipp.sh
+```
+
 ### Mantenimiento Rutinario
 
 **Escenario**: Verificación semanal del estado de reglas.
@@ -385,6 +410,21 @@ sudo ./iptables.rules.sh
 sudo ./ipp.sh
 # Usar opciones 1 y 5 para hacer reglas persistentes
 ```
+
+### Flujo de Trabajo con nftables.rules.sh
+
+```bash
+# 1. Configurar .env según tus necesidades
+nano .env
+
+# 2. Aplicar reglas con backend moderno
+sudo ./nftables.rules.sh
+
+# 3. Verificar ruleset nft
+sudo nft list ruleset
+```
+
+Nota: `ipp.sh` no reemplaza la persistencia nativa de nftables.
 
 ### Coordinación con iptable.loggin.py
 

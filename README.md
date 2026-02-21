@@ -18,6 +18,7 @@
 ## 📋 Características Principales
 
 - 🛡️ **Protección Avanzada DDoS**: Mitigación específica contra ataques comunes a servidores L4D2
+- ⚖️ **Doble Backend**: Soporte modular para `iptables` (legacy) y `nftables` (modern)
 - 🐳 **Soporte Docker**: Compatibilidad completa con servidores nativos y contenedores
 - 🔐 **Soporte OpenVPN**: Acceso remoto seguro (host o Docker) sin afectar reglas de juego
 - 📊 **Sistema de Logging**: Análisis detallado de ataques con reportes JSON comprehensivos
@@ -33,6 +34,33 @@
 - **Permisos**: Acceso root/sudo
 - **Dependencias**: Python 3.6+, iptables, rsyslog
 
+### Bibliotecas/paquetes requeridos (Debian/Ubuntu)
+
+Instala primero los paquetes base del sistema:
+
+```bash
+sudo apt update
+sudo apt install -y \
+  iptables \
+  nftables \
+  rsyslog \
+  python3 \
+  python3-pip \
+  python3-venv
+```
+
+Instala luego las librerías de Python del analizador:
+
+```bash
+python3 -m pip install -r requirements.txt
+```
+
+Opcional (recomendado, para aislar dependencias):
+
+```bash
+./venv.loggin.sh
+```
+
 ### Instalación
 
 ```bash
@@ -46,6 +74,9 @@ nano .env  # Ajustar configuración según tu servidor
 
 # 3. Aplicar reglas de iptables
 sudo ./iptables.rules.sh
+
+# 3b. (Opcional) Aplicar reglas con backend nftables
+sudo ./nftables.rules.sh
 
 # 4. Hacer reglas persistentes
 sudo ./ipp.sh
@@ -73,35 +104,57 @@ Edita el archivo `.env` según tu configuración:
 TYPECHAIN=0
 
 # Puertos de tu servidor L4D2
-GAMESERVERPORTS="27015"
-TVSERVERPORTS="27020"
+L4D2_GAMESERVER_PORTS="27015"
+L4D2_TV_PORTS="27020"
 
 # Protección TCP RCON
-ENABLE_TCP_PROTECT=true
+# Incluir l4d2_tcp_protect en MODULES_ONLY para activar
+
+# SSH: puertos expuestos al incluir módulo tcp_ssh
+SSH_PORT="2222,22220:22229"
 
 # IPs de confianza (acceso completo al sistema - ⚠️ TODOS los puertos)
-WHITELISTED_IPS="192.168.1.100 10.0.0.5"
+WHITELISTED_IPS="198.51.100.10 203.0.113.5"
+WHITELISTED_DOMAINS="admin-gateway.example.net"
 
-# OpenVPN (host o Docker)
-VPN_ENABLED=false
-VPN_PORT=1194
-VPN_PROTO="udp"
-VPN_SUBNET="10.8.0.0/24"
-VPN_INTERFACE="tun0"  # o "tun+" para múltiples
-VPN_DOCKER_INTERFACE="docker0"  # opcional para OpenVPN en Docker
-VPN_LAN_SUBNET="192.168.1.0/24"
-VPN_LAN_INTERFACE="enp3s0"  # requerido si VPN_ENABLE_NAT=true
-VPN_ENABLE_NAT=false
+# OpenVPN Server (host o Docker)
+# Se configura solo si incluyes el módulo openvpn_server
+OVPNSRV_PORT=1194
+OVPNSRV_PROTO="udp"
+OVPNSRV_SUBNET="10.8.0.0/24"
+OVPNSRV_INTERFACE="tun0"  # o "tun+" para múltiples
+OVPNSRV_DOCKER_INTERFACE="docker0"  # opcional para OpenVPN en Docker
+OVPNSRV_LAN_SUBNET="192.168.1.0/24"
+OVPNSRV_LAN_INTERFACE="enp3s0"  # requerido si OVPNSRV_ENABLE_NAT=true
+OVPNSRV_ENABLE_NAT=false
 
-# (Opcional) Alias del router/LAN vía VPN (DNAT) para evitar conflictos de subred en el cliente
-# Útil si el cliente VPN está en una red que también usa 192.168.1.0/24 y no puede acceder a 192.168.1.1.
-# Ejemplo: http://10.99.1.1  ->  Router real: 192.168.1.1
-# Si cualquiera de las variables está vacía, NO se crea el alias.
-VPN_ROUTER_REAL_IP=""
-VPN_ROUTER_ALIAS_IP=""
+# (Opcional) Alias del router/LAN vía VPN server (DNAT)
+OVPNSRV_ROUTER_REAL_IP=""
+OVPNSRV_ROUTER_ALIAS_IP=""
+OVPNSRV_LOG_ENABLED=false
+OVPNSRV_LOG_PREFIX="VPN_SERVER_TRAFFIC: "
 
-VPN_LOG_ENABLED=false
-VPN_LOG_PREFIX="VPN_TRAFFIC: "
+# OpenVPN Site-to-Site
+# Se configura solo si incluyes el módulo openvpn_sitetosite.
+# Incompatible con openvpn_server: no usar ambos a la vez.
+OVPNS2S_INTERFACE="tun0"
+OVPNS2S_LOCAL_SUBNETS="192.168.1.0/24"
+OVPNS2S_REMOTE_SUBNETS=""
+OVPNS2S_ENABLE_NAT=false
+OVPNS2S_LOCAL_INTERFACE=""
+OVPNS2S_LOG_ENABLED=false
+OVPNS2S_LOG_PREFIX="VPN_S2S_TRAFFIC: "
+
+# (Opcional) Alias del router/LAN en modo S2S (DNAT)
+# Útil cuando hay subredes solapadas (ej. 192.168.1.0/24 en ambos sitios)
+# Formato multi-alias: "real_ip;alias_ip,real_ip;alias_ip"
+OVPNS2S_ROUTER_ALIAS=""
+
+# Formato legacy (single alias, compatible)
+OVPNS2S_ROUTER_REAL_IP=""
+OVPNS2S_ROUTER_ALIAS_IP=""
+# Si true, hace SNAT de retorno hacia el router real (requiere OVPNS2S_LOCAL_INTERFACE)
+OVPNS2S_ROUTER_ALIAS_SNAT=false
 
 # Puertos extra permitidos (servicios adicionales)
 # Formato: "puerto,puerto" o rangos "inicio:fin" (multiport)
@@ -109,10 +162,16 @@ VPN_LOG_PREFIX="VPN_TRAFFIC: "
 UDP_ALLOW_PORTS=""
 TCP_ALLOW_PORTS=""
 
-Nota Docker: esta suite usa una cadena `DOCKER` propia en `filter`. Si deseas engancharte al flujo estandar de Docker, puedes adaptar las reglas a `DOCKER-USER`.
+Nota Docker: esta suite usa directamente la cadena `DOCKER-USER` en `filter` para las reglas del usuario, siguiendo el flujo recomendado por Docker.
 ```
 
-> ⚠️ **ADVERTENCIA**: Las IPs en `WHITELISTED_IPS` tendrán acceso **completo e irrestricto** a toda la máquina (SSH, Web, Bases de datos, APIs, etc.). Usar solo para administradores e IPs absolutamente confiables.
+Asistente rápido de configuración (`.env` guiado):
+
+```bash
+./configure-env.sh
+```
+
+> ⚠️ **ADVERTENCIA**: Las entradas de `WHITELISTED_IPS` y `WHITELISTED_DOMAINS` tendrán acceso **completo e irrestricto** a toda la máquina (SSH, Web, Bases de datos, APIs, etc.). Usar solo para administradores y orígenes absolutamente confiables.
 
 ## 🛠️ Herramientas Incluidas
 
@@ -123,6 +182,16 @@ Script principal que implementa reglas avanzadas de iptables específicamente di
 Soporta configuración flexible para servidores nativos, contenedores Docker o configuraciones híbridas mediante variables de entorno.
 
 **📖 [Documentación Completa](docs/iptables.rules.md)**
+
+---
+
+### 1b. `nftables.rules.sh` - Backend Moderno
+
+Entrypoint equivalente para aplicar protección usando `nftables` con la misma filosofía modular y configuración compartida por `.env`.
+
+Ideal para entornos modernos que ya operan con reglas `nft` y desean mantener paridad funcional con el flujo legacy.
+
+**📖 [Arquitectura Modular](docs/modular-loader-architecture.md)**
 
 ---
 
@@ -174,31 +243,44 @@ Available options:
 
 ---
 
+### 5. Tooling de Modularidad
+
+- **Smoke tests modulares**: `tests/smoke-modules.sh`
+  - Verifica contrato mínimo por módulo y ejecuta `--dry-run` de ambos backends si hay privilegios/dependencias.
+
+Comando rápido:
+
+```bash
+./tests/smoke-modules.sh
+```
+
+---
+
 ## 🎮 Casos de Uso Específicos
 
 ### Servidor Individual L4D2
 ```bash
 # .env configuration
 TYPECHAIN=0
-GAMESERVERPORTS="27015"
-TVSERVERPORTS="27020"
-ENABLE_TCP_PROTECT=true
+L4D2_GAMESERVER_PORTS="27015"
+L4D2_TV_PORTS="27020"
+# Activación TCP protect por módulo: incluir l4d2_tcp_protect en MODULES_ONLY
 ```
 
 ### Múltiples Servidores
 ```bash
 # .env configuration
 TYPECHAIN=0
-GAMESERVERPORTS="27015:27030"  # 16 servidores
-TVSERVERPORTS="27115:27130"    # 16 SourceTV
-ENABLE_TCP_PROTECT=true
+L4D2_GAMESERVER_PORTS="27015:27030"  # 16 servidores
+L4D2_TV_PORTS="27115:27130"          # 16 SourceTV
+# Activación TCP protect por módulo: incluir l4d2_tcp_protect en MODULES_ONLY
 ```
 
 ### Servidores en Docker
 ```bash
 # .env configuration
 TYPECHAIN=1  # Solo Docker
-GAMESERVERPORTS="27015:27018"
+L4D2_GAMESERVER_PORTS="27015:27018"
 TCP_DOCKER="80,443"  # Puertos adicionales
 SSH_DOCKER="2222"
 ```
@@ -207,10 +289,10 @@ SSH_DOCKER="2222"
 ```bash
 # .env configuration
 TYPECHAIN=2  # Nativo + Docker
-GAMESERVERPORTS="27015:27020"
-TVSERVERPORTS="27115:27120"
+L4D2_GAMESERVER_PORTS="27015:27020"
+L4D2_TV_PORTS="27115:27120"
 TCP_DOCKER="80,443,8080"
-ENABLE_TCP_PROTECT=true
+# Activación TCP protect por módulo: incluir l4d2_tcp_protect en MODULES_ONLY
 ```
 
 ## 📊 Tipos de Ataques Detectados
@@ -233,6 +315,40 @@ El sistema identifica y mitiga los siguientes patrones de ataque:
 | **ICMP_FLOOD** | Ping flood | Baja | Degradación de red |
 
 ## 📈 Flujo de Trabajo Recomendado
+
+### Backends de Firewall
+
+```bash
+# Legacy (iptables)
+sudo ./iptables.rules.sh
+
+# Modern (nftables)
+sudo ./nftables.rules.sh
+```
+
+### Estructura modular actual
+
+```text
+modules/
+├─ common_loader.sh
+├─ preload.sh
+├─ postload.sh
+├─ common_nft.sh
+├─ ip/   # módulos ip_*.sh
+└─ nf/   # módulos nf_*.sh
+```
+
+### Mapa de módulos (split TCP)
+
+- **SSH base**
+  - `ip_tcp_ssh` / `nf_tcp_ssh`
+  - Variables: `SSH_PORT`, `SSH_DOCKER`, `SSH_RATE`, `SSH_BURST`, `LOG_PREFIX_SSH_ABUSE`
+- **Protección TCP L4D2 (separada)**
+  - `ip_l4d2_tcp_protect` / `nf_l4d2_tcp_protect`
+  - Variables: `L4D2_GAMESERVER_PORTS`, `L4D2_TCP_PROTECTION`, `LOG_PREFIX_TCP_RCON_BLOCK`
+- **Cadena anti-spam TCP (ip específico)**
+  - `ip_l4d2_tcpfilter_chain` / `nf_l4d2_tcpfilter_chain` (compatibilidad)
+  - En `nftables`, la protección efectiva la aplica `nf_l4d2_tcp_protect`.
 
 ### 1. Instalación Inicial
 ```bash
@@ -275,11 +391,14 @@ sudo logrotate -f /etc/logrotate.d/l4d2-iptables
 ## 📚 Documentación Completa
 
 - **[📖 iptables.rules.sh](docs/iptables.rules.md)** - Documentación técnica del motor de protección
+- **[📖 nftables.rules.sh](docs/modular-loader-architecture.md)** - Arquitectura y operación del backend moderno
+- **[📖 Arquitectura Modular](docs/modular-loader-architecture.md)** - Contrato de módulos, paridad y validación
 - **[📖 ipp.sh](docs/ipp.md)** - Guía del gestor de persistencia
 - **[📖 iptable.loggin.py](docs/iptable.loggin.md)** - Manual del sistema de análisis
 - **[📖 venv.loggin.sh](docs/venv.loggin.md)** - Guía del gestor de entorno virtual
 - **[📋 example.env](example.env)** - Archivo de configuración de ejemplo  
 - **[📊 summary_example/](summary_example/)** - Ejemplos de reportes JSON
+- **[📚 Documentación de Módulos](docs/modules/README.md)** - Índice con descripciones breves de cada módulo
 
 ## 🤝 Créditos y Reconocimientos
 

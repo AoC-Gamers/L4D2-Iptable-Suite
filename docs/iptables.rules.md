@@ -4,6 +4,7 @@
 
 - [Descripción General](#descripción-general)
 - [Instalación y Configuración](#instalación-y-configuración)
+- [Modelo Modular Actual](#modelo-modular-actual)
 - [Arquitectura del Sistema](#arquitectura-del-sistema)
 - [Detección y Mitigación de Ataques](#detección-y-mitigación-de-ataques)
 - [Algoritmos de Rate Limiting](#algoritmos-de-rate-limiting)
@@ -13,7 +14,9 @@
 
 ## Descripción General
 
-`iptables.rules.sh` es el núcleo de la suite L4D2 IPTables, implementando un sistema avanzado de protección contra ataques DDoS específicamente diseñado para servidores Source Engine. Utiliza técnicas sofisticadas de detección basadas en patrones de paquetes, validación de contenido y algoritmos de rate limiting para mitigar múltiples tipos de ataques.
+`iptables.rules.sh` es el entrypoint del backend legacy (iptables) de la suite L4D2 IPTables. Actualmente ejecuta un loader modular compartido y aplica la lógica de protección cargando módulos desde `modules/ip` y `modules/` (módulos raíz).
+
+La protección sigue cubriendo detección por patrones, validación de paquetes y rate limiting para mitigar ataques comunes de Source Engine; la diferencia es que la implementación ahora está separada por módulos en vez de un único script monolítico.
 
 ### Características Técnicas Principales
 
@@ -23,6 +26,44 @@
 - **Separación Funcional**: Diferenciación entre GameServer y SourceTV
 - **Soporte Multi-Cadena**: Protección simultánea INPUT y DOCKER
 - **Logging Categorizado**: Sistema de logs con prefijos específicos por tipo de ataque
+
+## Modelo Modular Actual
+
+El flujo de `iptables.rules.sh` es:
+
+1. Cargar `modules/common_loader.sh`, `modules/preload.sh`, `modules/postload.sh`
+2. Leer configuración (`.env` + `--set KEY=VALUE`)
+3. Descubrir módulos `ip_*.sh` en `modules/ip` + `modules/`
+4. Ejecutar `metadata -> validate -> apply` por módulo
+5. Emitir resumen final en `postload`
+
+### Estructura relevante
+
+```text
+modules/
+├─ common_loader.sh
+├─ preload.sh
+├─ postload.sh
+├─ ip_chain_setup.sh
+├─ ip_finalize.sh
+└─ ip/
+    ├─ ip_05_loopback.sh
+    ├─ ip_10_whitelist.sh
+    ├─ ip_20_allowlist_ports.sh
+    ├─ ip_22_docker_dns_egress.sh
+    ├─ ip_30_openvpn_server.sh
+    ├─ ip_31_openvpn_sitetosite.sh
+    ├─ ip_35_tcpfilter_chain.sh
+    ├─ ip_40_tcp_ssh.sh
+    ├─ ip_45_http_https_protect.sh
+    ├─ ip_50_l4d2_udp_base.sh
+    ├─ ip_60_l4d2_packet_validation.sh
+    └─ ip_70_l4d2_a2s_filters.sh
+```
+
+### Nota de compatibilidad
+
+La lógica técnica de detección/mitigación documentada en este archivo sigue vigente; solo cambió la organización del código (modularización).
 
 ## Instalación y Configuración
 
@@ -56,17 +97,21 @@ El script utiliza variables de entorno definidas en `.env`:
 ```bash
 # === CONFIGURACIÓN FUNDAMENTAL ===
 TYPECHAIN=0                     # 0=INPUT, 1=DOCKER, 2=AMBOS
-GAMESERVERPORTS="27015"         # Puertos del servidor de juego
-TVSERVERPORTS="27020"           # Puertos de SourceTV
-CMD_LIMIT=100                   # Tickrate base para cálculos
+L4D2_GAMESERVER_PORTS="27015"  # Puertos del servidor de juego
+L4D2_TV_PORTS="27020"          # Puertos de SourceTV
+L4D2_CMD_LIMIT=100              # Tickrate base para cálculos
 
 # === PROTECCIÓN TCP ===
-ENABLE_TCP_PROTECT=true         # Activar bloqueo TCP completo
-TCP_PROTECTION=""               # Puertos específicos (vacío = todos)
+ENABLE_L4D2_TCP_PROTECT=true    # Activar bloqueo TCP de juego
+L4D2_TCP_PROTECTION=""          # Puertos TCP de juego específicos (vacío = L4D2_GAMESERVER_PORTS)
 
 # === ACCESO ADMINISTRATIVO ===
 SSH_PORT="22"                   # Puertos SSH del sistema
 WHITELISTED_IPS=""              # IPs con acceso completo al sistema (⚠️ TODOS los puertos)
+WHITELISTED_DOMAINS=""          # Dominios resueltos a IPv4 y fusionados con WHITELISTED_IPS
+
+# DNS saliente para contenedores Docker (ACME / resolución interna)
+DOCKER_DNS_EGRESS_SUBNETS="172.16.0.0/12"
 
 # === LOGGING DETALLADO ===
 LOG_PREFIX_INVALID_SIZE="INVALID_SIZE: "
@@ -75,35 +120,60 @@ LOG_PREFIX_A2S_INFO="A2S_INFO_FLOOD: "
 # ... [12 prefijos más para categorización]
 ```
 
-### Soporte OpenVPN (host o Docker)
+### Soporte OpenVPN Server (host o Docker)
 
 El script puede abrir el puerto de OpenVPN, permitir acceso desde el tun hacia el host y habilitar forwarding controlado hacia la LAN. Esto evita que el tráfico VPN pase por las cadenas de rate limiting del juego.
 
-**Variables principales:**
+**Variables principales (`openvpn_server`):**
 ```bash
-VPN_ENABLED=true
-VPN_PROTO="udp"
-VPN_PORT=1194
-VPN_SUBNET="10.8.0.0/24"
-VPN_INTERFACE="tun0"          # o "tun+" para varios
-VPN_DOCKER_INTERFACE="docker0" # opcional (OpenVPN en Docker)
-VPN_LAN_SUBNET="192.168.1.0/24"
-VPN_LAN_INTERFACE="enp3s0"     # requerido si VPN_ENABLE_NAT=true
-VPN_ENABLE_NAT=false
-VPN_LOG_ENABLED=false
-VPN_LOG_PREFIX="VPN_TRAFFIC: "
+OVPNSRV_PROTO="udp"
+OVPNSRV_PORT=1194
+OVPNSRV_SUBNET="10.8.0.0/24"
+OVPNSRV_INTERFACE="tun0"          # o "tun+" para varios
+OVPNSRV_DOCKER_INTERFACE="docker0" # opcional (OpenVPN en Docker)
+OVPNSRV_LAN_SUBNET="192.168.1.0/24"
+OVPNSRV_LAN_INTERFACE="enp3s0"     # requerido si OVPNSRV_ENABLE_NAT=true
+OVPNSRV_ENABLE_NAT=false
+OVPNSRV_LOG_ENABLED=false
+OVPNSRV_LOG_PREFIX="VPN_SERVER_TRAFFIC: "
 ```
 
 **Reglas generadas (resumen):**
-- INPUT: permite handshake OpenVPN en `VPN_PORT` y acceso desde `VPN_SUBNET` por la interfaz VPN.
-- FORWARD: permite `VPN_SUBNET -> VPN_LAN_SUBNET` y retorno `ESTABLISHED,RELATED`.
-- NAT opcional: `MASQUERADE` para `VPN_SUBNET` cuando no existe ruta estática en el router.
+- INPUT: permite handshake OpenVPN en `OVPNSRV_PORT` y acceso desde `OVPNSRV_SUBNET` por la interfaz VPN.
+- FORWARD: permite `OVPNSRV_SUBNET -> OVPNSRV_LAN_SUBNET` y retorno `ESTABLISHED,RELATED`.
+- NAT opcional: `MASQUERADE` para `OVPNSRV_SUBNET` cuando no existe ruta estática en el router.
 - Logging opcional: limitado por rate limit para evitar spam.
 
 **Notas:**
-- Para OpenVPN en Docker con bridge, define `VPN_DOCKER_INTERFACE` (ej. `docker0` o `br+`).
+- Para OpenVPN en Docker con bridge, define `OVPNSRV_DOCKER_INTERFACE` (ej. `docker0` o `br+`).
 - Asegura `net.ipv4.ip_forward=1` si usas forwarding/NAT.
-- `VPN_INTERFACE="tun+"` usa wildcard de iptables; en algunas distros puede requerir compatibilidad `iptables-legacy`/`iptables-nft`.
+- `OVPNSRV_INTERFACE="tun+"` usa wildcard de iptables; en algunas distros puede requerir compatibilidad `iptables-legacy`/`iptables-nft`.
+
+### Soporte OpenVPN Site-to-Site
+
+Habilita enrutamiento entre subredes locales/remotas usando el módulo `openvpn_sitetosite`.
+
+```bash
+OVPNS2S_INTERFACE="tun0"
+OVPNS2S_LOCAL_SUBNETS="192.168.1.0/24"
+OVPNS2S_REMOTE_SUBNETS="10.20.0.0/24,10.30.0.0/24"
+OVPNS2S_ENABLE_NAT=false
+OVPNS2S_LOCAL_INTERFACE=""
+OVPNS2S_LOG_ENABLED=false
+OVPNS2S_LOG_PREFIX="VPN_S2S_TRAFFIC: "
+OVPNS2S_ROUTER_ALIAS=""
+OVPNS2S_ROUTER_REAL_IP=""
+OVPNS2S_ROUTER_ALIAS_IP=""
+OVPNS2S_ROUTER_ALIAS_SNAT=false
+```
+
+Alias S2S para router/LAN solapada:
+- `OVPNS2S_ROUTER_ALIAS`: formato multi-alias `real_ip;alias_ip,real_ip;alias_ip`.
+    - Ejemplo: `192.168.1.1;10.99.2.1,192.168.1.254;10.99.2.254`.
+- Legacy compatible: `OVPNS2S_ROUTER_REAL_IP` + `OVPNS2S_ROUTER_ALIAS_IP` (single alias).
+- `OVPNS2S_ROUTER_ALIAS_SNAT=true`: fuerza retorno vía host S2S (requiere `OVPNS2S_LOCAL_INTERFACE`).
+
+`openvpn_server` y `openvpn_sitetosite` son incompatibles y no pueden ejecutarse juntos.
 
 **Modos Docker soportados (comportamiento esperado):**
 1. **OpenVPN host-native o container con `network_mode: host`**
@@ -119,11 +189,11 @@ VPN_LOG_PREFIX="VPN_TRAFFIC: "
 
 ```bash
 # Configuración: IPs con acceso irrestricto
-WHITELISTED_IPS="192.168.1.100 10.0.0.5"
+WHITELISTED_IPS="198.51.100.10 203.0.113.5"
 
 # Resultado: Reglas iptables generadas
-iptables -A INPUT -s 192.168.1.100 -j ACCEPT    # TODO el tráfico
-iptables -A INPUT -s 10.0.0.5 -j ACCEPT         # TODOS los puertos
+iptables -A INPUT -s 198.51.100.10 -j ACCEPT    # TODO el tráfico
+iptables -A INPUT -s 203.0.113.5 -j ACCEPT      # TODOS los puertos
 ```
 
 **Las IPs en esta lista tendrán**:
@@ -136,13 +206,43 @@ iptables -A INPUT -s 10.0.0.5 -j ACCEPT         # TODOS los puertos
 - Administradores con IPs fijas
 - Servidores de monitoreo confiables
 - IPs corporativas verificadas
+
+#### Resolución de dominios en whitelist
+
+También puedes usar `WHITELISTED_DOMAINS` para resolver nombres a IPv4 al aplicar reglas.
+
+```bash
+WHITELISTED_IPS="192.0.2.0/24"
+WHITELISTED_DOMAINS="admin-gateway.example.net"
+```
+
+Notas operativas:
+- Los dominios se resuelven en tiempo de aplicación (`iptables.rules.sh`).
+- Si DNS no resuelve y existe `WHITELISTED_IPS`, la suite continúa usando fallback por IP.
+- Si DNS cambia, reaplica reglas para refrescar IPs resueltas.
+
+#### SSH y whitelist
+
+`SSH_PORT` se expone al incluir el módulo `tcp_ssh`. La whitelist sigue otorgando bypass global (todos los puertos) para IPs/dominios confiables.
 ```
 
 ### Ejecución
 
 ```bash
+# Validación en seco (recomendado)
+sudo ./iptables.rules.sh --dry-run --verbose
+
 # Aplicar reglas (reemplaza configuración anterior)
 sudo ./iptables.rules.sh
+
+# Ejecutar subconjunto de módulos
+sudo ./iptables.rules.sh --only ip_whitelist --only ip_openvpn_server
+
+# Ejecutar módulo DNS egress Docker
+sudo ./iptables.rules.sh --only ip_docker_dns_egress
+
+# Omitir módulos específicos
+sudo ./iptables.rules.sh --skip ip_openvpn_server
 
 # Verificar reglas aplicadas
 sudo iptables -L -n -v --line-numbers
@@ -233,13 +333,13 @@ Los ataques de validación de paquetes explotan debilidades en el procesamiento 
 **Algoritmo de Detección**:
 ```bash
 # Paquetes demasiado pequeños (0-28 bytes)
-iptables -A INPUT -p udp --dports $GAMESERVERPORTS \
+iptables -A INPUT -p udp --dports $L4D2_GAMESERVER_PORTS \
     -m length --length 0:28 \
     -m limit --limit 60/min \
     -j LOG --log-prefix "INVALID_SIZE: "
 
 # Paquetes demasiado grandes (2521+ bytes)  
-iptables -A INPUT -p udp --dports $GAMESERVERPORTS \
+iptables -A INPUT -p udp --dports $L4D2_GAMESERVER_PORTS \
     -m length --length 2521:65535 \
     -m limit --limit 60/min \
     -j LOG --log-prefix "INVALID_SIZE: "
@@ -255,17 +355,17 @@ iptables -A INPUT -p udp --dports $GAMESERVERPORTS \
 **Tamaños Específicos de Ataques Conocidos**:
 ```bash
 # 30-32 bytes: Exploit específico de buffer overflow
-iptables -A INPUT -p udp --dports $GAMESERVERPORTS \
+iptables -A INPUT -p udp --dports $L4D2_GAMESERVER_PORTS \
     -m length --length 30:32 \
     -j LOG --log-prefix "MALFORMED: " && DROP
 
 # 46 bytes: Attack vector conocido para crash de servidor
-iptables -A INPUT -p udp --dports $GAMESERVERPORTS \
+iptables -A INPUT -p udp --dports $L4D2_GAMESERVER_PORTS \
     -m length --length 46:46 \
     -j LOG --log-prefix "MALFORMED: " && DROP
 
 # 60 bytes: Patrón de ataque de saturación específico
-iptables -A INPUT -p udp --dports $GAMESERVERPORTS \
+iptables -A INPUT -p udp --dports $L4D2_GAMESERVER_PORTS \
     -m length --length 60:60 \
     -j LOG --log-prefix "MALFORMED: " && DROP
 ```
@@ -285,7 +385,7 @@ Antes de las reglas específicas de cada tipo de consulta, Netfilter realiza un 
 
 ##### **1. Encaminamiento a Cadena A2S**
 ```bash
-iptables -A INPUT -p udp --dports $GAMESERVERPORTS \
+iptables -A INPUT -p udp --dports $L4D2_GAMESERVER_PORTS \
     -m string --algo bm --hex-string '|FFFFFFFF..|' -j <Cadena_A2S>
 ```
 - Cualquier paquete UDP al puerto de juego que contenga el prefijo `0xFF FF FF FF` se redirige a la cadena correspondiente (`A2S_LIMITS`, `A2S_PLAYERS_LIMITS`, etc.)
@@ -330,7 +430,7 @@ iptables -A <Cadena_A2S> -j DROP
 **Patrón Hexadecimal**:
 ```bash
 # Detección por signature hexadecimal
-iptables -A INPUT -p udp --dports $GAMESERVERPORTS \
+iptables -A INPUT -p udp --dports $L4D2_GAMESERVER_PORTS \
     -m string --algo bm --hex-string '|FFFFFFFF54|' \
     -j A2S_LIMITS
 ```
@@ -361,7 +461,7 @@ iptables -A A2S_LIMITS \
 
 **Detección**:
 ```bash
-iptables -A INPUT -p udp --dports $GAMESERVERPORTS \
+iptables -A INPUT -p udp --dports $L4D2_GAMESERVER_PORTS \
     -m string --algo bm --hex-string '|FFFFFFFF55|' \
     -j A2S_PLAYERS_LIMITS
 ```
@@ -377,7 +477,7 @@ iptables -A INPUT -p udp --dports $GAMESERVERPORTS \
 
 **Detección**:
 ```bash
-iptables -A INPUT -p udp --dports $GAMESERVERPORTS \
+iptables -A INPUT -p udp --dports $L4D2_GAMESERVER_PORTS \
     -m string --algo bm --hex-string '|FFFFFFFF56|' \
     -j A2S_RULES_LIMITS
 ```
@@ -391,7 +491,7 @@ iptables -A INPUT -p udp --dports $GAMESERVERPORTS \
 
 **Detección**:
 ```bash
-iptables -A INPUT -p udp --dports $GAMESERVERPORTS \
+iptables -A INPUT -p udp --dports $L4D2_GAMESERVER_PORTS \
     -m string --algo bm --hex-string '|FFFFFFFF00|' \
     -j STEAM_GROUP_LIMITS
 ```
@@ -448,7 +548,7 @@ iptables -A l4d2loginfilter -j DROP
 **Activación del Filtro**:
 ```bash
 # Se activa con patrón específico + rango de tamaño
-iptables -A INPUT -p udp --dports $GAMESERVERPORTS \
+iptables -A INPUT -p udp --dports $L4D2_GAMESERVER_PORTS \
     -m length --length 1:70 \
     -m string --algo bm --hex-string '|FFFFFFFF71|' \
     -j l4d2loginfilter
@@ -527,12 +627,12 @@ iptables -A UDP_GAME_ESTABLISHED_LIMIT \
 **Cálculo Dinámico**:
 ```bash
 # Variables calculadas automáticamente
-CMD_LIMIT_LEEWAY=$((CMD_LIMIT + 10))  # Ej: 100 → 110
-CMD_LIMIT_UPPER=$((CMD_LIMIT + 30))   # Ej: 100 → 130
+CMD_LIMIT_LEEWAY=$((L4D2_CMD_LIMIT + 10))  # Ej: 100 → 110
+CMD_LIMIT_UPPER=$((L4D2_CMD_LIMIT + 30))   # Ej: 100 → 130
 ```
 
 **Fundamento**:
-- **CMD_LIMIT**: Tickrate configurado del servidor (fps del servidor)
+- **L4D2_CMD_LIMIT**: Tickrate configurado del servidor (fps del servidor)
 - **+10 leeway**: Margen para variaciones de red y burst normales
 - **+30 upper**: Burst máximo para compensar latencia y pérdida de paquetes
 - **Por IP+puerto**: Tracking individual de cada conexión establecida
@@ -545,19 +645,19 @@ Los ataques TCP/RCON se dirigen a los puertos de administración remota (RCON) d
 
 #### Modo Protección Completa
 
-**Cuando `ENABLE_TCP_PROTECT=true`**:
+**Cuando `ENABLE_L4D2_TCP_PROTECT=true`**:
 ```bash
 # 1. Permitir SSH para administración
 iptables -A INPUT -p tcp --dports $SSH_PORT -j ACCEPT
 # Nota: WHITELISTED_IPS ya tienen acceso completo a TODO el sistema
 
-# 2. Bloquear todo TCP a puertos de juego
-if [ -n "$TCP_PROTECTION" ]; then
+# 2. Bloquear TCP de juego en puertos definidos
+if [ -n "$L4D2_TCP_PROTECTION" ]; then
     # Solo puertos específicos
-    iptables -A INPUT -p tcp --dports $TCP_PROTECTION -j DROP
+    iptables -A INPUT -p tcp --dports $L4D2_TCP_PROTECTION -j DROP
 else
     # Todos los puertos de juego
-    iptables -A INPUT -p tcp --dports $GAMESERVERPORTS -j DROP
+    iptables -A INPUT -p tcp --dports $L4D2_GAMESERVER_PORTS -j DROP
 fi
 ```
 
@@ -568,7 +668,7 @@ fi
 
 #### Modo Rate Limiting
 
-**Cuando `ENABLE_TCP_PROTECT=false`**:
+**Cuando `ENABLE_L4D2_TCP_PROTECT=false`**:
 ```bash
 iptables -A TCPfilter \
     -m state --state NEW \
@@ -791,8 +891,8 @@ static bool string_mt(const struct sk_buff *skb,
 
 ```bash
 # .env optimizado para alta performance
-CMD_LIMIT=128                   # Tickrate alto
-GAMESERVERPORTS="27015:27030"   # Múltiples servidores
+L4D2_CMD_LIMIT=128              # Tickrate alto
+L4D2_GAMESERVER_PORTS="27015:27030"  # Múltiples servidores
 
 # Ajustes más permisivos para A2S
 # Modificar directamente en el script:
@@ -804,8 +904,8 @@ GAMESERVERPORTS="27015:27030"   # Múltiples servidores
 
 ```bash
 # .env para máxima protección
-CMD_LIMIT=60                    # Tickrate estándar
-ENABLE_TCP_PROTECT=true         # Bloqueo TCP completo
+L4D2_CMD_LIMIT=60               # Tickrate estándar
+ENABLE_L4D2_TCP_PROTECT=true    # Bloqueo TCP completo
 
 # Ajustes más restrictivos:
 --hashlimit-upto 4/sec          # A2S más restrictivo
@@ -816,8 +916,8 @@ ENABLE_TCP_PROTECT=true         # Bloqueo TCP completo
 
 ```bash
 # Múltiples rangos de puertos
-GAMESERVERPORTS="27015:27030,27100:27110"
-TVSERVERPORTS="27200:27215,27300:27310"
+L4D2_GAMESERVER_PORTS="27015:27030,27100:27110"
+L4D2_TV_PORTS="27200:27215,27300:27310"
 
 # Docker + nativo
 TYPECHAIN=2
@@ -997,7 +1097,7 @@ iptables -L UDP_GAME_NEW_LIMIT -n -v -x
 ls /proc/net/ipt_hashlimit/
 
 # Buscar IPs específicas en logs
-grep "IP_PROBLEMA" /var/log/l4d2-iptables.log
+grep "IP_PROBLEMA" /var/log/firewall-suite.log
 ```
 
 **Soluciones**:
@@ -1007,8 +1107,8 @@ WHITELISTED_IPS="$WHITELISTED_IPS IP_PROBLEMA"
 sudo ./iptables.rules.sh
 
 # Permanente: Ajustar límites
-# Editar .env y aumentar CMD_LIMIT o burst values
-CMD_LIMIT=120  # Aumentar de 100 a 120
+# Editar .env y aumentar L4D2_CMD_LIMIT o burst values
+L4D2_CMD_LIMIT=120  # Aumentar de 100 a 120
 ```
 
 #### Performance Degradada
@@ -1062,7 +1162,7 @@ cat .env | grep -v "^#" | grep -v "^$"
 netstat -ulnp | grep :27015
 
 # 4. Verificar logs se generan
-sudo tail -f /var/log/l4d2-iptables.log
+sudo tail -f /var/log/firewall-suite.log
 ```
 
 **Soluciones**:
@@ -1122,14 +1222,14 @@ docker ps --format "table {{.Names}}\t{{.Ports}}"
 **Diagnóstico**:
 ```bash
 # Verificar configuración rsyslog
-sudo cat /etc/rsyslog.d/l4d2-iptables.conf
+sudo cat /etc/rsyslog.d/firewall-suite.conf
 
 # Estado del servicio
 sudo systemctl status rsyslog
 
 # Test manual de logging
 sudo logger -p kern.warning "TEST: Manual iptables log"
-tail /var/log/l4d2-iptables.log
+tail /var/log/firewall-suite.log
 ```
 
 **Soluciones**:
@@ -1141,8 +1241,8 @@ sudo python3 iptable.loggin.py  # Opción 1
 sudo systemctl restart rsyslog
 
 # Verificar permisos de archivos
-sudo ls -la /var/log/l4d2-iptables.log
-sudo chmod 644 /var/log/l4d2-iptables.log
+sudo ls -la /var/log/firewall-suite.log
+sudo chmod 644 /var/log/firewall-suite.log
 ```
 
 ### Herramientas de Debugging
@@ -1167,8 +1267,8 @@ echo "2. ARCHIVO .ENV"
 if [ -f ".env" ]; then
     echo "   ✅ Archivo .env existe"
     echo "   - TYPECHAIN: $(grep "^TYPECHAIN=" .env | cut -d= -f2)"
-    echo "   - GAMESERVERPORTS: $(grep "^GAMESERVERPORTS=" .env | cut -d= -f2)"
-    echo "   - CMD_LIMIT: $(grep "^CMD_LIMIT=" .env | cut -d= -f2)"
+    echo "   - L4D2_GAMESERVER_PORTS: $(grep "^L4D2_GAMESERVER_PORTS=" .env | cut -d= -f2)"
+    echo "   - L4D2_CMD_LIMIT: $(grep "^L4D2_CMD_LIMIT=" .env | cut -d= -f2)"
 else
     echo "   ❌ Archivo .env NO existe"
 fi
@@ -1195,12 +1295,12 @@ netstat -ulnp | grep ":27" | sed 's/^/     /'
 echo
 
 echo "6. LOGS"
-if [ -f "/var/log/l4d2-iptables.log" ]; then
-    log_lines=$(wc -l < /var/log/l4d2-iptables.log)
+if [ -f "/var/log/firewall-suite.log" ]; then
+    log_lines=$(wc -l < /var/log/firewall-suite.log)
     echo "   ✅ Log existe ($log_lines líneas)"
     if [ $log_lines -gt 0 ]; then
         echo "   - Últimos eventos:"
-        tail -3 /var/log/l4d2-iptables.log | sed 's/^/     /'
+        tail -3 /var/log/firewall-suite.log | sed 's/^/     /'
     fi
 else
     echo "   ❌ Log NO existe"
@@ -1221,7 +1321,7 @@ echo "Presiona Ctrl+C para salir"
 echo
 
 # Monitor de logs
-tail -f /var/log/l4d2-iptables.log | while read line; do
+tail -f /var/log/firewall-suite.log | while read line; do
     timestamp=$(echo "$line" | awk '{print $1, $2, $3}')
     attack_type=$(echo "$line" | grep -o '[A-Z_]*_FLOOD\|[A-Z_]*_LIMIT\|[A-Z_]*_BLOCK' | head -1)
     src_ip=$(echo "$line" | grep -o 'SRC=[0-9.]*' | cut -d= -f2)

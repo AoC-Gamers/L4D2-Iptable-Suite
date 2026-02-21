@@ -54,8 +54,8 @@ GENERATED FILES:
 
 INPUT FILES:
     - .env: Configuration file with LOG_PREFIX_* variables and system paths
-    - /var/log/l4d2-iptables.log: Main log file (configurable via LOGFILE in .env)
-    - /etc/rsyslog.d/l4d2-iptables.conf: Rsyslog configuration (auto-generated)
+    - /var/log/firewall-suite.log: Main log file (configurable via LOGFILE in .env)
+    - /etc/rsyslog.d/firewall-suite.conf: Rsyslog configuration (auto-generated)
 
 ATTACK TYPES SUPPORTED:
     INVALID_SIZE, MALFORMED, A2S_INFO_FLOOD, A2S_PLAYERS_FLOOD, A2S_RULES_FLOOD,
@@ -77,10 +77,11 @@ from collections import defaultdict
 
 TIME_FORMAT = "%H:%M:%S"
 ISO_TIMESTAMP_FORMAT = "%Y-%m-%dT%H:%M:%S"
+ANALYSIS_YEAR = None
 
 # Default values - will be overridden by .env file
-LOGFILE = "/var/log/l4d2-iptables.log"
-RSYSLOG_CONF = "/etc/rsyslog.d/l4d2-iptables.conf"
+LOGFILE = "/var/log/firewall-suite.log"
+RSYSLOG_CONF = "/etc/rsyslog.d/firewall-suite.conf"
 
 # Specific log prefixes for different attack types
 LOG_PREFIXES = {
@@ -103,7 +104,7 @@ def load_config(env_file):
     global LOGFILE, RSYSLOG_CONF, LOG_PREFIXES
     
     if not os.path.exists(env_file):
-        print(f"❌ .env file not found: {env_file}")
+        print(f"ERROR: .env file not found: {env_file}")
         return False
     
     load_dotenv(dotenv_path=env_file)
@@ -119,17 +120,38 @@ def load_config(env_file):
     
     return True
 
+
+def _validate_port_bounds(port_value, original_value):
+    if port_value < 1 or port_value > 65535:
+        raise ValueError(f"Port out of bounds (1-65535): {original_value}")
+
+
+def _parse_port_item(part):
+    if ':' in part:
+        bounds = part.split(':', 1)
+        if len(bounds) != 2:
+            raise ValueError(f"Invalid port range format: {part}")
+        start, end = map(int, bounds)
+        if start > end:
+            raise ValueError(f"Invalid port range (start > end): {part}")
+        _validate_port_bounds(start, part)
+        _validate_port_bounds(end, part)
+        return list(range(start, end + 1))
+
+    port = int(part)
+    _validate_port_bounds(port, part)
+    return [port]
+
 def expand_ports(port_string):
-    ports = []
     if not port_string:
-        return ports
-    for part in port_string.split(','):
-        if ':' in part:
-            start, end = map(int, part.split(':'))
-            ports.extend(range(start, end + 1))
-        else:
-            ports.append(int(part))
-    return ports
+        return []
+
+    chunks = [chunk.strip() for chunk in re.split(r"[\s,;]+", str(port_string)) if chunk.strip()]
+    ports = []
+    for part in chunks:
+        ports.extend(_parse_port_item(part))
+
+    return sorted(set(ports))
 
 def classify_port(port, game_ports, tv_ports):
     if port in game_ports:
@@ -139,7 +161,48 @@ def classify_port(port, game_ports, tv_ports):
     else:
         return "Other"
 
-def parse_log(log_path, game_ports, tv_ports):
+
+def _extract_timestamp(timestamp_re, line, active_year, last_timestamp, year_hint):
+    timestamp_match = timestamp_re.search(line)
+    if not timestamp_match:
+        return None, active_year
+
+    timestamp_str = timestamp_match.group(1)
+
+    try:
+        dt = datetime.strptime(f"{active_year} {timestamp_str}", "%Y %b %d %H:%M:%S")
+    except ValueError:
+        return None, active_year
+
+    if year_hint is None and last_timestamp is not None:
+        if dt < last_timestamp and last_timestamp.month == 12 and dt.month == 1:
+            active_year += 1
+            try:
+                dt = datetime.strptime(f"{active_year} {timestamp_str}", "%Y %b %d %H:%M:%S")
+            except ValueError:
+                return None, active_year
+
+    return dt, active_year
+
+
+def _extract_line_fields(line, ip_re, port_re, length_re):
+    ip = ip_re.search(line)
+    port = port_re.search(line)
+    length = length_re.findall(line)
+
+    if not (ip and port and length):
+        return None
+
+    return ip.group(1), int(port.group(1)), int(length[-1])
+
+
+def _detect_attack_pattern(line):
+    for pattern_name, prefix in LOG_PREFIXES.items():
+        if prefix.strip() in line:
+            return pattern_name
+    return "UNKNOWN"
+
+def parse_log(log_path, game_ports, tv_ports, year_hint=None):
     """Parse log file and extract attack information with timestamps"""
     ip_re = re.compile(r'SRC=(\S+)')
     port_re = re.compile(r'DPT=(\d+)')
@@ -147,51 +210,31 @@ def parse_log(log_path, game_ports, tv_ports):
     timestamp_re = re.compile(r'^(\w+\s+\d+\s+\d+:\d+:\d+)')
     
     entries = []
+    active_year = year_hint if year_hint is not None else datetime.now().year
+    last_timestamp = None
     
     with open(log_path, "r") as f:
         for line in f:
-            # Extract timestamp
-            timestamp_match = timestamp_re.search(line)
-            if not timestamp_match:
+            dt, active_year = _extract_timestamp(timestamp_re, line, active_year, last_timestamp, year_hint)
+            if dt is None:
                 continue
-                
-            timestamp_str = timestamp_match.group(1)
-            
-            # Parse timestamp and extract date/time components
-            try:
-                # Add year to timestamp (assuming current year)
-                current_year = datetime.now().year
-                full_timestamp = f"{current_year} {timestamp_str}"
-                dt = datetime.strptime(full_timestamp, "%Y %b %d %H:%M:%S")
-                fecha = dt.strftime("%Y-%m-%d")
-                hora = dt.strftime("%H:%M:%S")
-            except ValueError:
+
+            last_timestamp = dt
+
+            line_fields = _extract_line_fields(line, ip_re, port_re, length_re)
+            if line_fields is None:
                 continue
-            
-            ip = ip_re.search(line)
-            port = port_re.search(line)
-            length = length_re.findall(line)
-            
-            if not (ip and port and length):
-                continue
-                
-            port_num = int(port.group(1))
-            
-            # Detect attack pattern from log prefixes
-            pattern_detected = "UNKNOWN"
-            for pattern_name, prefix in LOG_PREFIXES.items():
-                if prefix.strip() in line:
-                    pattern_detected = pattern_name
-                    break
-            
+
+            ip_value, port_num, packet_length = line_fields
+
             entries.append({
-                "IP": ip.group(1),
+                "IP": ip_value,
                 "Port": port_num,
                 "PortType": classify_port(port_num, game_ports, tv_ports),
-                "Pattern": pattern_detected,
-                "Length": int(length[-1]),
-                "Date": fecha,
-                "Time": hora,
+                "Pattern": _detect_attack_pattern(line),
+                "Length": packet_length,
+                "Date": dt.strftime("%Y-%m-%d"),
+                "Time": dt.strftime("%H:%M:%S"),
                 "Timestamp": dt
             })
 
@@ -548,7 +591,7 @@ def menu_analysis_options():
     if choice == "8":
         return None, None
     elif choice not in ["1", "2", "3", "4", "5", "6", "7"]:
-        print("❌ Invalid option")
+        print("ERROR: Invalid option")
         return None, None
     
     if choice == "7":
@@ -587,11 +630,11 @@ def generate_all_reports(df):
     
     generated_files = []
     
-    print("🔄 Generating all analysis reports...")
+    print("INFO: Generating all analysis reports...")
     
     for analysis_type, generator_func in reports.items():
         try:
-            print(f"  📊 Generating {analysis_type} analysis...")
+            print(f"  INFO: Generating {analysis_type} analysis...")
             
             # Generate the analysis data
             summary_data = generator_func(df)
@@ -610,10 +653,10 @@ def generate_all_reports(df):
                 'size': os.path.getsize(filepath)
             })
             
-            print(f"    ✅ {filename} created successfully")
+            print(f"    OK: {filename} created successfully")
             
         except Exception as e:
-            print(f"    ❌ Error generating {analysis_type}: {e}")
+            print(f"    ERROR: Error generating {analysis_type}: {e}")
     
     return generated_files
 
@@ -627,62 +670,67 @@ def install_rsyslog_and_config():
     print("[1] Installing rsyslog and creating custom configuration...")
 
     if subprocess.call(["which", "rsyslogd"], stdout=subprocess.DEVNULL) != 0:
-        print("⏳ Installing rsyslog...")
+        print("INFO: Installing rsyslog...")
         subprocess.call(["apt", "update"])
         subprocess.call(["apt", "install", "-y", "rsyslog"])
     else:
-        print("✅ rsyslog is already installed.")
+        print("OK: rsyslog is already installed.")
 
-    print("🛠️ Configuring", RSYSLOG_CONF)
+    print("INFO: Configuring", RSYSLOG_CONF)
     with open(RSYSLOG_CONF, "w") as f:
         for pattern_name, prefix in LOG_PREFIXES.items():
             f.write(f':msg,contains,"{prefix.strip()}"    {LOGFILE}\n')
         f.write("& stop\n")
 
     subprocess.call(["systemctl", "restart", "rsyslog"])
-    print("✅ Installation and configuration completed.")
-    print(f"📝 Optimized configuration: only {len(LOG_PREFIXES)} specific prefixes")
+    print("OK: Installation and configuration completed.")
+    print(f"INFO: Optimized configuration: only {len(LOG_PREFIXES)} specific prefixes")
 
 def verify_permissions():
     user = os.environ.get("SUDO_USER") or os.getlogin()
     print(f"[2] Verifying if '{user}' belongs to 'adm' group...")
     if check_permissions():
-        print(f"✅ User '{user}' belongs to 'adm' and can read logs.")
+        print(f"OK: User '{user}' belongs to 'adm' and can read logs.")
     else:
-        print(f"❌ User '{user}' does NOT belong to 'adm' group.")
+        print(f"ERROR: User '{user}' does NOT belong to 'adm' group.")
 
 def add_permissions():
     user = os.environ.get("SUDO_USER") or os.getlogin()
     print(f"[3] Adding permissions for '{user}'...")
     if check_permissions():
-        print(f"✅ User '{user}' already belongs to 'adm' group. Nothing to do.")
+        print(f"OK: User '{user}' already belongs to 'adm' group. Nothing to do.")
     else:
         subprocess.call(["usermod", "-aG", "adm", user])
-        print("✅ Permissions added. Please log out and log back in for changes to take effect.")
+        print("OK: Permissions added. Please log out and log back in for changes to take effect.")
 
 def run_analysis(env_file):
     if not load_config(env_file):
         return
 
     if not os.path.exists(LOGFILE):
-        print(f"❌ Log file not found: {LOGFILE}")
+        print(f"ERROR: Log file not found: {LOGFILE}")
         return
 
-    print(f"📁 Reading logs from: {LOGFILE}")
-    game_ports = expand_ports(os.getenv("GAMESERVERPORTS", ""))
-    tv_ports = expand_ports(os.getenv("TVSERVERPORTS", ""))
-    df = parse_log(LOGFILE, game_ports, tv_ports)
+    print(f"INFO: Reading logs from: {LOGFILE}")
+    try:
+        game_ports = expand_ports(os.getenv("L4D2_GAMESERVER_PORTS", ""))
+        tv_ports = expand_ports(os.getenv("L4D2_TV_PORTS", ""))
+    except ValueError as e:
+        print(f"ERROR: Invalid port configuration in .env: {e}")
+        return
+
+    df = parse_log(LOGFILE, game_ports, tv_ports, year_hint=ANALYSIS_YEAR)
     
     if df.empty:
-        print("⚠️  No events found in log file")
+        print("WARNING: No events found in log file")
         return
     
-    print(f"📊 Found {len(df)} events from {df['IP'].nunique()} different IPs")
-    print(f"🗓️  Temporal coverage: {df['Date'].nunique()} unique days")
+    print(f"INFO: Found {len(df)} events from {df['IP'].nunique()} different IPs")
+    print(f"INFO: Temporal coverage: {df['Date'].nunique()} unique days")
 
     output_path, analysis_type = menu_analysis_options()
     if not output_path:
-        print("❌ Operation cancelled.")
+        print("ERROR: Operation cancelled.")
         return
 
     if analysis_type == "all":
@@ -690,24 +738,24 @@ def run_analysis(env_file):
         generated_files = generate_all_reports(df)
         
         if generated_files:
-            print("\n✅ All analysis reports generated successfully!")
-            print(f"📂 Location: {os.path.dirname(os.path.abspath(__file__))}")
-            print(f"📊 Summary: {len(generated_files)} files generated")
+            print("\nOK: All analysis reports generated successfully!")
+            print(f"INFO: Location: {os.path.dirname(os.path.abspath(__file__))}")
+            print(f"INFO: Summary: {len(generated_files)} files generated")
             
             # Show detailed summary
             total_size = sum(f['size'] for f in generated_files)
-            print(f"📈 Total data size: {total_size:,} bytes")
+            print(f"INFO: Total data size: {total_size:,} bytes")
             
-            print("\n📋 Generated files:")
+            print("\nINFO: Generated files:")
             for file_info in generated_files:
                 filename = os.path.basename(file_info['file'])
                 size_kb = file_info['size'] / 1024
                 print(f"  • {filename} ({size_kb:.1f} KB)")
         else:
-            print("❌ No files were generated successfully")
+            print("ERROR: No files were generated successfully")
         return
 
-    print(f"🔄 Generating {analysis_type} analysis in JSON format...")
+    print(f"INFO: Generating {analysis_type} analysis in JSON format...")
 
     generators = {
         "by_ip": generate_summary_by_ip,
@@ -738,7 +786,7 @@ def run_analysis(env_file):
 
     generator = generators.get(analysis_type)
     if not generator:
-        print("❌ Unknown analysis type")
+        print("ERROR: Unknown analysis type")
         return
 
     try:
@@ -748,14 +796,14 @@ def run_analysis(env_file):
         with open(output_path, 'w', encoding='utf-8') as f:
             json.dump(summary_data, f, indent=2, ensure_ascii=False, default=str)
 
-        print(f"✅ Analysis exported successfully to: {output_path}")
-        print(f"📂 Location: {os.path.abspath(output_path)}")
+        print(f"OK: Analysis exported successfully to: {output_path}")
+        print(f"INFO: Location: {os.path.abspath(output_path)}")
         
         # Show quick summary based on analysis type
         count = summary_counts[analysis_type](summary_data)
-        print(f"📈 Summary: {count} {label_map[analysis_type]} analyzed")
+        print(f"INFO: Summary: {count} {label_map[analysis_type]} analyzed")
     except Exception as e:
-        print(f"❌ Error generating analysis: {e}")
+        print(f"ERROR: Error generating analysis: {e}")
 
 
 def main_menu(env_file):
@@ -779,16 +827,16 @@ def main_menu(env_file):
         elif opt == "4":
             run_analysis(env_file)
         elif opt == "5":
-            print("👋 Exiting...")
+            print("EXIT: Exiting...")
             break
         else:
-            print("❌ Invalid option.")
+            print("ERROR: Invalid option.")
 
 
 if __name__ == "__main__":
     if os.geteuid() != 0:
-        print("❌ This script must be run as root or with sudo.")
-        print(f"➡️  Use: sudo {__file__}")
+        print("ERROR: This script must be run as root or with sudo.")
+        print(f"INFO: Use: sudo {__file__}")
         exit(1)
 
     parser = argparse.ArgumentParser(description="L4D2 iptables Log Manager")
@@ -797,6 +845,17 @@ if __name__ == "__main__":
         default=".env",
         help="Path to .env file (default: .env in current directory)"
     )
+    parser.add_argument(
+        "--year",
+        type=int,
+        default=None,
+        help="Force year for syslog timestamps (default: auto with Dec->Jan rollover handling)"
+    )
     args = parser.parse_args()
+
+    ANALYSIS_YEAR = args.year
+    if ANALYSIS_YEAR is not None and (ANALYSIS_YEAR < 1970 or ANALYSIS_YEAR > 2100):
+        print("ERROR: --year must be between 1970 and 2100")
+        exit(2)
 
     main_menu(args.env_file)
