@@ -161,7 +161,17 @@ OVPNS2S_ENABLE_NAT=false
 OVPNS2S_LOCAL_INTERFACE=""
 OVPNS2S_LOG_ENABLED=false
 OVPNS2S_LOG_PREFIX="VPN_S2S_TRAFFIC: "
+OVPNS2S_ROUTER_ALIAS=""
+OVPNS2S_ROUTER_REAL_IP=""
+OVPNS2S_ROUTER_ALIAS_IP=""
+OVPNS2S_ROUTER_ALIAS_SNAT=false
 ```
+
+Alias S2S para router/LAN solapada:
+- `OVPNS2S_ROUTER_ALIAS`: formato multi-alias `real_ip;alias_ip,real_ip;alias_ip`.
+    - Ejemplo: `192.168.1.1;10.99.2.1,192.168.1.254;10.99.2.254`.
+- Legacy compatible: `OVPNS2S_ROUTER_REAL_IP` + `OVPNS2S_ROUTER_ALIAS_IP` (single alias).
+- `OVPNS2S_ROUTER_ALIAS_SNAT=true`: fuerza retorno vía host S2S (requiere `OVPNS2S_LOCAL_INTERFACE`).
 
 `openvpn_server` y `openvpn_sitetosite` son incompatibles y no pueden ejecutarse juntos.
 

@@ -28,7 +28,8 @@ Separar explícitamente los dos modos de operación de OpenVPN:
 - `OVPNS2S_INTERFACE`
 - `OVPNS2S_LOCAL_SUBNETS`
 - `OVPNS2S_REMOTE_SUBNETS`
-- extras en `ip`: `OVPNS2S_ENABLE_NAT`, `OVPNS2S_LOCAL_INTERFACE`, `OVPNS2S_LOG_*`
+- extras en `ip`: `OVPNS2S_ENABLE_NAT`, `OVPNS2S_LOCAL_INTERFACE`, `OVPNS2S_LOG_*`, `OVPNS2S_ROUTER_ALIAS`, `OVPNS2S_ROUTER_REAL_IP`, `OVPNS2S_ROUTER_ALIAS_IP`, `OVPNS2S_ROUTER_ALIAS_SNAT`
+- extras en `nf`: `OVPNS2S_ENABLE_NAT`, `OVPNS2S_LOCAL_INTERFACE`, `OVPNS2S_ROUTER_ALIAS`, `OVPNS2S_ROUTER_REAL_IP`, `OVPNS2S_ROUTER_ALIAS_IP`, `OVPNS2S_ROUTER_ALIAS_SNAT`
 
 ## Activación
 - Se activan por inclusión en `MODULES_ONLY` usando tokens:
@@ -41,4 +42,4 @@ Separar explícitamente los dos modos de operación de OpenVPN:
 
 ## Diferencias por backend
 - `ip` incluye más opciones avanzadas (NAT/log/DNAT).
-- `nf` mantiene implementación más directa para input/forward.
+- `nf` mantiene implementación directa para input/forward y soporta NAT S2S (tabla `ip l4d2_s2s_nat`) para alias de router y MASQUERADE opcional.

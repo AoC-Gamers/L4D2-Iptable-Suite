@@ -145,6 +145,17 @@ OVPNS2S_LOCAL_INTERFACE=""
 OVPNS2S_LOG_ENABLED=false
 OVPNS2S_LOG_PREFIX="VPN_S2S_TRAFFIC: "
 
+# (Opcional) Alias del router/LAN en modo S2S (DNAT)
+# Útil cuando hay subredes solapadas (ej. 192.168.1.0/24 en ambos sitios)
+# Formato multi-alias: "real_ip;alias_ip,real_ip;alias_ip"
+OVPNS2S_ROUTER_ALIAS=""
+
+# Formato legacy (single alias, compatible)
+OVPNS2S_ROUTER_REAL_IP=""
+OVPNS2S_ROUTER_ALIAS_IP=""
+# Si true, hace SNAT de retorno hacia el router real (requiere OVPNS2S_LOCAL_INTERFACE)
+OVPNS2S_ROUTER_ALIAS_SNAT=false
+
 # Puertos extra permitidos (servicios adicionales)
 # Formato: "puerto,puerto" o rangos "inicio:fin" (multiport)
 # Vacío = no agrega excepciones extras.
