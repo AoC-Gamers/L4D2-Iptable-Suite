@@ -51,6 +51,15 @@ nf_50_l4d2_udp_base_apply() {
     nft add chain inet l4d2_filter udp_new_limit_global
     nft add chain inet l4d2_filter udp_established_limit
 
+    # Source query/login signatures are handled by dedicated modules later in
+    # chain order (A2S + login filters). Return to caller to avoid dropping
+    # legitimate server browser traffic in generic NEW throttling.
+    nf_add_rule udp_new_limit @th,64,40 0xFFFFFFFF54 return
+    nf_add_rule udp_new_limit @th,64,40 0xFFFFFFFF55 return
+    nf_add_rule udp_new_limit @th,64,40 0xFFFFFFFF56 return
+    nf_add_rule udp_new_limit @th,64,40 0xFFFFFFFF00 return
+    nf_add_rule udp_new_limit @th,64,40 0xFFFFFFFF71 return
+
     nf_add_rule udp_new_limit meter udp_new_src_under '{ ip saddr . udp dport limit rate 1/second burst 3 packets }' jump udp_new_limit_global
     nf_add_rule udp_new_limit meter udp_new_src_over '{ ip saddr . udp dport limit rate over 1/second burst 3 packets }' log prefix "\"$LOG_PREFIX_UDP_NEW_LIMIT \""
     nf_add_rule udp_new_limit meter udp_new_src_over_drop '{ ip saddr . udp dport limit rate over 1/second burst 3 packets }' drop

@@ -45,6 +45,15 @@ ip_50_l4d2_udp_base_apply() {
     local cmd_limit_leeway=$((L4D2_CMD_LIMIT + 10))
     local cmd_limit_upper=$((L4D2_CMD_LIMIT + 30))
 
+    # Source query/login signatures are handled by dedicated modules later in
+    # the chain order (A2S + l4d2loginfilter). Bypass generic NEW rate limiting
+    # so legitimate server browser traffic is not dropped too early.
+    iptables -A UDP_GAME_NEW_LIMIT -m string --algo bm --hex-string '|FFFFFFFF54|' -j RETURN
+    iptables -A UDP_GAME_NEW_LIMIT -m string --algo bm --hex-string '|FFFFFFFF55|' -j RETURN
+    iptables -A UDP_GAME_NEW_LIMIT -m string --algo bm --hex-string '|FFFFFFFF56|' -j RETURN
+    iptables -A UDP_GAME_NEW_LIMIT -m string --algo bm --hex-string '|FFFFFFFF00|' -j RETURN
+    iptables -A UDP_GAME_NEW_LIMIT -m string --algo bm --hex-string '|FFFFFFFF71|' -j RETURN
+
     iptables -A UDP_GAME_NEW_LIMIT -m hashlimit --hashlimit-upto 1/s --hashlimit-burst 3 --hashlimit-mode srcip,dstport --hashlimit-name L4D2_NEW_HASHLIMIT --hashlimit-htable-expire 5000 -j UDP_GAME_NEW_LIMIT_GLOBAL
     iptables -A UDP_GAME_NEW_LIMIT -m limit --limit 60/min --limit-burst 20 -j LOG --log-prefix "$LOG_PREFIX_UDP_NEW_LIMIT" --log-level 4
     iptables -A UDP_GAME_NEW_LIMIT -j DROP
