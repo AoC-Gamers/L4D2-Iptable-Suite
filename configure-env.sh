@@ -63,6 +63,11 @@ is_cmd_limit() {
     [ "$1" -ge 10 ] && [ "$1" -le 10000 ]
 }
 
+is_positive_int() {
+    [[ "$1" =~ ^[0-9]+$ ]] || return 1
+    [ "$1" -gt 0 ]
+}
+
 is_port_number() {
     [[ "$1" =~ ^[0-9]+$ ]] || return 1
     [ "$1" -ge 1 ] && [ "$1" -le 65535 ]
@@ -91,6 +96,10 @@ is_interface_name() {
 
 is_rate_expr() {
     [[ "$1" =~ ^[0-9]+/(sec|min|hour|day)$ ]]
+}
+
+is_hex_byte_csv() {
+    [[ "$1" =~ ^[0-9A-Fa-f]{2}(,[0-9A-Fa-f]{2})*$ ]]
 }
 
 ask() {
@@ -397,6 +406,18 @@ done
 l4d2_game_ports="27015"
 l4d2_tv_ports="27020"
 l4d2_cmd_limit="100"
+a2s_info_rate="16"
+a2s_info_burst="80"
+a2s_players_rate="12"
+a2s_players_burst="60"
+a2s_rules_rate="8"
+a2s_rules_burst="40"
+steam_group_rate="6"
+steam_group_burst="30"
+l4d2_login_rate="4"
+l4d2_login_burst="16"
+enable_steam_group_filter="true"
+steam_group_signatures="00"
 ssh_ports="22"
 ssh_docker=""
 ssh_rate="60/min"
@@ -646,6 +667,121 @@ else
     say_info "Módulos de juego no incluidos: se mantienen defaults mínimos (sin activar protección de juego)."
 fi
 
+if [ "${module_enabled[ip_l4d2_a2s_filters]:-false}" = "true" ] || needs_var "A2S_INFO_RATE" || needs_var "A2S_INFO_BURST" || needs_var "A2S_PLAYERS_RATE" || needs_var "A2S_PLAYERS_BURST" || needs_var "A2S_RULES_RATE" || needs_var "A2S_RULES_BURST" || needs_var "STEAM_GROUP_RATE" || needs_var "STEAM_GROUP_BURST" || needs_var "L4D2_LOGIN_RATE" || needs_var "L4D2_LOGIN_BURST" || needs_var "ENABLE_STEAM_GROUP_FILTER" || needs_var "STEAM_GROUP_SIGNATURES"; then
+    say_section "Filtros A2S / Steam / Login"
+    a2s_info_rate="$(ask_with_context \
+        "A2S_INFO_RATE" \
+        "Rate por segundo para queries A2S_INFO (firma 54)." \
+        "docs/modules/11_l4d2_a2s_filters.md" \
+        "A2S_INFO_RATE" \
+        "$a2s_info_rate" \
+        "is_positive_int" \
+        "A2S_INFO_RATE debe ser entero > 0.")"
+
+    a2s_info_burst="$(ask_with_context \
+        "A2S_INFO_BURST" \
+        "Burst permitido para A2S_INFO." \
+        "docs/modules/11_l4d2_a2s_filters.md" \
+        "A2S_INFO_BURST" \
+        "$a2s_info_burst" \
+        "is_positive_int" \
+        "A2S_INFO_BURST debe ser entero > 0.")"
+
+    a2s_players_rate="$(ask_with_context \
+        "A2S_PLAYERS_RATE" \
+        "Rate por segundo para queries A2S_PLAYERS (firma 55)." \
+        "docs/modules/11_l4d2_a2s_filters.md" \
+        "A2S_PLAYERS_RATE" \
+        "$a2s_players_rate" \
+        "is_positive_int" \
+        "A2S_PLAYERS_RATE debe ser entero > 0.")"
+
+    a2s_players_burst="$(ask_with_context \
+        "A2S_PLAYERS_BURST" \
+        "Burst permitido para A2S_PLAYERS." \
+        "docs/modules/11_l4d2_a2s_filters.md" \
+        "A2S_PLAYERS_BURST" \
+        "$a2s_players_burst" \
+        "is_positive_int" \
+        "A2S_PLAYERS_BURST debe ser entero > 0.")"
+
+    a2s_rules_rate="$(ask_with_context \
+        "A2S_RULES_RATE" \
+        "Rate por segundo para queries A2S_RULES (firma 56)." \
+        "docs/modules/11_l4d2_a2s_filters.md" \
+        "A2S_RULES_RATE" \
+        "$a2s_rules_rate" \
+        "is_positive_int" \
+        "A2S_RULES_RATE debe ser entero > 0.")"
+
+    a2s_rules_burst="$(ask_with_context \
+        "A2S_RULES_BURST" \
+        "Burst permitido para A2S_RULES." \
+        "docs/modules/11_l4d2_a2s_filters.md" \
+        "A2S_RULES_BURST" \
+        "$a2s_rules_burst" \
+        "is_positive_int" \
+        "A2S_RULES_BURST debe ser entero > 0.")"
+
+    steam_group_rate="$(ask_with_context \
+        "STEAM_GROUP_RATE" \
+        "Rate por segundo para firmas Steam Group/legacy (ej: 00,69)." \
+        "docs/modules/11_l4d2_a2s_filters.md" \
+        "STEAM_GROUP_RATE" \
+        "$steam_group_rate" \
+        "is_positive_int" \
+        "STEAM_GROUP_RATE debe ser entero > 0.")"
+
+    steam_group_burst="$(ask_with_context \
+        "STEAM_GROUP_BURST" \
+        "Burst permitido para Steam Group/legacy." \
+        "docs/modules/11_l4d2_a2s_filters.md" \
+        "STEAM_GROUP_BURST" \
+        "$steam_group_burst" \
+        "is_positive_int" \
+        "STEAM_GROUP_BURST debe ser entero > 0.")"
+
+    l4d2_login_rate="$(ask_with_context \
+        "L4D2_LOGIN_RATE" \
+        "Rate por segundo para short-query login (firma 71)." \
+        "docs/modules/11_l4d2_a2s_filters.md" \
+        "L4D2_LOGIN_RATE" \
+        "$l4d2_login_rate" \
+        "is_positive_int" \
+        "L4D2_LOGIN_RATE debe ser entero > 0.")"
+
+    l4d2_login_burst="$(ask_with_context \
+        "L4D2_LOGIN_BURST" \
+        "Burst permitido para short-query login (71)." \
+        "docs/modules/11_l4d2_a2s_filters.md" \
+        "L4D2_LOGIN_BURST" \
+        "$l4d2_login_burst" \
+        "is_positive_int" \
+        "L4D2_LOGIN_BURST debe ser entero > 0.")"
+
+    enable_steam_group_filter="$(ask_with_context \
+        "ENABLE_STEAM_GROUP_FILTER" \
+        "Habilita detección de firmas Steam Group configurables." \
+        "docs/modules/11_l4d2_a2s_filters.md" \
+        "ENABLE_STEAM_GROUP_FILTER (true/false)" \
+        "$enable_steam_group_filter" \
+        "is_bool" \
+        "ENABLE_STEAM_GROUP_FILTER debe ser true o false.")"
+    enable_steam_group_filter="${enable_steam_group_filter,,}"
+
+    if [ "$enable_steam_group_filter" = "true" ]; then
+        steam_group_signatures="$(ask_with_context \
+            "STEAM_GROUP_SIGNATURES" \
+            "Lista CSV de bytes hex (2 dígitos), ej: 00 o 00,69." \
+            "docs/modules/11_l4d2_a2s_filters.md" \
+            "STEAM_GROUP_SIGNATURES" \
+            "$steam_group_signatures" \
+            "is_hex_byte_csv" \
+            "Formato inválido. Usa bytes hex CSV como 00 o 00,69.")"
+        steam_group_signatures="${steam_group_signatures^^}"
+    fi
+fi
+
 say_section "Compatibilidad Docker"
 docker_input_compat_raw="$(ask_with_context \
     "DOCKER_INPUT_COMPAT" \
@@ -674,6 +810,11 @@ fi
 has_l4d2_udp_modules="false"
 if [ "${module_enabled[ip_l4d2_udp_base]:-false}" = "true" ] || [ "${module_enabled[ip_l4d2_packet_validation]:-false}" = "true" ] || [ "${module_enabled[ip_l4d2_a2s_filters]:-false}" = "true" ]; then
     has_l4d2_udp_modules="true"
+fi
+
+has_l4d2_a2s_module="false"
+if [ "${module_enabled[ip_l4d2_a2s_filters]:-false}" = "true" ]; then
+    has_l4d2_a2s_module="true"
 fi
 
 has_l4d2_tcp_modules="false"
@@ -755,6 +896,23 @@ if [ "$has_l4d2_udp_modules" = "true" ]; then
 cat >> "$output_file" <<EOF
 L4D2_TV_PORTS="${l4d2_tv_ports}"
 L4D2_CMD_LIMIT=${l4d2_cmd_limit}
+EOF
+fi
+
+if [ "$has_l4d2_a2s_module" = "true" ]; then
+cat >> "$output_file" <<EOF
+A2S_INFO_RATE=${a2s_info_rate}
+A2S_INFO_BURST=${a2s_info_burst}
+A2S_PLAYERS_RATE=${a2s_players_rate}
+A2S_PLAYERS_BURST=${a2s_players_burst}
+A2S_RULES_RATE=${a2s_rules_rate}
+A2S_RULES_BURST=${a2s_rules_burst}
+STEAM_GROUP_RATE=${steam_group_rate}
+STEAM_GROUP_BURST=${steam_group_burst}
+L4D2_LOGIN_RATE=${l4d2_login_rate}
+L4D2_LOGIN_BURST=${l4d2_login_burst}
+ENABLE_STEAM_GROUP_FILTER=${enable_steam_group_filter}
+STEAM_GROUP_SIGNATURES="${steam_group_signatures}"
 EOF
 fi
 
@@ -920,4 +1078,21 @@ fi
 if [ "$has_l4d2_udp_modules" = "true" ]; then
 echo "  L4D2_TV_PORTS=$l4d2_tv_ports" >&2
 echo "  L4D2_CMD_LIMIT=$l4d2_cmd_limit" >&2
+fi
+
+if [ "$has_l4d2_a2s_module" = "true" ]; then
+echo "  A2S_INFO_RATE=$a2s_info_rate" >&2
+echo "  A2S_INFO_BURST=$a2s_info_burst" >&2
+echo "  A2S_PLAYERS_RATE=$a2s_players_rate" >&2
+echo "  A2S_PLAYERS_BURST=$a2s_players_burst" >&2
+echo "  A2S_RULES_RATE=$a2s_rules_rate" >&2
+echo "  A2S_RULES_BURST=$a2s_rules_burst" >&2
+echo "  STEAM_GROUP_RATE=$steam_group_rate" >&2
+echo "  STEAM_GROUP_BURST=$steam_group_burst" >&2
+echo "  L4D2_LOGIN_RATE=$l4d2_login_rate" >&2
+echo "  L4D2_LOGIN_BURST=$l4d2_login_burst" >&2
+echo "  ENABLE_STEAM_GROUP_FILTER=$enable_steam_group_filter" >&2
+if [ "$enable_steam_group_filter" = "true" ]; then
+echo "  STEAM_GROUP_SIGNATURES=$steam_group_signatures" >&2
+fi
 fi

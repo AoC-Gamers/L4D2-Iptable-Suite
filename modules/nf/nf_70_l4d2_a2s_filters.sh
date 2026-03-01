@@ -8,9 +8,9 @@ nf_70_l4d2_a2s_filters_metadata() {
 ID=nf_l4d2_a2s_filters
 ALIASES=l4d2_a2s_filters
 DESCRIPTION=Applies A2S/Steam Group filters and short-flood controls in the nftables backend
-REQUIRED_VARS=TYPECHAIN L4D2_GAMESERVER_PORTS LOG_PREFIX_A2S_INFO LOG_PREFIX_A2S_PLAYERS LOG_PREFIX_A2S_RULES LOG_PREFIX_STEAM_GROUP LOG_PREFIX_L4D2_CONNECT LOG_PREFIX_L4D2_RESERVE
+REQUIRED_VARS=TYPECHAIN L4D2_GAMESERVER_PORTS L4D2_TV_PORTS LOG_PREFIX_A2S_INFO LOG_PREFIX_A2S_PLAYERS LOG_PREFIX_A2S_RULES LOG_PREFIX_STEAM_GROUP LOG_PREFIX_L4D2_CONNECT LOG_PREFIX_L4D2_RESERVE
 OPTIONAL_VARS=A2S_INFO_RATE A2S_INFO_BURST A2S_PLAYERS_RATE A2S_PLAYERS_BURST A2S_RULES_RATE A2S_RULES_BURST STEAM_GROUP_RATE STEAM_GROUP_BURST L4D2_LOGIN_RATE L4D2_LOGIN_BURST ENABLE_STEAM_GROUP_FILTER STEAM_GROUP_SIGNATURES
-DEFAULTS=TYPECHAIN=0 L4D2_GAMESERVER_PORTS=27015 A2S_INFO_RATE=16 A2S_INFO_BURST=80 A2S_PLAYERS_RATE=12 A2S_PLAYERS_BURST=60 A2S_RULES_RATE=8 A2S_RULES_BURST=40 STEAM_GROUP_RATE=6 STEAM_GROUP_BURST=30 L4D2_LOGIN_RATE=4 L4D2_LOGIN_BURST=16 ENABLE_STEAM_GROUP_FILTER=true STEAM_GROUP_SIGNATURES=00 LOG_PREFIX_A2S_INFO=A2S_INFO_FLOOD: LOG_PREFIX_A2S_PLAYERS=A2S_PLAYERS_FLOOD: LOG_PREFIX_A2S_RULES=A2S_RULES_FLOOD: LOG_PREFIX_STEAM_GROUP=STEAM_GROUP_FLOOD: LOG_PREFIX_L4D2_CONNECT=L4D2_CONNECT_FLOOD: LOG_PREFIX_L4D2_RESERVE=L4D2_RESERVE_FLOOD:
+DEFAULTS=TYPECHAIN=0 L4D2_GAMESERVER_PORTS=27015 L4D2_TV_PORTS=27020 A2S_INFO_RATE=16 A2S_INFO_BURST=80 A2S_PLAYERS_RATE=12 A2S_PLAYERS_BURST=60 A2S_RULES_RATE=8 A2S_RULES_BURST=40 STEAM_GROUP_RATE=6 STEAM_GROUP_BURST=30 L4D2_LOGIN_RATE=4 L4D2_LOGIN_BURST=16 ENABLE_STEAM_GROUP_FILTER=true STEAM_GROUP_SIGNATURES=00 LOG_PREFIX_A2S_INFO=A2S_INFO_FLOOD: LOG_PREFIX_A2S_PLAYERS=A2S_PLAYERS_FLOOD: LOG_PREFIX_A2S_RULES=A2S_RULES_FLOOD: LOG_PREFIX_STEAM_GROUP=STEAM_GROUP_FLOOD: LOG_PREFIX_L4D2_CONNECT=L4D2_CONNECT_FLOOD: LOG_PREFIX_L4D2_RESERVE=L4D2_RESERVE_FLOOD:
 EOF
 }
 
@@ -39,6 +39,7 @@ nf_70_l4d2_a2s_filters_validate() {
     esac
 
     nf_validate_ports_spec "$L4D2_GAMESERVER_PORTS" "nf_l4d2_a2s_filters: L4D2_GAMESERVER_PORTS" || return $?
+    nf_validate_ports_spec "$L4D2_TV_PORTS" "nf_l4d2_a2s_filters: L4D2_TV_PORTS" || return $?
 
     local key
     for key in \
@@ -72,11 +73,12 @@ nf_70_l4d2_a2s_filters_validate() {
 }
 
 nf_70_l4d2_a2s_filters_apply() {
-    local chain game_ports_expr
+    local chain game_ports_expr all_query_ports_expr
     local steam_signatures_csv steam_sig
     local -a steam_signatures
 
     game_ports_expr="$(nf_ports_set_expr "$L4D2_GAMESERVER_PORTS")"
+    all_query_ports_expr="{ $(nf_ports_normalize "$L4D2_GAMESERVER_PORTS"), $(nf_ports_normalize "$L4D2_TV_PORTS") }"
 
     nft add chain inet l4d2_filter a2s_info_limit
     nft add chain inet l4d2_filter a2s_players_limit
@@ -110,20 +112,20 @@ nf_70_l4d2_a2s_filters_apply() {
     nf_add_rule login_reserve_limit meter login_reserve_over_drop "{ ip saddr . ip daddr . udp dport limit rate over ${L4D2_LOGIN_RATE}/second burst ${L4D2_LOGIN_BURST} packets }" drop
 
     for chain in $(nf_get_target_chains); do
-        nf_add_rule "$chain" udp dport "$game_ports_expr" @th,64,40 0xFFFFFFFF54 jump a2s_info_limit
-        nf_add_rule "$chain" udp dport "$game_ports_expr" @th,64,40 0xFFFFFFFF55 jump a2s_players_limit
-        nf_add_rule "$chain" udp dport "$game_ports_expr" @th,64,40 0xFFFFFFFF56 jump a2s_rules_limit
+        nf_add_rule "$chain" udp dport "$all_query_ports_expr" @th,64,40 0xFFFFFFFF54 jump a2s_info_limit
+        nf_add_rule "$chain" udp dport "$all_query_ports_expr" @th,64,40 0xFFFFFFFF55 jump a2s_players_limit
+        nf_add_rule "$chain" udp dport "$all_query_ports_expr" @th,64,40 0xFFFFFFFF56 jump a2s_rules_limit
         if [ "${ENABLE_STEAM_GROUP_FILTER}" = "true" ]; then
             steam_signatures_csv="${STEAM_GROUP_SIGNATURES//[[:space:]]/}"
             IFS=',' read -r -a steam_signatures <<< "$steam_signatures_csv"
             for steam_sig in "${steam_signatures[@]}"; do
                 [ -z "$steam_sig" ] && continue
                 steam_sig="${steam_sig^^}"
-                nf_add_rule "$chain" udp dport "$game_ports_expr" @th,64,40 "0xFFFFFFFF${steam_sig}" jump steam_group_limit
+                nf_add_rule "$chain" udp dport "$all_query_ports_expr" @th,64,40 "0xFFFFFFFF${steam_sig}" jump steam_group_limit
             done
         fi
 
-        nf_add_rule "$chain" udp dport "$game_ports_expr" meta length 1-70 @th,64,48 0xFFFFFFFF0000 drop
+        nf_add_rule "$chain" udp dport "$all_query_ports_expr" meta length 1-70 @th,64,48 0xFFFFFFFF0000 drop
         nf_add_rule "$chain" udp dport "$game_ports_expr" meta length 1-70 @th,64,40 0xFFFFFFFF71 @th,104,56 0x636f6e6e656374 jump login_connect_limit
         nf_add_rule "$chain" udp dport "$game_ports_expr" meta length 1-70 @th,64,40 0xFFFFFFFF71 @th,104,56 0x72657365727665 jump login_reserve_limit
         nf_add_rule "$chain" udp dport "$game_ports_expr" meta length 1-70 @th,64,40 0xFFFFFFFF71 drop

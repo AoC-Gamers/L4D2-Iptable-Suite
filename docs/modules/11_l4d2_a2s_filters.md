@@ -9,6 +9,7 @@ Mitigar flood de consultas A2S/Steam Group y patrones de login (`connect/reserve
 
 ## Variables principales
 - `L4D2_GAMESERVER_PORTS`
+- `L4D2_TV_PORTS`
 - `LOG_PREFIX_A2S_INFO`, `LOG_PREFIX_A2S_PLAYERS`, `LOG_PREFIX_A2S_RULES`
 - `LOG_PREFIX_STEAM_GROUP`, `LOG_PREFIX_L4D2_CONNECT`, `LOG_PREFIX_L4D2_RESERVE`
 
@@ -46,11 +47,14 @@ El módulo inspecciona el prefijo Source `0xFFFFFFFF` y luego clasifica por byte
 
 ## Lógica de mitigación
 - A2S (`54/55/56`): cada tipo entra a su propia cadena con rate/burst dedicado.
+- A2S se aplica sobre `L4D2_GAMESERVER_PORTS + L4D2_TV_PORTS`.
 - Steam Group (`00` y firmas configuradas): entra a `STEAM_GROUP_LIMITS`.
+- Steam Group se aplica sobre `L4D2_GAMESERVER_PORTS + L4D2_TV_PORTS`.
 - Login (`71`):
   - acepta a tasa controlada paquetes que contienen `connect`
   - acepta a tasa controlada paquetes que contienen `reserve`
   - `drop` para el resto de `71` en ventana corta (1..70 bytes)
+  - se aplica solo sobre `L4D2_GAMESERVER_PORTS` para evitar falsos positivos en SourceTV
 - El módulo mantiene logging con prefijos específicos para facilitar diagnóstico.
 
 ## Validaciones de configuración

@@ -5,9 +5,9 @@ ip_70_l4d2_a2s_filters_metadata() {
 ID=ip_l4d2_a2s_filters
 ALIASES=l4d2_a2s_filters
 DESCRIPTION=Applies A2S/Steam Group filters and login-flood controls for GameServer
-REQUIRED_VARS=TYPECHAIN L4D2_GAMESERVER_PORTS LOG_PREFIX_A2S_INFO LOG_PREFIX_A2S_PLAYERS LOG_PREFIX_A2S_RULES LOG_PREFIX_STEAM_GROUP LOG_PREFIX_L4D2_CONNECT LOG_PREFIX_L4D2_RESERVE
+REQUIRED_VARS=TYPECHAIN L4D2_GAMESERVER_PORTS L4D2_TV_PORTS LOG_PREFIX_A2S_INFO LOG_PREFIX_A2S_PLAYERS LOG_PREFIX_A2S_RULES LOG_PREFIX_STEAM_GROUP LOG_PREFIX_L4D2_CONNECT LOG_PREFIX_L4D2_RESERVE
 OPTIONAL_VARS=A2S_INFO_RATE A2S_INFO_BURST A2S_PLAYERS_RATE A2S_PLAYERS_BURST A2S_RULES_RATE A2S_RULES_BURST STEAM_GROUP_RATE STEAM_GROUP_BURST L4D2_LOGIN_RATE L4D2_LOGIN_BURST ENABLE_STEAM_GROUP_FILTER STEAM_GROUP_SIGNATURES
-DEFAULTS=TYPECHAIN=0 L4D2_GAMESERVER_PORTS=27015 A2S_INFO_RATE=16 A2S_INFO_BURST=80 A2S_PLAYERS_RATE=12 A2S_PLAYERS_BURST=60 A2S_RULES_RATE=8 A2S_RULES_BURST=40 STEAM_GROUP_RATE=6 STEAM_GROUP_BURST=30 L4D2_LOGIN_RATE=4 L4D2_LOGIN_BURST=16 ENABLE_STEAM_GROUP_FILTER=true STEAM_GROUP_SIGNATURES=00 LOG_PREFIX_A2S_INFO=A2S_INFO_FLOOD: LOG_PREFIX_A2S_PLAYERS=A2S_PLAYERS_FLOOD: LOG_PREFIX_A2S_RULES=A2S_RULES_FLOOD: LOG_PREFIX_STEAM_GROUP=STEAM_GROUP_FLOOD: LOG_PREFIX_L4D2_CONNECT=L4D2_CONNECT_FLOOD: LOG_PREFIX_L4D2_RESERVE=L4D2_RESERVE_FLOOD:
+DEFAULTS=TYPECHAIN=0 L4D2_GAMESERVER_PORTS=27015 L4D2_TV_PORTS=27020 A2S_INFO_RATE=16 A2S_INFO_BURST=80 A2S_PLAYERS_RATE=12 A2S_PLAYERS_BURST=60 A2S_RULES_RATE=8 A2S_RULES_BURST=40 STEAM_GROUP_RATE=6 STEAM_GROUP_BURST=30 L4D2_LOGIN_RATE=4 L4D2_LOGIN_BURST=16 ENABLE_STEAM_GROUP_FILTER=true STEAM_GROUP_SIGNATURES=00 LOG_PREFIX_A2S_INFO=A2S_INFO_FLOOD: LOG_PREFIX_A2S_PLAYERS=A2S_PLAYERS_FLOOD: LOG_PREFIX_A2S_RULES=A2S_RULES_FLOOD: LOG_PREFIX_STEAM_GROUP=STEAM_GROUP_FLOOD: LOG_PREFIX_L4D2_CONNECT=L4D2_CONNECT_FLOOD: LOG_PREFIX_L4D2_RESERVE=L4D2_RESERVE_FLOOD:
 EOF
 }
 
@@ -64,6 +64,16 @@ ip_70_l4d2_a2s_filters_validate() {
             return 2
         fi
     fi
+
+    if ! [[ "${L4D2_GAMESERVER_PORTS}" =~ ^[0-9]+(:[0-9]+)?(,[0-9]+(:[0-9]+)?)*$ ]]; then
+        echo "ERROR: ip_l4d2_a2s_filters: invalid L4D2_GAMESERVER_PORTS format"
+        return 2
+    fi
+
+    if ! [[ "${L4D2_TV_PORTS}" =~ ^[0-9]+(:[0-9]+)?(,[0-9]+(:[0-9]+)?)*$ ]]; then
+        echo "ERROR: ip_l4d2_a2s_filters: invalid L4D2_TV_PORTS format"
+        return 2
+    fi
 }
 
 ip_70_l4d2_a2s_filters_apply_chains() {
@@ -92,12 +102,17 @@ ip_70_l4d2_a2s_filters_apply_chains() {
 
 ip_70_l4d2_a2s_filters_apply_for_chain() {
     local chain="$1"
+    local target_ports
     local steam_signatures_csv steam_sig
     local -a steam_signatures
+    target_ports="${L4D2_GAMESERVER_PORTS},${L4D2_TV_PORTS}"
+    target_ports="${target_ports//,,/,}"
+    target_ports="${target_ports#,}"
+    target_ports="${target_ports%,}"
 
-    iptables -A "$chain" -p udp -m multiport --dports "$L4D2_GAMESERVER_PORTS" -m string --algo bm --hex-string '|FFFFFFFF54|' -j A2S_LIMITS
-    iptables -A "$chain" -p udp -m multiport --dports "$L4D2_GAMESERVER_PORTS" -m string --algo bm --hex-string '|FFFFFFFF55|' -j A2S_PLAYERS_LIMITS
-    iptables -A "$chain" -p udp -m multiport --dports "$L4D2_GAMESERVER_PORTS" -m string --algo bm --hex-string '|FFFFFFFF56|' -j A2S_RULES_LIMITS
+    iptables -A "$chain" -p udp -m multiport --dports "$target_ports" -m string --algo bm --hex-string '|FFFFFFFF54|' -j A2S_LIMITS
+    iptables -A "$chain" -p udp -m multiport --dports "$target_ports" -m string --algo bm --hex-string '|FFFFFFFF55|' -j A2S_PLAYERS_LIMITS
+    iptables -A "$chain" -p udp -m multiport --dports "$target_ports" -m string --algo bm --hex-string '|FFFFFFFF56|' -j A2S_RULES_LIMITS
 
     if [ "${ENABLE_STEAM_GROUP_FILTER}" = "true" ]; then
         steam_signatures_csv="${STEAM_GROUP_SIGNATURES//[[:space:]]/}"
@@ -105,11 +120,11 @@ ip_70_l4d2_a2s_filters_apply_for_chain() {
         for steam_sig in "${steam_signatures[@]}"; do
             [ -z "$steam_sig" ] && continue
             steam_sig="${steam_sig^^}"
-            iptables -A "$chain" -p udp -m multiport --dports "$L4D2_GAMESERVER_PORTS" -m string --algo bm --hex-string "|FFFFFFFF${steam_sig}|" -j STEAM_GROUP_LIMITS
+            iptables -A "$chain" -p udp -m multiport --dports "$target_ports" -m string --algo bm --hex-string "|FFFFFFFF${steam_sig}|" -j STEAM_GROUP_LIMITS
         done
     fi
 
-    iptables -A "$chain" -p udp -m multiport --dports "$L4D2_GAMESERVER_PORTS" -m length --length 1:70 -m string --algo bm --hex-string '|FFFFFFFF0000|' -j DROP
+    iptables -A "$chain" -p udp -m multiport --dports "$target_ports" -m length --length 1:70 -m string --algo bm --hex-string '|FFFFFFFF0000|' -j DROP
     iptables -A "$chain" -p udp -m multiport --dports "$L4D2_GAMESERVER_PORTS" -m length --length 1:70 -m string --algo bm --hex-string '|FFFFFFFF71|' -j l4d2loginfilter
 }
 
