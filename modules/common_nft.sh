@@ -42,13 +42,11 @@ nf_build_log_prefix() {
     local action="${5:-drop}"
     local severity="${6:-medium}"
 
-    local safe_env safe_host
-    safe_env="${FIREWALL_ENV:-prod}"
-    safe_env="${safe_env// /_}"
+    local safe_host
     safe_host="${FIREWALL_HOST_ALIAS:-}"
     safe_host="${safe_host// /_}"
 
-    local prefix="FW_EVT attack=${attack} backend=nft module=${module} chain=${chain} action=${action} severity=${severity} env=${safe_env}"
+    local prefix="FW_EVT attack=${attack} backend=nft module=${module} chain=${chain} action=${action} severity=${severity}"
     if [ -n "$safe_host" ]; then
         prefix="${prefix} host=${safe_host}"
     fi

@@ -29,11 +29,11 @@ Mejorar trazabilidad, correlación y observabilidad de ataques sin romper compat
 ## Fase A: Estandarizar el formato de prefijos (sin romper)
 Definir un formato de prefijo extendido para nuevas reglas de log:
 
-`FW_EVT attack=<tipo> backend=nft module=<modulo> chain=<chain> action=drop severity=<nivel> env=<env>:`
+`FW_EVT attack=<tipo> backend=nft module=<modulo> chain=<chain> action=drop severity=<nivel>:`
 
 Ejemplo:
 
-`FW_EVT attack=A2S_INFO_FLOOD backend=nft module=nf_70_l4d2_a2s_filters chain=input action=drop severity=medium env=prod:`
+`FW_EVT attack=A2S_INFO_FLOOD backend=nft module=nf_70_l4d2_a2s_filters chain=input action=drop severity=medium:`
 
 Notas:
 - Mantener también los prefijos legados (`A2S_INFO_FLOOD:`, etc.) durante transición.
@@ -77,14 +77,13 @@ Objetivo:
 
 Estrategia:
 1. Usar formato estructurado único `FW_EVT ...`.
-2. Mantener `FIREWALL_ENV` y `FIREWALL_HOST_ALIAS` como metadata opcional.
+2. Mantener `FIREWALL_HOST_ALIAS` como metadata opcional.
 
 Impacto:
 - Cero impacto funcional en reglas `drop/accept`; solo cambia texto de `log`.
 
 ### 5.2 Configuración `.env` / `example.env`
 Agregar variables nuevas:
-- `FIREWALL_ENV=prod`
 - `FIREWALL_HOST_ALIAS=` (opcional)
 
 Mantener:

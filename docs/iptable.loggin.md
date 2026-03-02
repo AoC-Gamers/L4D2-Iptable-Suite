@@ -145,7 +145,6 @@ LOGFILE=/var/log/firewall-suite.log
 RSYSLOG_CONF=/etc/rsyslog.d/firewall-suite.conf
 
 # Prefijos de firewall estructurados (FW_EVT)
-FIREWALL_ENV=prod
 FIREWALL_HOST_ALIAS=""
 
 # Prefijos de Log para Diferentes Tipos de Ataque
