@@ -34,6 +34,28 @@ nf_add_rule() {
     nft add rule inet l4d2_filter "$chain" "$@"
 }
 
+nf_build_log_prefix() {
+    local _legacy_prefix="$1"
+    local attack="$2"
+    local module="$3"
+    local chain="$4"
+    local action="${5:-drop}"
+    local severity="${6:-medium}"
+
+    local safe_env safe_host
+    safe_env="${FIREWALL_ENV:-prod}"
+    safe_env="${safe_env// /_}"
+    safe_host="${FIREWALL_HOST_ALIAS:-}"
+    safe_host="${safe_host// /_}"
+
+    local prefix="FW_EVT attack=${attack} backend=nft module=${module} chain=${chain} action=${action} severity=${severity} env=${safe_env}"
+    if [ -n "$safe_host" ]; then
+        prefix="${prefix} host=${safe_host}"
+    fi
+
+    printf "%s: " "$prefix"
+}
+
 nf_ports_normalize() {
     local raw="$1"
     local value="$raw"

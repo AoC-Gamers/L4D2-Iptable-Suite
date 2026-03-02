@@ -9,8 +9,8 @@ ID=nf_l4d2_tcp_protect
 ALIASES=l4d2_tcp_protect
 DESCRIPTION=Applies L4D2 TCP protection (RCON/game ports) in the nftables backend
 REQUIRED_VARS=TYPECHAIN
-OPTIONAL_VARS=L4D2_GAMESERVER_PORTS L4D2_TCP_PROTECTION LOG_PREFIX_TCP_RCON_BLOCK
-DEFAULTS=TYPECHAIN=0 L4D2_GAMESERVER_PORTS=27015 L4D2_TCP_PROTECTION= LOG_PREFIX_TCP_RCON_BLOCK=TCP_RCON_BLOCK:
+OPTIONAL_VARS=L4D2_GAMESERVER_PORTS L4D2_TCP_PROTECTION LOG_PREFIX_TCP_RCON_BLOCK FIREWALL_ENV FIREWALL_HOST_ALIAS
+DEFAULTS=TYPECHAIN=0 L4D2_GAMESERVER_PORTS=27015 L4D2_TCP_PROTECTION= LOG_PREFIX_TCP_RCON_BLOCK=TCP_RCON_BLOCK: FIREWALL_ENV=prod FIREWALL_HOST_ALIAS=
 EOF
 }
 
@@ -33,12 +33,13 @@ nf_42_l4d2_tcp_protect_validate() {
 }
 
 nf_42_l4d2_tcp_protect_apply() {
-    local chain protected_ports_expr
+    local chain protected_ports_expr log_tcp_rcon
 
     protected_ports_expr="$(nf_ports_set_expr "${L4D2_TCP_PROTECTION:-$L4D2_GAMESERVER_PORTS}")"
 
     for chain in $(nf_get_target_chains); do
-        nf_add_rule "$chain" tcp dport "$protected_ports_expr" limit rate over 60/minute burst 20 packets log prefix "\"$LOG_PREFIX_TCP_RCON_BLOCK \""
+        log_tcp_rcon="$(nf_build_log_prefix "$LOG_PREFIX_TCP_RCON_BLOCK" "TCP_RCON_BLOCK" "nf_42_l4d2_tcp_protect" "$chain" "drop" "high")"
+        nf_add_rule "$chain" tcp dport "$protected_ports_expr" limit rate over 60/minute burst 20 packets log prefix "\"$log_tcp_rcon\""
         nf_add_rule "$chain" tcp dport "$protected_ports_expr" drop
     done
 }
