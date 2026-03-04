@@ -5,3 +5,8 @@
 # Python cache / bytecode
 __pycache__/
 *.py[cod]
+
+# Docker log-summary local env and generated outputs
+/log-summary/.env
+/log-summary/output/*.json
+/log-summary/output/*.txt
