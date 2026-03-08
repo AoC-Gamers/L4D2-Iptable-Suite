@@ -18,3 +18,4 @@ Breve índice de la documentación de cada módulo. Cada entrada enlaza al fiche
 - [14_ip_l4d2_tcpfilter_chain.md](14_ip_l4d2_tcpfilter_chain.md) — Módulo específico `ip` (`ip_l4d2_tcpfilter_chain`).
 - [15_l4d2_tcp_protect.md](15_l4d2_tcp_protect.md) — Protección TCP L4D2 (ip/nf).
 - [16_docker_dns_egress.md](16_docker_dns_egress.md) — Egreso DNS para subredes Docker (ip/nf).
+- [17_docker_monitor_egress.md](17_docker_monitor_egress.md) — Egreso de monitoreo Docker hacia targets LAN (ip/nf).

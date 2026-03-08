@@ -170,7 +170,7 @@ module_default_include() {
         ip_loopback|ip_whitelist|ip_allowlist_ports|ip_docker_dns_egress|ip_openvpn_server|ip_tcp_ssh|ip_http_https_protect)
             echo "true"
             ;;
-        ip_openvpn_sitetosite|ip_l4d2_tcpfilter_chain|ip_l4d2_tcp_protect|ip_l4d2_udp_base|ip_l4d2_packet_validation|ip_l4d2_a2s_filters)
+        ip_docker_monitor_egress|ip_openvpn_sitetosite|ip_l4d2_tcpfilter_chain|ip_l4d2_tcp_protect|ip_l4d2_udp_base|ip_l4d2_packet_validation|ip_l4d2_a2s_filters)
             echo "false"
             ;;
         *)
@@ -198,6 +198,7 @@ module_token_to_module_ids() {
         whitelist) echo "ip_whitelist nf_whitelist" ;;
         allowlist_ports) echo "ip_allowlist_ports nf_allowlist_ports" ;;
         docker_dns_egress) echo "ip_docker_dns_egress nf_docker_dns_egress" ;;
+        docker_monitor_egress) echo "ip_docker_monitor_egress nf_docker_monitor_egress" ;;
         openvpn_server) echo "ip_openvpn_server nf_openvpn_server" ;;
         openvpn_sitetosite) echo "ip_openvpn_sitetosite nf_openvpn_sitetosite" ;;
         tcp_ssh) echo "ip_tcp_ssh nf_tcp_ssh" ;;
@@ -357,6 +358,7 @@ declare -a selectable_modules=(
     "ip_openvpn_server|OpenVPN modo servidor (clientes remotos)"
     "ip_openvpn_sitetosite|OpenVPN modo site-to-site"
     "ip_docker_dns_egress|Egreso DNS para subredes Docker (ACME/resolución)"
+    "ip_docker_monitor_egress|Egreso monitoreo Docker a targets LAN (Prometheus/node-exporter)"
     "ip_tcp_ssh|Acceso SSH base"
     "ip_l4d2_tcp_protect|Protección TCP L4D2"
     "ip_http_https_protect|Protección HTTP/HTTPS"
@@ -427,6 +429,9 @@ whitelist_domains=""
 udp_allow=""
 tcp_allow=""
 docker_dns_egress_subnets="172.16.0.0/12"
+docker_monitor_egress_subnets="172.16.0.0/12"
+docker_monitor_egress_targets=""
+docker_monitor_egress_tcp_ports="9100"
 http_https_ports="80,443"
 http_https_rate="180/min"
 http_https_burst="360"
@@ -512,19 +517,49 @@ if [ "${module_enabled[ip_whitelist]:-false}" = "true" ]; then
         "")"
 fi
 
-if needs_var "UDP_ALLOW_PORTS" || needs_var "TCP_ALLOW_PORTS"; then
+if needs_var "DOCKER_DNS_EGRESS_SUBNETS"; then
+    say_section "DNS Docker egress"
+    docker_dns_egress_subnets="$(ask_with_context \
+        "DOCKER_DNS_EGRESS_SUBNETS" \
+        "CIDRs Docker permitidos para DNS saliente (UDP/TCP 53), separados por coma." \
+        "docs/modules/16_docker_dns_egress.md" \
+        "DOCKER_DNS_EGRESS_SUBNETS (ej: 172.16.0.0/12 o 172.18.0.0/16,172.19.0.0/16)" \
+        "172.16.0.0/12" \
+        "is_ipv4_cidr_csv" \
+        "Formato inválido. Usa CIDR IPv4 separados por coma.")"
+fi
 
-    if [ "${module_enabled[ip_docker_dns_egress]:-false}" = "true" ]; then
-        say_section "DNS Docker egress"
-        docker_dns_egress_subnets="$(ask_with_context \
-            "DOCKER_DNS_EGRESS_SUBNETS" \
-            "CIDRs Docker permitidos para DNS saliente (UDP/TCP 53), separados por coma." \
-            "docs/modules/16_docker_dns_egress.md" \
-            "DOCKER_DNS_EGRESS_SUBNETS (ej: 172.16.0.0/12 o 172.18.0.0/16,172.19.0.0/16)" \
-            "172.16.0.0/12" \
-            "is_ipv4_cidr_csv" \
-            "Formato inválido. Usa CIDR IPv4 separados por coma.")"
-    fi
+if needs_var "DOCKER_MONITOR_EGRESS_SUBNETS" || needs_var "DOCKER_MONITOR_EGRESS_TARGETS" || needs_var "DOCKER_MONITOR_EGRESS_TCP_PORTS"; then
+    say_section "Monitoreo Docker egress"
+    docker_monitor_egress_subnets="$(ask_with_context \
+        "DOCKER_MONITOR_EGRESS_SUBNETS" \
+        "CIDRs Docker origen permitidos para monitoreo saliente." \
+        "docs/modules/17_docker_monitor_egress.md" \
+        "DOCKER_MONITOR_EGRESS_SUBNETS (ej: 172.21.0.0/16)" \
+        "172.16.0.0/12" \
+        "is_ipv4_cidr_csv" \
+        "Formato inválido. Usa CIDR IPv4 separados por coma.")"
+
+    docker_monitor_egress_targets="$(ask_with_context \
+        "DOCKER_MONITOR_EGRESS_TARGETS" \
+        "IPv4 destino para monitoreo (ej. hosts con node-exporter), separados por coma." \
+        "docs/modules/17_docker_monitor_egress.md" \
+        "DOCKER_MONITOR_EGRESS_TARGETS (ej: 192.168.1.202,192.168.1.203)" \
+        "" \
+        "true" \
+        "")"
+
+    docker_monitor_egress_tcp_ports="$(ask_with_context \
+        "DOCKER_MONITOR_EGRESS_TCP_PORTS" \
+        "Puertos TCP de monitoreo permitidos (ej. 9100)." \
+        "docs/modules/17_docker_monitor_egress.md" \
+        "DOCKER_MONITOR_EGRESS_TCP_PORTS (ej: 9100 o 9100,9113)" \
+        "9100" \
+        "is_required_ports_expr" \
+        "Formato inválido para DOCKER_MONITOR_EGRESS_TCP_PORTS.")"
+fi
+
+if needs_var "UDP_ALLOW_PORTS" || needs_var "TCP_ALLOW_PORTS"; then
     say_section "Allowlist de puertos"
     udp_allow="$(ask_with_context \
         "UDP_ALLOW_PORTS" \
@@ -867,6 +902,14 @@ DOCKER_DNS_EGRESS_SUBNETS="${docker_dns_egress_subnets}"
 EOF
 fi
 
+if [ "${module_enabled[ip_docker_monitor_egress]:-false}" = "true" ]; then
+cat >> "$output_file" <<EOF
+DOCKER_MONITOR_EGRESS_SUBNETS="${docker_monitor_egress_subnets}"
+DOCKER_MONITOR_EGRESS_TARGETS="${docker_monitor_egress_targets}"
+DOCKER_MONITOR_EGRESS_TCP_PORTS="${docker_monitor_egress_tcp_ports}"
+EOF
+fi
+
 if [ "$has_ssh_module" = "true" ]; then
 cat >> "$output_file" <<EOF
 SSH_PORT="${ssh_ports}"
@@ -1050,6 +1093,12 @@ echo "  DOCKER_CHAIN_AUTORECOVER=$docker_chain_autorecover" >&2
 
 if [ "${module_enabled[ip_docker_dns_egress]:-false}" = "true" ]; then
 echo "  DOCKER_DNS_EGRESS_SUBNETS=$docker_dns_egress_subnets" >&2
+fi
+
+if [ "${module_enabled[ip_docker_monitor_egress]:-false}" = "true" ]; then
+echo "  DOCKER_MONITOR_EGRESS_SUBNETS=$docker_monitor_egress_subnets" >&2
+echo "  DOCKER_MONITOR_EGRESS_TARGETS=$docker_monitor_egress_targets" >&2
+echo "  DOCKER_MONITOR_EGRESS_TCP_PORTS=$docker_monitor_egress_tcp_ports" >&2
 fi
 
 if [ "$has_ssh_module" = "true" ]; then
