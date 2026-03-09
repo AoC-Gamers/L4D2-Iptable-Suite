@@ -76,7 +76,7 @@ nf_70_l4d2_a2s_filters_apply() {
     local chain game_ports_expr all_query_ports_expr
     local steam_signatures_csv steam_sig
     local -a steam_signatures
-    local log_a2s_info log_a2s_players log_a2s_rules log_steam_group log_connect log_reserve
+    local log_a2s_info log_a2s_players log_a2s_rules log_steam_group log_connect log_reserve log_login_short
 
     game_ports_expr="$(nf_ports_set_expr "$L4D2_GAMESERVER_PORTS")"
     all_query_ports_expr="{ $(nf_ports_normalize "$L4D2_GAMESERVER_PORTS"), $(nf_ports_normalize "$L4D2_TV_PORTS") }"
@@ -87,6 +87,7 @@ nf_70_l4d2_a2s_filters_apply() {
     nft add chain inet l4d2_filter steam_group_limit
     nft add chain inet l4d2_filter login_connect_limit
     nft add chain inet l4d2_filter login_reserve_limit
+    nft add chain inet l4d2_filter login_short_limit
 
     log_a2s_info="$(nf_build_log_prefix "$LOG_PREFIX_A2S_INFO" "A2S_INFO_FLOOD" "nf_70_l4d2_a2s_filters" "a2s_info_limit" "drop" "medium")"
     log_a2s_players="$(nf_build_log_prefix "$LOG_PREFIX_A2S_PLAYERS" "A2S_PLAYERS_FLOOD" "nf_70_l4d2_a2s_filters" "a2s_players_limit" "drop" "medium")"
@@ -94,6 +95,7 @@ nf_70_l4d2_a2s_filters_apply() {
     log_steam_group="$(nf_build_log_prefix "$LOG_PREFIX_STEAM_GROUP" "STEAM_GROUP_FLOOD" "nf_70_l4d2_a2s_filters" "steam_group_limit" "drop" "medium")"
     log_connect="$(nf_build_log_prefix "$LOG_PREFIX_L4D2_CONNECT" "L4D2_CONNECT_FLOOD" "nf_70_l4d2_a2s_filters" "login_connect_limit" "drop" "high")"
     log_reserve="$(nf_build_log_prefix "$LOG_PREFIX_L4D2_RESERVE" "L4D2_RESERVE_FLOOD" "nf_70_l4d2_a2s_filters" "login_reserve_limit" "drop" "high")"
+    log_login_short="$(nf_build_log_prefix "$LOG_PREFIX_L4D2_CONNECT" "L4D2_LOGIN_FLOOD" "nf_70_l4d2_a2s_filters" "login_short_limit" "drop" "high")"
 
     nf_add_rule a2s_info_limit meter a2s_info_under "{ ip saddr . udp dport limit rate ${A2S_INFO_RATE}/second burst ${A2S_INFO_BURST} packets }" accept
     nf_add_rule a2s_info_limit meter a2s_info_over "{ ip saddr . udp dport limit rate over ${A2S_INFO_RATE}/second burst ${A2S_INFO_BURST} packets }" log prefix "\"$log_a2s_info\""
@@ -119,6 +121,10 @@ nf_70_l4d2_a2s_filters_apply() {
     nf_add_rule login_reserve_limit meter login_reserve_over "{ ip saddr . ip daddr . udp dport limit rate over ${L4D2_LOGIN_RATE}/second burst ${L4D2_LOGIN_BURST} packets }" log prefix "\"$log_reserve\""
     nf_add_rule login_reserve_limit meter login_reserve_over_drop "{ ip saddr . ip daddr . udp dport limit rate over ${L4D2_LOGIN_RATE}/second burst ${L4D2_LOGIN_BURST} packets }" drop
 
+    nf_add_rule login_short_limit meter login_short_under "{ ip saddr . ip daddr . udp dport limit rate ${L4D2_LOGIN_RATE}/second burst ${L4D2_LOGIN_BURST} packets }" accept
+    nf_add_rule login_short_limit meter login_short_over "{ ip saddr . ip daddr . udp dport limit rate over ${L4D2_LOGIN_RATE}/second burst ${L4D2_LOGIN_BURST} packets }" log prefix "\"$log_login_short\""
+    nf_add_rule login_short_limit meter login_short_over_drop "{ ip saddr . ip daddr . udp dport limit rate over ${L4D2_LOGIN_RATE}/second burst ${L4D2_LOGIN_BURST} packets }" drop
+
     for chain in $(nf_get_target_chains); do
         nf_add_rule "$chain" udp dport "$all_query_ports_expr" @th,64,40 0xFFFFFFFF54 jump a2s_info_limit
         nf_add_rule "$chain" udp dport "$all_query_ports_expr" @th,64,40 0xFFFFFFFF55 jump a2s_players_limit
@@ -134,8 +140,8 @@ nf_70_l4d2_a2s_filters_apply() {
         fi
 
         nf_add_rule "$chain" udp dport "$all_query_ports_expr" meta length 1-70 @th,64,48 0xFFFFFFFF0000 drop
-        nf_add_rule "$chain" udp dport "$game_ports_expr" meta length 1-70 @th,64,40 0xFFFFFFFF71 @th,104,56 0x636f6e6e656374 jump login_connect_limit
-        nf_add_rule "$chain" udp dport "$game_ports_expr" meta length 1-70 @th,64,40 0xFFFFFFFF71 @th,104,56 0x72657365727665 jump login_reserve_limit
-        nf_add_rule "$chain" udp dport "$game_ports_expr" meta length 1-70 @th,64,40 0xFFFFFFFF71 drop
+        nf_add_rule "$chain" udp dport "$game_ports_expr" meta length 1-140 @th,64,40 0xFFFFFFFF71 @th,104,56 0x636f6e6e656374 jump login_connect_limit
+        nf_add_rule "$chain" udp dport "$game_ports_expr" meta length 1-140 @th,64,40 0xFFFFFFFF71 @th,104,56 0x72657365727665 jump login_reserve_limit
+        nf_add_rule "$chain" udp dport "$game_ports_expr" meta length 1-140 @th,64,40 0xFFFFFFFF71 jump login_short_limit
     done
 }
