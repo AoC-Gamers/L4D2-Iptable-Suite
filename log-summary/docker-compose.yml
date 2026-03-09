@@ -1,0 +1,31 @@
+services:
+  log-summary:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: firewall-log-summary
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      - SUMMARY_LOG_PATH=${SUMMARY_LOG_PATH}
+      - SUMMARY_OUTPUT_DIR=${SUMMARY_OUTPUT_DIR}
+      - SUMMARY_TOP_N=${SUMMARY_TOP_N}
+      - SUMMARY_WINDOW_MINUTES=${SUMMARY_WINDOW_MINUTES}
+      - SUMMARY_POLL_SECONDS=${SUMMARY_POLL_SECONDS}
+      - SUMMARY_RUN_MODE=${SUMMARY_RUN_MODE}
+      - SUMMARY_STATUS_PATH=${SUMMARY_STATUS_PATH}
+      - SUMMARY_HEALTHCHECK_MAX_EMPTY_CYCLES=${SUMMARY_HEALTHCHECK_MAX_EMPTY_CYCLES}
+    volumes:
+      - ${SUMMARY_LOG_MOUNT_DIR}:${SUMMARY_LOG_MOUNT_DIR}:ro
+      - ./output:${SUMMARY_OUTPUT_DIR}
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "python -c \"import json,os,sys; p=os.getenv('SUMMARY_STATUS_PATH','/output/summary.status.json'); m=int(os.getenv('SUMMARY_HEALTHCHECK_MAX_EMPTY_CYCLES','10')); d=json.load(open(p)); sys.exit(0 if int(d.get('consecutive_empty_cycles',0)) <= m else 1)\"",
+        ]
+      interval: 60s
+      timeout: 5s
+      retries: 2
+      start_period: 120s

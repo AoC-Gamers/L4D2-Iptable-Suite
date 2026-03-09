@@ -63,6 +63,11 @@ is_cmd_limit() {
     [ "$1" -ge 10 ] && [ "$1" -le 10000 ]
 }
 
+is_positive_int() {
+    [[ "$1" =~ ^[0-9]+$ ]] || return 1
+    [ "$1" -gt 0 ]
+}
+
 is_port_number() {
     [[ "$1" =~ ^[0-9]+$ ]] || return 1
     [ "$1" -ge 1 ] && [ "$1" -le 65535 ]
@@ -91,6 +96,10 @@ is_interface_name() {
 
 is_rate_expr() {
     [[ "$1" =~ ^[0-9]+/(sec|min|hour|day)$ ]]
+}
+
+is_hex_byte_csv() {
+    [[ "$1" =~ ^[0-9A-Fa-f]{2}(,[0-9A-Fa-f]{2})*$ ]]
 }
 
 ask() {
@@ -161,7 +170,7 @@ module_default_include() {
         ip_loopback|ip_whitelist|ip_allowlist_ports|ip_docker_dns_egress|ip_openvpn_server|ip_tcp_ssh|ip_http_https_protect)
             echo "true"
             ;;
-        ip_openvpn_sitetosite|ip_l4d2_tcpfilter_chain|ip_l4d2_tcp_protect|ip_l4d2_udp_base|ip_l4d2_packet_validation|ip_l4d2_a2s_filters)
+        ip_docker_monitor_egress|ip_openvpn_sitetosite|ip_l4d2_tcpfilter_chain|ip_l4d2_tcp_protect|ip_l4d2_udp_base|ip_l4d2_packet_validation|ip_l4d2_a2s_filters)
             echo "false"
             ;;
         *)
@@ -189,6 +198,7 @@ module_token_to_module_ids() {
         whitelist) echo "ip_whitelist nf_whitelist" ;;
         allowlist_ports) echo "ip_allowlist_ports nf_allowlist_ports" ;;
         docker_dns_egress) echo "ip_docker_dns_egress nf_docker_dns_egress" ;;
+        docker_monitor_egress) echo "ip_docker_monitor_egress nf_docker_monitor_egress" ;;
         openvpn_server) echo "ip_openvpn_server nf_openvpn_server" ;;
         openvpn_sitetosite) echo "ip_openvpn_sitetosite nf_openvpn_sitetosite" ;;
         tcp_ssh) echo "ip_tcp_ssh nf_tcp_ssh" ;;
@@ -348,6 +358,7 @@ declare -a selectable_modules=(
     "ip_openvpn_server|OpenVPN modo servidor (clientes remotos)"
     "ip_openvpn_sitetosite|OpenVPN modo site-to-site"
     "ip_docker_dns_egress|Egreso DNS para subredes Docker (ACME/resolución)"
+    "ip_docker_monitor_egress|Egreso monitoreo Docker a targets LAN (Prometheus/node-exporter)"
     "ip_tcp_ssh|Acceso SSH base"
     "ip_l4d2_tcp_protect|Protección TCP L4D2"
     "ip_http_https_protect|Protección HTTP/HTTPS"
@@ -397,6 +408,18 @@ done
 l4d2_game_ports="27015"
 l4d2_tv_ports="27020"
 l4d2_cmd_limit="100"
+a2s_info_rate="16"
+a2s_info_burst="80"
+a2s_players_rate="12"
+a2s_players_burst="60"
+a2s_rules_rate="8"
+a2s_rules_burst="40"
+steam_group_rate="6"
+steam_group_burst="30"
+l4d2_login_rate="4"
+l4d2_login_burst="16"
+enable_steam_group_filter="true"
+steam_group_signatures="00"
 ssh_ports="22"
 ssh_docker=""
 ssh_rate="60/min"
@@ -406,6 +429,9 @@ whitelist_domains=""
 udp_allow=""
 tcp_allow=""
 docker_dns_egress_subnets="172.16.0.0/12"
+docker_monitor_egress_subnets="172.16.0.0/12"
+docker_monitor_egress_targets=""
+docker_monitor_egress_tcp_ports="9100"
 http_https_ports="80,443"
 http_https_rate="180/min"
 http_https_burst="360"
@@ -491,19 +517,49 @@ if [ "${module_enabled[ip_whitelist]:-false}" = "true" ]; then
         "")"
 fi
 
-if needs_var "UDP_ALLOW_PORTS" || needs_var "TCP_ALLOW_PORTS"; then
+if needs_var "DOCKER_DNS_EGRESS_SUBNETS"; then
+    say_section "DNS Docker egress"
+    docker_dns_egress_subnets="$(ask_with_context \
+        "DOCKER_DNS_EGRESS_SUBNETS" \
+        "CIDRs Docker permitidos para DNS saliente (UDP/TCP 53), separados por coma." \
+        "docs/modules/16_docker_dns_egress.md" \
+        "DOCKER_DNS_EGRESS_SUBNETS (ej: 172.16.0.0/12 o 172.18.0.0/16,172.19.0.0/16)" \
+        "172.16.0.0/12" \
+        "is_ipv4_cidr_csv" \
+        "Formato inválido. Usa CIDR IPv4 separados por coma.")"
+fi
 
-    if [ "${module_enabled[ip_docker_dns_egress]:-false}" = "true" ]; then
-        say_section "DNS Docker egress"
-        docker_dns_egress_subnets="$(ask_with_context \
-            "DOCKER_DNS_EGRESS_SUBNETS" \
-            "CIDRs Docker permitidos para DNS saliente (UDP/TCP 53), separados por coma." \
-            "docs/modules/16_docker_dns_egress.md" \
-            "DOCKER_DNS_EGRESS_SUBNETS (ej: 172.16.0.0/12 o 172.18.0.0/16,172.19.0.0/16)" \
-            "172.16.0.0/12" \
-            "is_ipv4_cidr_csv" \
-            "Formato inválido. Usa CIDR IPv4 separados por coma.")"
-    fi
+if needs_var "DOCKER_MONITOR_EGRESS_SUBNETS" || needs_var "DOCKER_MONITOR_EGRESS_TARGETS" || needs_var "DOCKER_MONITOR_EGRESS_TCP_PORTS"; then
+    say_section "Monitoreo Docker egress"
+    docker_monitor_egress_subnets="$(ask_with_context \
+        "DOCKER_MONITOR_EGRESS_SUBNETS" \
+        "CIDRs Docker origen permitidos para monitoreo saliente." \
+        "docs/modules/17_docker_monitor_egress.md" \
+        "DOCKER_MONITOR_EGRESS_SUBNETS (ej: 172.21.0.0/16)" \
+        "172.16.0.0/12" \
+        "is_ipv4_cidr_csv" \
+        "Formato inválido. Usa CIDR IPv4 separados por coma.")"
+
+    docker_monitor_egress_targets="$(ask_with_context \
+        "DOCKER_MONITOR_EGRESS_TARGETS" \
+        "IPv4 destino para monitoreo (ej. hosts con node-exporter), separados por coma." \
+        "docs/modules/17_docker_monitor_egress.md" \
+        "DOCKER_MONITOR_EGRESS_TARGETS (ej: 192.168.1.202,192.168.1.203)" \
+        "" \
+        "true" \
+        "")"
+
+    docker_monitor_egress_tcp_ports="$(ask_with_context \
+        "DOCKER_MONITOR_EGRESS_TCP_PORTS" \
+        "Puertos TCP de monitoreo permitidos (ej. 9100)." \
+        "docs/modules/17_docker_monitor_egress.md" \
+        "DOCKER_MONITOR_EGRESS_TCP_PORTS (ej: 9100 o 9100,9113)" \
+        "9100" \
+        "is_required_ports_expr" \
+        "Formato inválido para DOCKER_MONITOR_EGRESS_TCP_PORTS.")"
+fi
+
+if needs_var "UDP_ALLOW_PORTS" || needs_var "TCP_ALLOW_PORTS"; then
     say_section "Allowlist de puertos"
     udp_allow="$(ask_with_context \
         "UDP_ALLOW_PORTS" \
@@ -646,6 +702,121 @@ else
     say_info "Módulos de juego no incluidos: se mantienen defaults mínimos (sin activar protección de juego)."
 fi
 
+if [ "${module_enabled[ip_l4d2_a2s_filters]:-false}" = "true" ] || needs_var "A2S_INFO_RATE" || needs_var "A2S_INFO_BURST" || needs_var "A2S_PLAYERS_RATE" || needs_var "A2S_PLAYERS_BURST" || needs_var "A2S_RULES_RATE" || needs_var "A2S_RULES_BURST" || needs_var "STEAM_GROUP_RATE" || needs_var "STEAM_GROUP_BURST" || needs_var "L4D2_LOGIN_RATE" || needs_var "L4D2_LOGIN_BURST" || needs_var "ENABLE_STEAM_GROUP_FILTER" || needs_var "STEAM_GROUP_SIGNATURES"; then
+    say_section "Filtros A2S / Steam / Login"
+    a2s_info_rate="$(ask_with_context \
+        "A2S_INFO_RATE" \
+        "Rate por segundo para queries A2S_INFO (firma 54)." \
+        "docs/modules/11_l4d2_a2s_filters.md" \
+        "A2S_INFO_RATE" \
+        "$a2s_info_rate" \
+        "is_positive_int" \
+        "A2S_INFO_RATE debe ser entero > 0.")"
+
+    a2s_info_burst="$(ask_with_context \
+        "A2S_INFO_BURST" \
+        "Burst permitido para A2S_INFO." \
+        "docs/modules/11_l4d2_a2s_filters.md" \
+        "A2S_INFO_BURST" \
+        "$a2s_info_burst" \
+        "is_positive_int" \
+        "A2S_INFO_BURST debe ser entero > 0.")"
+
+    a2s_players_rate="$(ask_with_context \
+        "A2S_PLAYERS_RATE" \
+        "Rate por segundo para queries A2S_PLAYERS (firma 55)." \
+        "docs/modules/11_l4d2_a2s_filters.md" \
+        "A2S_PLAYERS_RATE" \
+        "$a2s_players_rate" \
+        "is_positive_int" \
+        "A2S_PLAYERS_RATE debe ser entero > 0.")"
+
+    a2s_players_burst="$(ask_with_context \
+        "A2S_PLAYERS_BURST" \
+        "Burst permitido para A2S_PLAYERS." \
+        "docs/modules/11_l4d2_a2s_filters.md" \
+        "A2S_PLAYERS_BURST" \
+        "$a2s_players_burst" \
+        "is_positive_int" \
+        "A2S_PLAYERS_BURST debe ser entero > 0.")"
+
+    a2s_rules_rate="$(ask_with_context \
+        "A2S_RULES_RATE" \
+        "Rate por segundo para queries A2S_RULES (firma 56)." \
+        "docs/modules/11_l4d2_a2s_filters.md" \
+        "A2S_RULES_RATE" \
+        "$a2s_rules_rate" \
+        "is_positive_int" \
+        "A2S_RULES_RATE debe ser entero > 0.")"
+
+    a2s_rules_burst="$(ask_with_context \
+        "A2S_RULES_BURST" \
+        "Burst permitido para A2S_RULES." \
+        "docs/modules/11_l4d2_a2s_filters.md" \
+        "A2S_RULES_BURST" \
+        "$a2s_rules_burst" \
+        "is_positive_int" \
+        "A2S_RULES_BURST debe ser entero > 0.")"
+
+    steam_group_rate="$(ask_with_context \
+        "STEAM_GROUP_RATE" \
+        "Rate por segundo para firmas Steam Group/legacy (ej: 00,69)." \
+        "docs/modules/11_l4d2_a2s_filters.md" \
+        "STEAM_GROUP_RATE" \
+        "$steam_group_rate" \
+        "is_positive_int" \
+        "STEAM_GROUP_RATE debe ser entero > 0.")"
+
+    steam_group_burst="$(ask_with_context \
+        "STEAM_GROUP_BURST" \
+        "Burst permitido para Steam Group/legacy." \
+        "docs/modules/11_l4d2_a2s_filters.md" \
+        "STEAM_GROUP_BURST" \
+        "$steam_group_burst" \
+        "is_positive_int" \
+        "STEAM_GROUP_BURST debe ser entero > 0.")"
+
+    l4d2_login_rate="$(ask_with_context \
+        "L4D2_LOGIN_RATE" \
+        "Rate por segundo para short-query login (firma 71)." \
+        "docs/modules/11_l4d2_a2s_filters.md" \
+        "L4D2_LOGIN_RATE" \
+        "$l4d2_login_rate" \
+        "is_positive_int" \
+        "L4D2_LOGIN_RATE debe ser entero > 0.")"
+
+    l4d2_login_burst="$(ask_with_context \
+        "L4D2_LOGIN_BURST" \
+        "Burst permitido para short-query login (71)." \
+        "docs/modules/11_l4d2_a2s_filters.md" \
+        "L4D2_LOGIN_BURST" \
+        "$l4d2_login_burst" \
+        "is_positive_int" \
+        "L4D2_LOGIN_BURST debe ser entero > 0.")"
+
+    enable_steam_group_filter="$(ask_with_context \
+        "ENABLE_STEAM_GROUP_FILTER" \
+        "Habilita detección de firmas Steam Group configurables." \
+        "docs/modules/11_l4d2_a2s_filters.md" \
+        "ENABLE_STEAM_GROUP_FILTER (true/false)" \
+        "$enable_steam_group_filter" \
+        "is_bool" \
+        "ENABLE_STEAM_GROUP_FILTER debe ser true o false.")"
+    enable_steam_group_filter="${enable_steam_group_filter,,}"
+
+    if [ "$enable_steam_group_filter" = "true" ]; then
+        steam_group_signatures="$(ask_with_context \
+            "STEAM_GROUP_SIGNATURES" \
+            "Lista CSV de bytes hex (2 dígitos), ej: 00 o 00,69." \
+            "docs/modules/11_l4d2_a2s_filters.md" \
+            "STEAM_GROUP_SIGNATURES" \
+            "$steam_group_signatures" \
+            "is_hex_byte_csv" \
+            "Formato inválido. Usa bytes hex CSV como 00 o 00,69.")"
+        steam_group_signatures="${steam_group_signatures^^}"
+    fi
+fi
+
 say_section "Compatibilidad Docker"
 docker_input_compat_raw="$(ask_with_context \
     "DOCKER_INPUT_COMPAT" \
@@ -674,6 +845,11 @@ fi
 has_l4d2_udp_modules="false"
 if [ "${module_enabled[ip_l4d2_udp_base]:-false}" = "true" ] || [ "${module_enabled[ip_l4d2_packet_validation]:-false}" = "true" ] || [ "${module_enabled[ip_l4d2_a2s_filters]:-false}" = "true" ]; then
     has_l4d2_udp_modules="true"
+fi
+
+has_l4d2_a2s_module="false"
+if [ "${module_enabled[ip_l4d2_a2s_filters]:-false}" = "true" ]; then
+    has_l4d2_a2s_module="true"
 fi
 
 has_l4d2_tcp_modules="false"
@@ -726,6 +902,14 @@ DOCKER_DNS_EGRESS_SUBNETS="${docker_dns_egress_subnets}"
 EOF
 fi
 
+if [ "${module_enabled[ip_docker_monitor_egress]:-false}" = "true" ]; then
+cat >> "$output_file" <<EOF
+DOCKER_MONITOR_EGRESS_SUBNETS="${docker_monitor_egress_subnets}"
+DOCKER_MONITOR_EGRESS_TARGETS="${docker_monitor_egress_targets}"
+DOCKER_MONITOR_EGRESS_TCP_PORTS="${docker_monitor_egress_tcp_ports}"
+EOF
+fi
+
 if [ "$has_ssh_module" = "true" ]; then
 cat >> "$output_file" <<EOF
 SSH_PORT="${ssh_ports}"
@@ -755,6 +939,23 @@ if [ "$has_l4d2_udp_modules" = "true" ]; then
 cat >> "$output_file" <<EOF
 L4D2_TV_PORTS="${l4d2_tv_ports}"
 L4D2_CMD_LIMIT=${l4d2_cmd_limit}
+EOF
+fi
+
+if [ "$has_l4d2_a2s_module" = "true" ]; then
+cat >> "$output_file" <<EOF
+A2S_INFO_RATE=${a2s_info_rate}
+A2S_INFO_BURST=${a2s_info_burst}
+A2S_PLAYERS_RATE=${a2s_players_rate}
+A2S_PLAYERS_BURST=${a2s_players_burst}
+A2S_RULES_RATE=${a2s_rules_rate}
+A2S_RULES_BURST=${a2s_rules_burst}
+STEAM_GROUP_RATE=${steam_group_rate}
+STEAM_GROUP_BURST=${steam_group_burst}
+L4D2_LOGIN_RATE=${l4d2_login_rate}
+L4D2_LOGIN_BURST=${l4d2_login_burst}
+ENABLE_STEAM_GROUP_FILTER=${enable_steam_group_filter}
+STEAM_GROUP_SIGNATURES="${steam_group_signatures}"
 EOF
 fi
 
@@ -894,6 +1095,12 @@ if [ "${module_enabled[ip_docker_dns_egress]:-false}" = "true" ]; then
 echo "  DOCKER_DNS_EGRESS_SUBNETS=$docker_dns_egress_subnets" >&2
 fi
 
+if [ "${module_enabled[ip_docker_monitor_egress]:-false}" = "true" ]; then
+echo "  DOCKER_MONITOR_EGRESS_SUBNETS=$docker_monitor_egress_subnets" >&2
+echo "  DOCKER_MONITOR_EGRESS_TARGETS=$docker_monitor_egress_targets" >&2
+echo "  DOCKER_MONITOR_EGRESS_TCP_PORTS=$docker_monitor_egress_tcp_ports" >&2
+fi
+
 if [ "$has_ssh_module" = "true" ]; then
 echo "  SSH_PORT=$ssh_ports" >&2
 echo "  SSH_DOCKER=$ssh_docker" >&2
@@ -920,4 +1127,21 @@ fi
 if [ "$has_l4d2_udp_modules" = "true" ]; then
 echo "  L4D2_TV_PORTS=$l4d2_tv_ports" >&2
 echo "  L4D2_CMD_LIMIT=$l4d2_cmd_limit" >&2
+fi
+
+if [ "$has_l4d2_a2s_module" = "true" ]; then
+echo "  A2S_INFO_RATE=$a2s_info_rate" >&2
+echo "  A2S_INFO_BURST=$a2s_info_burst" >&2
+echo "  A2S_PLAYERS_RATE=$a2s_players_rate" >&2
+echo "  A2S_PLAYERS_BURST=$a2s_players_burst" >&2
+echo "  A2S_RULES_RATE=$a2s_rules_rate" >&2
+echo "  A2S_RULES_BURST=$a2s_rules_burst" >&2
+echo "  STEAM_GROUP_RATE=$steam_group_rate" >&2
+echo "  STEAM_GROUP_BURST=$steam_group_burst" >&2
+echo "  L4D2_LOGIN_RATE=$l4d2_login_rate" >&2
+echo "  L4D2_LOGIN_BURST=$l4d2_login_burst" >&2
+echo "  ENABLE_STEAM_GROUP_FILTER=$enable_steam_group_filter" >&2
+if [ "$enable_steam_group_filter" = "true" ]; then
+echo "  STEAM_GROUP_SIGNATURES=$steam_group_signatures" >&2
+fi
 fi

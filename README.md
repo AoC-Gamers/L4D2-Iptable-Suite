@@ -256,6 +256,24 @@ Comando rápido:
 
 ---
 
+### 6. Contenedor de Resumen Rápido de Logs
+
+Herramienta opcional para generar resúmenes rápidos desde logs estructurados `FW_EVT` en formato JSON/TXT, útil para operación por SSH o revisión rápida.
+
+Ruta:
+
+```bash
+log-summary
+```
+
+Documentación:
+
+```bash
+docs/log-summary-container.md
+```
+
+---
+
 ## 🎮 Casos de Uso Específicos
 
 ### Servidor Individual L4D2

@@ -51,14 +51,15 @@ nf_45_http_https_protect_validate() {
 }
 
 nf_45_http_https_protect_apply() {
-    local chain ports_expr normalized_rate
+    local chain ports_expr normalized_rate log_http_abuse
 
     ports_expr="$(nf_ports_set_expr "$HTTP_HTTPS_PORTS")"
     normalized_rate="$(nf_45_http_https_protect_normalize_rate "$HTTP_HTTPS_RATE")"
+    log_http_abuse="$(nf_log_prefix_safe "${LOG_PREFIX_HTTP_HTTPS_ABUSE} ")"
 
     for chain in $(nf_get_target_chains); do
         nf_add_rule "$chain" tcp dport "$ports_expr" ct state new limit rate "$normalized_rate" burst "$HTTP_HTTPS_BURST" packets accept
-        nf_add_rule "$chain" tcp dport "$ports_expr" ct state new limit rate over 30/minute burst 10 packets log prefix "\"$LOG_PREFIX_HTTP_HTTPS_ABUSE \""
+        nf_add_rule "$chain" tcp dport "$ports_expr" ct state new limit rate over 30/minute burst 10 packets log prefix "\"$log_http_abuse\""
         nf_add_rule "$chain" tcp dport "$ports_expr" ct state new drop
     done
 }

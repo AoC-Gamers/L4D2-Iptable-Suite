@@ -144,6 +144,9 @@ El script utiliza el mismo archivo `.env` que `iptables.rules.sh`. Asegúrate de
 LOGFILE=/var/log/firewall-suite.log
 RSYSLOG_CONF=/etc/rsyslog.d/firewall-suite.conf
 
+# Prefijos de firewall estructurados (FW_EVT)
+FIREWALL_HOST_ALIAS=""
+
 # Prefijos de Log para Diferentes Tipos de Ataque
 LOG_PREFIX_INVALID_SIZE=\"INVALID_SIZE: \"
 LOG_PREFIX_MALFORMED=\"MALFORMED: \"

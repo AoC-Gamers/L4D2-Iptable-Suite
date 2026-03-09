@@ -34,6 +34,43 @@ nf_add_rule() {
     nft add rule inet l4d2_filter "$chain" "$@"
 }
 
+nf_log_prefix_safe() {
+    local raw="$1"
+    local max_len="${2:-120}"
+
+    raw="${raw//$'\n'/ }"
+    raw="${raw//$'\r'/ }"
+
+    if [ "${#raw}" -gt "$max_len" ]; then
+        raw="${raw:0:max_len}"
+    fi
+
+    printf "%s" "$raw"
+}
+
+nf_build_log_prefix() {
+    local _legacy_prefix="$1"
+    local attack="$2"
+    local module="$3"
+    local chain="$4"
+    local action="${5:-drop}"
+    local severity="${6:-medium}"
+
+    local safe_host
+    safe_host="${FIREWALL_HOST_ALIAS:-}"
+    safe_host="${safe_host// /_}"
+
+    local prefix="FW_EVT attack=${attack} backend=nft module=${module} chain=${chain} action=${action} severity=${severity}"
+    if [ -n "$safe_host" ]; then
+        prefix="${prefix} host=${safe_host}"
+    fi
+
+    # Keep a trailing ": " for FW_EVT parser compatibility.
+    # Reserve 2 chars for ": " so truncation never removes it.
+    prefix="$(nf_log_prefix_safe "$prefix" 118)"
+    printf "%s: " "$prefix"
+}
+
 nf_ports_normalize() {
     local raw="$1"
     local value="$raw"

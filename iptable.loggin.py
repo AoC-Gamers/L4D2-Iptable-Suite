@@ -30,7 +30,7 @@ MENU OPTIONS:
 DEPENDENCIES:
     - pandas: pip install pandas
     - python-dotenv: pip install python-dotenv
-    - .env file with LOG_PREFIX_* configuration variables
+    - .env file with system paths and FW metadata variables
 
 GENERATED FILES:
     - summary_by_ip.json: Detailed analysis by IP with timeline and multiple dates
@@ -53,7 +53,7 @@ GENERATED FILES:
       Contains: Attack type statistics, port distribution, temporal coverage
 
 INPUT FILES:
-    - .env: Configuration file with LOG_PREFIX_* variables and system paths
+    - .env: Configuration file with system paths and FW metadata variables
     - /var/log/firewall-suite.log: Main log file (configurable via LOGFILE in .env)
     - /etc/rsyslog.d/firewall-suite.conf: Rsyslog configuration (auto-generated)
 
@@ -78,30 +78,15 @@ from collections import defaultdict
 TIME_FORMAT = "%H:%M:%S"
 ISO_TIMESTAMP_FORMAT = "%Y-%m-%dT%H:%M:%S"
 ANALYSIS_YEAR = None
+FW_EVT_MARKER = "FW_EVT "
 
 # Default values - will be overridden by .env file
 LOGFILE = "/var/log/firewall-suite.log"
 RSYSLOG_CONF = "/etc/rsyslog.d/firewall-suite.conf"
 
-# Specific log prefixes for different attack types
-LOG_PREFIXES = {
-    "INVALID_SIZE": "INVALID_SIZE: ",
-    "MALFORMED": "MALFORMED: ",
-    "A2S_INFO_FLOOD": "A2S_INFO_FLOOD: ",
-    "A2S_PLAYERS_FLOOD": "A2S_PLAYERS_FLOOD: ",
-    "A2S_RULES_FLOOD": "A2S_RULES_FLOOD: ",
-    "STEAM_GROUP_FLOOD": "STEAM_GROUP_FLOOD: ",
-    "L4D2_CONNECT_FLOOD": "L4D2_CONNECT_FLOOD: ",
-    "L4D2_RESERVE_FLOOD": "L4D2_RESERVE_FLOOD: ",
-    "UDP_NEW_LIMIT": "UDP_NEW_LIMIT: ",
-    "UDP_EST_LIMIT": "UDP_EST_LIMIT: ",
-    "TCP_RCON_BLOCK": "TCP_RCON_BLOCK: ",
-    "ICMP_FLOOD": "ICMP_FLOOD: "
-}
-
 def load_config(env_file):
     """Load configuration from .env file and update global variables"""
-    global LOGFILE, RSYSLOG_CONF, LOG_PREFIXES
+    global LOGFILE, RSYSLOG_CONF
     
     if not os.path.exists(env_file):
         print(f"ERROR: .env file not found: {env_file}")
@@ -112,11 +97,6 @@ def load_config(env_file):
     # Update global variables from environment
     LOGFILE = os.getenv("LOGFILE", LOGFILE)
     RSYSLOG_CONF = os.getenv("RSYSLOG_CONF", RSYSLOG_CONF)
-    
-    # Update log prefixes from .env file
-    for key in LOG_PREFIXES.keys():
-        env_key = f"LOG_PREFIX_{key}"
-        LOG_PREFIXES[key] = os.getenv(env_key, LOG_PREFIXES[key])
     
     return True
 
@@ -196,11 +176,56 @@ def _extract_line_fields(line, ip_re, port_re, length_re):
     return ip.group(1), int(port.group(1)), int(length[-1])
 
 
-def _detect_attack_pattern(line):
-    for pattern_name, prefix in LOG_PREFIXES.items():
-        if prefix.strip() in line:
-            return pattern_name
-    return "UNKNOWN"
+def _parse_fw_evt_fields(line):
+    marker_idx = line.find(FW_EVT_MARKER)
+    if marker_idx == -1:
+        return None
+
+    segment = line[marker_idx + len(FW_EVT_MARKER):]
+    prefix_segment, separator, _ = segment.partition(":")
+    if separator != ":":
+        return None
+
+    fields = {}
+    for part in prefix_segment.strip().split():
+        if "=" not in part:
+            continue
+        key, value = part.split("=", 1)
+        key = key.strip()
+        value = value.strip()
+        if key and value:
+            fields[key] = value
+
+    if "attack" not in fields:
+        return None
+
+    return fields
+
+
+def _extract_event_context(line):
+    fw_evt = _parse_fw_evt_fields(line)
+    if fw_evt:
+        return {
+            "Pattern": fw_evt.get("attack", "UNKNOWN"),
+            "Backend": fw_evt.get("backend", ""),
+            "Module": fw_evt.get("module", ""),
+            "Chain": fw_evt.get("chain", ""),
+            "Action": fw_evt.get("action", ""),
+            "Severity": fw_evt.get("severity", ""),
+            "Env": fw_evt.get("env", ""),
+            "Host": fw_evt.get("host", ""),
+        }
+
+    return {
+        "Pattern": "UNKNOWN",
+        "Backend": "",
+        "Module": "",
+        "Chain": "",
+        "Action": "",
+        "Severity": "",
+        "Env": "",
+        "Host": "",
+    }
 
 def parse_log(log_path, game_ports, tv_ports, year_hint=None):
     """Parse log file and extract attack information with timestamps"""
@@ -226,12 +251,20 @@ def parse_log(log_path, game_ports, tv_ports, year_hint=None):
                 continue
 
             ip_value, port_num, packet_length = line_fields
+            event_context = _extract_event_context(line)
 
             entries.append({
                 "IP": ip_value,
                 "Port": port_num,
                 "PortType": classify_port(port_num, game_ports, tv_ports),
-                "Pattern": _detect_attack_pattern(line),
+                "Pattern": event_context["Pattern"],
+                "Backend": event_context["Backend"],
+                "Module": event_context["Module"],
+                "Chain": event_context["Chain"],
+                "Action": event_context["Action"],
+                "Severity": event_context["Severity"],
+                "Env": event_context["Env"],
+                "Host": event_context["Host"],
                 "Length": packet_length,
                 "Date": dt.strftime("%Y-%m-%d"),
                 "Time": dt.strftime("%H:%M:%S"),
@@ -678,13 +711,12 @@ def install_rsyslog_and_config():
 
     print("INFO: Configuring", RSYSLOG_CONF)
     with open(RSYSLOG_CONF, "w") as f:
-        for pattern_name, prefix in LOG_PREFIXES.items():
-            f.write(f':msg,contains,"{prefix.strip()}"    {LOGFILE}\n')
+        f.write(f':msg,contains,"{FW_EVT_MARKER.strip()}"    {LOGFILE}\n')
         f.write("& stop\n")
 
     subprocess.call(["systemctl", "restart", "rsyslog"])
     print("OK: Installation and configuration completed.")
-    print(f"INFO: Optimized configuration: only {len(LOG_PREFIXES)} specific prefixes")
+    print("INFO: Optimized configuration: structured FW_EVT capture enabled")
 
 def verify_permissions():
     user = os.environ.get("SUDO_USER") or os.getlogin()

@@ -48,14 +48,15 @@ nf_40_tcp_ssh_validate() {
 }
 
 nf_40_tcp_ssh_apply() {
-    local chain ssh_ports_expr normalized_rate
+    local chain ssh_ports_expr normalized_rate log_ssh_abuse
 
     ssh_ports_expr="$(nf_ports_set_expr "$SSH_PORT")"
     normalized_rate="$(nf_40_tcp_ssh_normalize_rate "$SSH_RATE")"
+    log_ssh_abuse="$(nf_log_prefix_safe "${LOG_PREFIX_SSH_ABUSE} ")"
 
     for chain in $(nf_get_target_chains); do
         nf_add_rule "$chain" tcp dport "$ssh_ports_expr" ct state new limit rate "$normalized_rate" burst "$SSH_BURST" packets accept
-        nf_add_rule "$chain" tcp dport "$ssh_ports_expr" ct state new limit rate over 30/minute burst 10 packets log prefix "\"$LOG_PREFIX_SSH_ABUSE \""
+        nf_add_rule "$chain" tcp dport "$ssh_ports_expr" ct state new limit rate over 30/minute burst 10 packets log prefix "\"$log_ssh_abuse\""
         nf_add_rule "$chain" tcp dport "$ssh_ports_expr" ct state new drop
         nf_add_rule "$chain" tcp dport "$ssh_ports_expr" ct state established,related accept
     done
