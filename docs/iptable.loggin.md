@@ -677,5 +677,3 @@ EOF
 - [Archivo de Configuración example.env](../example.env)
 
 ---
-
-*Documentación actualizada para L4D2 IPTables Suite v2.4*

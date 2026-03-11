@@ -53,7 +53,7 @@ El módulo inspecciona el prefijo Source `0xFFFFFFFF` y luego clasifica por byte
 - Login (`71`):
   - acepta a tasa controlada paquetes que contienen `connect`
   - acepta a tasa controlada paquetes que contienen `reserve`
-  - aplica limitación de respaldo para el resto de `71` en ventana corta (evita `drop` ciego)
+  - `drop` para el resto de `71` en ventana corta (1..70 bytes)
   - se aplica solo sobre `L4D2_GAMESERVER_PORTS` para evitar falsos positivos en SourceTV
 - El módulo mantiene logging con prefijos específicos para facilitar diagnóstico.
 
@@ -69,7 +69,6 @@ Antes de aplicar reglas, el módulo valida:
 - Ambos aplican mitigaciones A2S/Steam y patrones de login equivalentes por área.
 - `iptables` usa `-m string --hex-string '|FFFFFFFF..|'`.
 - `nftables` usa payload match (`@th,64,40 0xFFFFFFFF..`) con meter/rate.
-- `nftables` usa ventana corta ampliada para login (`1..140`) y fallback rate-limit para `0x71` no clasificado.
 
 ## Nota operativa
 - Excluir `l4d2_a2s_filters` de `MODULES_ONLY` en nodos sin servicios de juego.

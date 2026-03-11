@@ -9,8 +9,8 @@ ID=nf_l4d2_udp_base
 ALIASES=l4d2_udp_base
 DESCRIPTION=Applies base UDP/state/ICMP rules in the nftables backend
 REQUIRED_VARS=TYPECHAIN L4D2_GAMESERVER_PORTS L4D2_TV_PORTS L4D2_CMD_LIMIT LOG_PREFIX_UDP_NEW_LIMIT LOG_PREFIX_UDP_EST_LIMIT LOG_PREFIX_ICMP_FLOOD
-OPTIONAL_VARS=FIREWALL_HOST_ALIAS STEAM_GROUP_SIGNATURES
-DEFAULTS=TYPECHAIN=0 L4D2_GAMESERVER_PORTS=27015 L4D2_TV_PORTS=27020 L4D2_CMD_LIMIT=100 LOG_PREFIX_UDP_NEW_LIMIT=UDP_NEW_LIMIT: LOG_PREFIX_UDP_EST_LIMIT=UDP_EST_LIMIT: LOG_PREFIX_ICMP_FLOOD=ICMP_FLOOD: FIREWALL_HOST_ALIAS= STEAM_GROUP_SIGNATURES=00
+OPTIONAL_VARS=FIREWALL_HOST_ALIAS
+DEFAULTS=TYPECHAIN=0 L4D2_GAMESERVER_PORTS=27015 L4D2_TV_PORTS=27020 L4D2_CMD_LIMIT=100 LOG_PREFIX_UDP_NEW_LIMIT=UDP_NEW_LIMIT: LOG_PREFIX_UDP_EST_LIMIT=UDP_EST_LIMIT: LOG_PREFIX_ICMP_FLOOD=ICMP_FLOOD: FIREWALL_HOST_ALIAS=
 EOF
 }
 
@@ -35,19 +35,11 @@ nf_50_l4d2_udp_base_validate() {
 
     nf_validate_ports_spec "$L4D2_GAMESERVER_PORTS" "nf_l4d2_udp_base: L4D2_GAMESERVER_PORTS" || return $?
     nf_validate_ports_spec "$L4D2_TV_PORTS" "nf_l4d2_udp_base: L4D2_TV_PORTS" || return $?
-
-    local steam_signatures="${STEAM_GROUP_SIGNATURES//[[:space:]]/}"
-    if [ -n "$steam_signatures" ] && ! [[ "$steam_signatures" =~ ^[0-9A-Fa-f]{2}(,[0-9A-Fa-f]{2})*$ ]]; then
-        echo "ERROR: nf_l4d2_udp_base: STEAM_GROUP_SIGNATURES must be comma-separated hex bytes (example: 00,69)"
-        return 2
-    fi
 }
 
 nf_50_l4d2_udp_base_apply() {
     local cmd_limit_leeway cmd_limit_upper
     local game_ports_expr tv_ports_expr all_udp_ports_expr chain
-    local steam_signatures_csv steam_sig
-    local -a steam_signatures
     local log_udp_new log_udp_est log_icmp
 
     cmd_limit_leeway=$((L4D2_CMD_LIMIT + 10))
@@ -68,13 +60,7 @@ nf_50_l4d2_udp_base_apply() {
     nf_add_rule udp_new_limit @th,64,40 0xFFFFFFFF54 return
     nf_add_rule udp_new_limit @th,64,40 0xFFFFFFFF55 return
     nf_add_rule udp_new_limit @th,64,40 0xFFFFFFFF56 return
-    steam_signatures_csv="${STEAM_GROUP_SIGNATURES//[[:space:]]/}"
-    IFS=',' read -r -a steam_signatures <<< "$steam_signatures_csv"
-    for steam_sig in "${steam_signatures[@]}"; do
-        [ -z "$steam_sig" ] && continue
-        steam_sig="${steam_sig^^}"
-        nf_add_rule udp_new_limit @th,64,40 "0xFFFFFFFF${steam_sig}" return
-    done
+    nf_add_rule udp_new_limit @th,64,40 0xFFFFFFFF00 return
     nf_add_rule udp_new_limit @th,64,40 0xFFFFFFFF71 return
 
     nf_add_rule udp_new_limit meter udp_new_src_under '{ ip saddr . udp dport limit rate 1/second burst 3 packets }' jump udp_new_limit_global
