@@ -181,6 +181,10 @@ Alias S2S para router/LAN solapada:
 2. **OpenVPN en Docker bridge (tun dentro del namespace del contenedor)**
     - La suite puede abrir el puerto y permitir `docker0`, pero el forwarding real puede requerir reglas dentro del contenedor o routing/NAT adicional.
 
+**Nota operativa para hosts con Docker + backend `nftables`:**
+- Si Docker mantiene una tabla `ip filter` con `FORWARD policy drop`, el tráfico S2S aceptado en `inet l4d2_filter` puede seguir siendo bloqueado después por `DOCKER-USER`/`DOCKER-FORWARD`.
+- En ese escenario, el módulo `openvpn_sitetosite` debe añadir excepciones equivalentes en `DOCKER-USER` para `OVPNS2S_INTERFACE -> OVPNS2S_LOCAL_INTERFACE` y su retorno `ESTABLISHED,RELATED`.
+
 **Cadena DOCKER en esta suite:**
 - La suite usa una cadena `DOCKER` propia en la tabla `filter` cuando `TYPECHAIN` incluye Docker.
 - Si prefieres engancharte al flujo estándar de Docker, puedes adaptar las reglas a `DOCKER-USER`.
@@ -1342,3 +1346,5 @@ done
 - [Archivo de Configuración example.env](../example.env)
 
 ---
+
+*Documentación actualizada para L4D2 IPTables Suite v2.4*

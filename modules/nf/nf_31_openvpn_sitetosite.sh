@@ -58,6 +58,55 @@ nf_31_openvpn_sitetosite_validate_cidr_list() {
     done < <(nf_31_openvpn_sitetosite_expand_list "$raw")
 }
 
+nf_31_openvpn_sitetosite_docker_user_exists() {
+    nft list chain ip filter DOCKER-USER >/dev/null 2>&1
+}
+
+nf_31_openvpn_sitetosite_cleanup_docker_user_rules() {
+    local handles=()
+    local handle
+
+    mapfile -t handles < <(
+        nft -a list chain ip filter DOCKER-USER 2>/dev/null \
+            | awk '/comment "l4d2-s2s-dockeruser-/ {print $NF}' \
+            | sort -rn
+    )
+
+    for handle in "${handles[@]}"; do
+        nft delete rule ip filter DOCKER-USER handle "$handle" 2>/dev/null || true
+    done
+}
+
+nf_31_openvpn_sitetosite_apply_docker_user_rules() {
+    local remote_subnet local_subnet
+
+    if [ -z "${OVPNS2S_LOCAL_INTERFACE:-}" ]; then
+        return 0
+    fi
+
+    if ! nf_31_openvpn_sitetosite_docker_user_exists; then
+        return 0
+    fi
+
+    nf_31_openvpn_sitetosite_cleanup_docker_user_rules
+
+    while IFS= read -r remote_subnet; do
+        [ -z "$remote_subnet" ] && continue
+        while IFS= read -r local_subnet; do
+            [ -z "$local_subnet" ] && continue
+            nft insert rule ip filter DOCKER-USER \
+                iifname "$OVPNS2S_INTERFACE" oifname "$OVPNS2S_LOCAL_INTERFACE" \
+                ip saddr "$remote_subnet" ip daddr "$local_subnet" \
+                accept comment "l4d2-s2s-dockeruser-fwd"
+            nft insert rule ip filter DOCKER-USER \
+                iifname "$OVPNS2S_LOCAL_INTERFACE" oifname "$OVPNS2S_INTERFACE" \
+                ip saddr "$local_subnet" ip daddr "$remote_subnet" \
+                ct state established,related \
+                accept comment "l4d2-s2s-dockeruser-ret"
+        done < <(nf_31_openvpn_sitetosite_expand_list "$OVPNS2S_LOCAL_SUBNETS")
+    done < <(nf_31_openvpn_sitetosite_expand_list "$OVPNS2S_REMOTE_SUBNETS")
+}
+
 nf_31_openvpn_sitetosite_metadata() {
     cat << 'EOF'
 ID=nf_openvpn_sitetosite
@@ -137,8 +186,10 @@ nf_31_openvpn_sitetosite_apply() {
                 nf_add_rule forward iifname "$OVPNS2S_INTERFACE" ip saddr "$remote_subnet" ip daddr "$local_subnet" accept
                 nf_add_rule forward oifname "$OVPNS2S_INTERFACE" ip saddr "$local_subnet" ip daddr "$remote_subnet" ct state established,related accept
             done < <(nf_31_openvpn_sitetosite_expand_list "$OVPNS2S_LOCAL_SUBNETS")
-        done < <(nf_31_openvpn_sitetosite_expand_list "$OVPNS2S_REMOTE_SUBNETS")
+            done < <(nf_31_openvpn_sitetosite_expand_list "$OVPNS2S_REMOTE_SUBNETS")
     fi
+
+    nf_31_openvpn_sitetosite_apply_docker_user_rules
 
     if [ "$need_nat_table" = "true" ]; then
         nft delete table ip "$nat_table" 2>/dev/null || true

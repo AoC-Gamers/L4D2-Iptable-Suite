@@ -27,12 +27,12 @@
 
 ## Alcance por Backend
 
-`ipp.sh` gestiona la persistencia de reglas para el backend **iptables**.
+`ipp.sh` gestiona la persistencia de reglas para ambos backends soportados por la suite.
 
 - ✅ Compatible con `iptables.rules.sh`
-- ⚠️ No administra persistencia nativa de `nftables.rules.sh`
+- ✅ Compatible con `nftables.rules.sh`
 
-Si operas con backend `nftables`, puedes seguir usando la suite modular para aplicar reglas, pero la persistencia debe gestionarse con mecanismos propios de `nft`/sistema (fuera de `ipp.sh`).
+En backend `nftables`, el script guarda y recarga las tablas administradas por la suite cuyo nombre comienza con `l4d2_` o coincide con `l4d2_filter`, usando `/etc/nftables.conf` como archivo persistente.
 
 ## Instalación y Requisitos
 
@@ -193,13 +193,19 @@ Chain PREROUTING (policy ACCEPT 0 packets, 0 bytes)
 
 ### 5. Save current rules (persistent)
 
-**Funcionalidad**: Guarda las reglas actuales de iptables para que persistan después de reinicios.
+**Funcionalidad**: Guarda las reglas actuales del backend activo para que persistan después de reinicios.
 
 **Proceso realizado**:
-- Crea el directorio `/etc/iptables` si no existe
-- Ejecuta `iptables-save` y guarda en `/etc/iptables/rules.v4`
-- Establece permisos apropiados (644)
-- Cuenta y reporta el número total de reglas guardadas
+- Backend `iptables`:
+  - Crea el directorio `/etc/iptables` si no existe
+  - Ejecuta `iptables-save` y guarda en `/etc/iptables/rules.v4`
+  - Establece permisos apropiados (644)
+  - Cuenta y reporta el número total de reglas guardadas
+- Backend `nftables`:
+  - Descubre las tablas activas administradas por la suite (`l4d2_filter`, `l4d2_*`)
+  - Exporta cada tabla al archivo `/etc/nftables.conf`
+  - Establece permisos apropiados (644)
+  - Reporta cuántas tablas gestionadas fueron persistidas
 
 **Salida típica**:
 ```
@@ -208,7 +214,7 @@ Chain PREROUTING (policy ACCEPT 0 packets, 0 bytes)
 📊 Total rules saved: 25
 ```
 
-**Cuándo usarlo**: Después de configurar reglas con `iptables.rules.sh` para hacer los cambios permanentes.
+**Cuándo usarlo**: Después de configurar reglas con `iptables.rules.sh` o `nftables.rules.sh` para hacer los cambios permanentes.
 
 ---
 
@@ -259,42 +265,38 @@ Chain PREROUTING (policy ACCEPT 0 packets, 0 bytes)
 
 ### 8. Reload saved rules
 
-**Funcionalidad**: Recarga las reglas desde el archivo guardado, aplicándolas inmediatamente al sistema.
+**Funcionalidad**: Recarga el archivo persistente del backend activo.
 
 **Proceso realizado**:
-- Verifica que el archivo de reglas existe
-- Ejecuta `iptables-restore` con el archivo guardado
-- Reemplaza completamente las reglas activas
+- Backend `iptables`:
+  - Ejecuta `iptables-restore` sobre `/etc/iptables/rules.v4`
+- Backend `nftables`:
+  - Elimina primero las tablas gestionadas definidas en `/etc/nftables.conf`
+  - Ejecuta `nft -f /etc/nftables.conf`
 
-**Salida típica**:
-```
-🔄 Reloading saved iptables rules...
-✅ Rules reloaded successfully
-```
+**Nota importante para `nftables`**:
+- El servicio `nftables.service` también carga `/etc/nftables.conf` al iniciar el sistema.
+- Si cambias reglas activas y no ejecutas la opción 5, esos cambios no sobrevivirán a un reinicio.
 
-**Cuándo usarlo**: Para restaurar una configuración guardada o aplicar cambios después de modificar manualmente el archivo de reglas.
+**Cuándo usarlo**: Para restaurar una configuración guardada o aplicar cambios después de modificar manualmente el archivo persistente.
 
 ---
 
-### 9. Status of iptables service
+### 9. Status of persistent service
 
-**Funcionalidad**: Proporciona un diagnóstico completo del estado del sistema de iptables persistentes.
+**Funcionalidad**: Proporciona un diagnóstico completo del backend persistente activo.
 
 **Información mostrada**:
-- Estado de instalación de iptables-persistent
-- Existencia y ubicación del archivo de reglas
-- Número total de reglas guardadas
-- Número de reglas actualmente activas
-
-**Salida típica**:
-```
-📊 IPTables service status:
-==========================
-✅ iptables-persistent: INSTALLED
-✅ Rules file: EXISTS (/etc/iptables/rules.v4)
-📊 Total saved rules: 25
-📊 Current active rules: 27
-```
+- Backend `iptables`:
+  - Estado de instalación de `iptables-persistent`
+  - Existencia y ubicación del archivo `/etc/iptables/rules.v4`
+  - Número total de reglas guardadas
+  - Número de reglas actualmente activas
+- Backend `nftables`:
+  - Estado del paquete y del servicio `nftables`
+  - Existencia y ubicación del archivo `/etc/nftables.conf`
+  - Número de líneas guardadas
+  - Cantidad de tablas gestionadas guardadas y activas
 
 **Cuándo usarlo**: Para verificar el estado general del sistema antes de hacer cambios o diagnosticar problemas.
 
@@ -671,3 +673,5 @@ sudo ./ipp.sh  # Guardar reglas
 - [Archivo de Configuración example.env](../example.env)
 
 ---
+
+*Documentación actualizada para L4D2 IPTables Suite v2.4*

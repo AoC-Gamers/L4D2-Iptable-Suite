@@ -145,6 +145,69 @@ detect_default_backend() {
     fi
 }
 
+nft_managed_table_entries_live() {
+    nft list tables 2>/dev/null | awk '
+        $1 == "table" && $3 ~ /^l4d2(_|$)/ {
+            print $2 " " $3
+        }
+    '
+}
+
+nft_managed_table_entries_file() {
+    local source_file="${1:-$NFT_CONF_FILE}"
+
+    [ -f "$source_file" ] || return 0
+
+    awk '
+        $1 == "table" && $3 ~ /^l4d2(_|$)/ {
+            print $2 " " $3
+        }
+    ' "$source_file" | awk '!seen[$0]++'
+}
+
+nft_write_managed_tables() {
+    local output_file="$1"
+    local tmp_file
+    local entries=()
+    local entry family table_name
+
+    mapfile -t entries < <(nft_managed_table_entries_live)
+
+    if [ "${#entries[@]}" -eq 0 ]; then
+        msg_error "No managed nftables tables found (expected names like l4d2_filter or l4d2_*)."
+        return 1
+    fi
+
+    tmp_file="$(mktemp)"
+    trap 'rm -f "$tmp_file"' RETURN
+
+    : > "$tmp_file"
+    for entry in "${entries[@]}"; do
+        family="${entry%% *}"
+        table_name="${entry#* }"
+        nft list table "$family" "$table_name" >> "$tmp_file"
+        printf '\n' >> "$tmp_file"
+    done
+
+    chmod 644 "$tmp_file"
+    mv "$tmp_file" "$output_file"
+    trap - RETURN
+}
+
+nft_delete_managed_tables() {
+    local source_file="${1:-$NFT_CONF_FILE}"
+    local entries=()
+    local entry family table_name
+
+    mapfile -t entries < <(nft_managed_table_entries_file "$source_file")
+
+    for entry in "${entries[@]}"; do
+        family="${entry%% *}"
+        table_name="${entry#* }"
+        nft delete table "$family" "$table_name" 2>/dev/null || true
+    done
+}
+
 
 # Function to display menu
 show_menu() {
@@ -268,9 +331,9 @@ save_rules() {
             return 1
         fi
 
-        nft list table inet l4d2_filter > "$NFT_CONF_FILE"
-        chmod 644 "$NFT_CONF_FILE"
+        nft_write_managed_tables "$NFT_CONF_FILE"
         msg_ok "Rules saved to $NFT_CONF_FILE"
+        msg_info "Managed tables saved: $(nft_managed_table_entries_file "$NFT_CONF_FILE" | wc -l)"
         msg_info "Total lines saved: $(wc -l < "$NFT_CONF_FILE" 2>/dev/null || echo 0)"
     fi
 }
@@ -327,9 +390,7 @@ reload_rules() {
         if [ -f "$NFT_CONF_FILE" ]; then
             msg_info "Reloading saved nftables rules..."
 
-            # Ensure idempotent reloads for our managed table only
-            nft delete table inet l4d2_filter 2>/dev/null || true
-
+            nft_delete_managed_tables "$NFT_CONF_FILE"
             nft -f "$NFT_CONF_FILE"
             msg_ok "Rules reloaded successfully"
         else
@@ -378,11 +439,13 @@ show_status() {
         if [ -f "$NFT_CONF_FILE" ]; then
             msg_ok "Rules file: EXISTS ($NFT_CONF_FILE)"
             msg_info "Total saved lines: $(wc -l < "$NFT_CONF_FILE" 2>/dev/null || echo 0)"
+            msg_info "Managed tables in file: $(nft_managed_table_entries_file "$NFT_CONF_FILE" | wc -l)"
         else
             msg_error "Rules file: NOT FOUND ($NFT_CONF_FILE)"
         fi
 
         msg_info "Current active tables: $(nft list tables 2>/dev/null | wc -l)"
+        msg_info "Current managed tables: $(nft_managed_table_entries_live | wc -l)"
     fi
 }
 
