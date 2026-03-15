@@ -165,6 +165,8 @@ LOG_PREFIX_ICMP_FLOOD=\"ICMP_FLOOD: \"
 L4D2_GAMESERVER_PORTS="27015"
 L4D2_TV_PORTS="27020"
 ```
+
+Si `ENABLE_UDP_BASELINE_LOGS=false` o `ENABLE_PACKET_NORMALIZATION_LOGS=false`, las categorías `UDP_NEW_LIMIT`, `UDP_EST_LIMIT`, `INVALID_SIZE` y `MALFORMED` pueden no aparecer en los reportes. Eso no implica ausencia de filtro, solo ausencia de logging para saneamiento/base.
 - **Configuración**: Basada en `L4D2_CMD_LIMIT` y algoritmos hashlimit específicos
 Para que el script pueda acceder a los logs del sistema, el usuario debe tener permisos adecuados:
 
@@ -442,6 +444,7 @@ Todos los reportes JSON incluyen:
 - **Descripción**: Protección contra floods UDP en conexiones nuevas y establecidas
 - **Detalles técnicos**: Ver [Ataques de Rate Limiting UDP](iptables.rules.md#ataques-rate-limiting-udp)
 - **Configuración**: Basada en `L4D2_CMD_LIMIT` y algoritmos hashlimit específicos
+- **Nota operativa**: Estas categorías pueden deshabilitarse en logs si `ENABLE_UDP_BASELINE_LOGS=false`
 
 ### Otros Ataques
 
@@ -484,6 +487,8 @@ Todos los reportes JSON incluyen:
 - **INVALID_SIZE / MALFORMED**: Filtrados automáticamente
 - **UDP_NEW_LIMIT**: Protección preventiva
 - **ICMP_FLOOD**: Impacto mínimo si está bien limitado
+
+Nota: `INVALID_SIZE`, `MALFORMED`, `UDP_NEW_LIMIT` y `UDP_EST_LIMIT` pueden omitirse por política de logging si solo se desea registrar limitación de tráfico malicioso.
 
 ### Recomendaciones por Patrón
 

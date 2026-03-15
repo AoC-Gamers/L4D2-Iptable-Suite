@@ -408,6 +408,7 @@ done
 l4d2_game_ports="27015"
 l4d2_tv_ports="27020"
 l4d2_cmd_limit="100"
+enable_udp_baseline_logs="false"
 a2s_info_rate="16"
 a2s_info_burst="80"
 a2s_players_rate="12"
@@ -419,7 +420,8 @@ steam_group_burst="30"
 l4d2_login_rate="4"
 l4d2_login_burst="16"
 enable_steam_group_filter="true"
-steam_group_signatures="00"
+steam_group_signatures="69"
+enable_packet_normalization_logs="false"
 ssh_ports="22"
 ssh_docker=""
 ssh_rate="60/min"
@@ -760,7 +762,7 @@ if [ "${module_enabled[ip_l4d2_a2s_filters]:-false}" = "true" ] || needs_var "A2
 
     steam_group_rate="$(ask_with_context \
         "STEAM_GROUP_RATE" \
-        "Rate por segundo para firmas Steam Group/legacy (ej: 00,69)." \
+        "Rate por segundo para firmas Steam Group/legacy (ej: 69 o 69,00)." \
         "docs/modules/11_l4d2_a2s_filters.md" \
         "STEAM_GROUP_RATE" \
         "$steam_group_rate" \
@@ -807,12 +809,12 @@ if [ "${module_enabled[ip_l4d2_a2s_filters]:-false}" = "true" ] || needs_var "A2
     if [ "$enable_steam_group_filter" = "true" ]; then
         steam_group_signatures="$(ask_with_context \
             "STEAM_GROUP_SIGNATURES" \
-            "Lista CSV de bytes hex (2 dígitos), ej: 00 o 00,69." \
+            "Lista CSV de bytes hex (2 digitos), ej: 69 o 69,00." \
             "docs/modules/11_l4d2_a2s_filters.md" \
             "STEAM_GROUP_SIGNATURES" \
             "$steam_group_signatures" \
             "is_hex_byte_csv" \
-            "Formato inválido. Usa bytes hex CSV como 00 o 00,69.")"
+            "Formato inválido. Usa bytes hex CSV como 69 o 69,00.")"
         steam_group_signatures="${steam_group_signatures^^}"
     fi
 fi
@@ -939,6 +941,7 @@ if [ "$has_l4d2_udp_modules" = "true" ]; then
 cat >> "$output_file" <<EOF
 L4D2_TV_PORTS="${l4d2_tv_ports}"
 L4D2_CMD_LIMIT=${l4d2_cmd_limit}
+ENABLE_UDP_BASELINE_LOGS=${enable_udp_baseline_logs}
 EOF
 fi
 
@@ -956,6 +959,12 @@ L4D2_LOGIN_RATE=${l4d2_login_rate}
 L4D2_LOGIN_BURST=${l4d2_login_burst}
 ENABLE_STEAM_GROUP_FILTER=${enable_steam_group_filter}
 STEAM_GROUP_SIGNATURES="${steam_group_signatures}"
+EOF
+fi
+
+if needs_var "ENABLE_PACKET_NORMALIZATION_LOGS"; then
+cat >> "$output_file" <<EOF
+ENABLE_PACKET_NORMALIZATION_LOGS=${enable_packet_normalization_logs}
 EOF
 fi
 
@@ -1127,6 +1136,7 @@ fi
 if [ "$has_l4d2_udp_modules" = "true" ]; then
 echo "  L4D2_TV_PORTS=$l4d2_tv_ports" >&2
 echo "  L4D2_CMD_LIMIT=$l4d2_cmd_limit" >&2
+echo "  ENABLE_UDP_BASELINE_LOGS=$enable_udp_baseline_logs" >&2
 fi
 
 if [ "$has_l4d2_a2s_module" = "true" ]; then
@@ -1144,4 +1154,8 @@ echo "  ENABLE_STEAM_GROUP_FILTER=$enable_steam_group_filter" >&2
 if [ "$enable_steam_group_filter" = "true" ]; then
 echo "  STEAM_GROUP_SIGNATURES=$steam_group_signatures" >&2
 fi
+fi
+
+if needs_var "ENABLE_PACKET_NORMALIZATION_LOGS"; then
+echo "  ENABLE_PACKET_NORMALIZATION_LOGS=$enable_packet_normalization_logs" >&2
 fi

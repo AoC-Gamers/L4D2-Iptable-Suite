@@ -9,8 +9,8 @@ ID=nf_l4d2_packet_validation
 ALIASES=l4d2_packet_validation
 DESCRIPTION=Validates invalid/malformed UDP packet sizes in the nftables backend
 REQUIRED_VARS=TYPECHAIN L4D2_GAMESERVER_PORTS L4D2_TV_PORTS LOG_PREFIX_INVALID_SIZE LOG_PREFIX_MALFORMED
-OPTIONAL_VARS=FIREWALL_HOST_ALIAS
-DEFAULTS=TYPECHAIN=0 L4D2_GAMESERVER_PORTS=27015 L4D2_TV_PORTS=27020 LOG_PREFIX_INVALID_SIZE=INVALID_SIZE: LOG_PREFIX_MALFORMED=MALFORMED: FIREWALL_HOST_ALIAS=
+OPTIONAL_VARS=FIREWALL_HOST_ALIAS ENABLE_PACKET_NORMALIZATION_LOGS
+DEFAULTS=TYPECHAIN=0 L4D2_GAMESERVER_PORTS=27015 L4D2_TV_PORTS=27020 LOG_PREFIX_INVALID_SIZE=INVALID_SIZE: LOG_PREFIX_MALFORMED=MALFORMED: FIREWALL_HOST_ALIAS= ENABLE_PACKET_NORMALIZATION_LOGS=false
 EOF
 }
 
@@ -25,6 +25,14 @@ nf_60_l4d2_packet_validation_validate() {
 
     nf_validate_ports_spec "$L4D2_GAMESERVER_PORTS" "nf_l4d2_packet_validation: L4D2_GAMESERVER_PORTS" || return $?
     nf_validate_ports_spec "$L4D2_TV_PORTS" "nf_l4d2_packet_validation: L4D2_TV_PORTS" || return $?
+
+    case "${ENABLE_PACKET_NORMALIZATION_LOGS:-}" in
+        true|false) ;;
+        *)
+            echo "ERROR: nf_l4d2_packet_validation: ENABLE_PACKET_NORMALIZATION_LOGS must be true or false"
+            return 2
+            ;;
+    esac
 }
 
 nf_60_l4d2_packet_validation_apply_chain() {
@@ -35,19 +43,29 @@ nf_60_l4d2_packet_validation_apply_chain() {
     log_invalid_size="$(nf_build_log_prefix "$LOG_PREFIX_INVALID_SIZE" "INVALID_SIZE" "nf_60_l4d2_packet_validation" "$chain" "drop" "low")"
     log_malformed="$(nf_build_log_prefix "$LOG_PREFIX_MALFORMED" "MALFORMED" "nf_60_l4d2_packet_validation" "$chain" "drop" "medium")"
 
-    nf_add_rule "$chain" udp dport "$ports_expr" meta length 0-28 limit rate over 60/minute log prefix "\"$log_invalid_size\""
+    if [ "${ENABLE_PACKET_NORMALIZATION_LOGS}" = "true" ]; then
+        nf_add_rule "$chain" udp dport "$ports_expr" meta length 0-28 limit rate over 60/minute log prefix "\"$log_invalid_size\""
+    fi
     nf_add_rule "$chain" udp dport "$ports_expr" meta length 0-28 drop
 
-    nf_add_rule "$chain" udp dport "$ports_expr" meta length 2521-65535 limit rate over 60/minute log prefix "\"$log_invalid_size\""
+    if [ "${ENABLE_PACKET_NORMALIZATION_LOGS}" = "true" ]; then
+        nf_add_rule "$chain" udp dport "$ports_expr" meta length 2521-65535 limit rate over 60/minute log prefix "\"$log_invalid_size\""
+    fi
     nf_add_rule "$chain" udp dport "$ports_expr" meta length 2521-65535 drop
 
-    nf_add_rule "$chain" udp dport "$ports_expr" meta length 30-32 limit rate over 60/minute log prefix "\"$log_malformed\""
+    if [ "${ENABLE_PACKET_NORMALIZATION_LOGS}" = "true" ]; then
+        nf_add_rule "$chain" udp dport "$ports_expr" meta length 30-32 limit rate over 60/minute log prefix "\"$log_malformed\""
+    fi
     nf_add_rule "$chain" udp dport "$ports_expr" meta length 30-32 drop
 
-    nf_add_rule "$chain" udp dport "$ports_expr" meta length 46 limit rate over 60/minute log prefix "\"$log_malformed\""
+    if [ "${ENABLE_PACKET_NORMALIZATION_LOGS}" = "true" ]; then
+        nf_add_rule "$chain" udp dport "$ports_expr" meta length 46 limit rate over 60/minute log prefix "\"$log_malformed\""
+    fi
     nf_add_rule "$chain" udp dport "$ports_expr" meta length 46 drop
 
-    nf_add_rule "$chain" udp dport "$ports_expr" meta length 60 limit rate over 60/minute log prefix "\"$log_malformed\""
+    if [ "${ENABLE_PACKET_NORMALIZATION_LOGS}" = "true" ]; then
+        nf_add_rule "$chain" udp dport "$ports_expr" meta length 60 limit rate over 60/minute log prefix "\"$log_malformed\""
+    fi
     nf_add_rule "$chain" udp dport "$ports_expr" meta length 60 drop
 }
 
