@@ -9,6 +9,9 @@ fi
 DIR_IPTABLES="/etc/iptables"
 NFT_CONF_FILE="/etc/nftables.conf"
 ACTIVE_BACKEND="iptables"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SUITE_ENV_FILE="${SUITE_ENV_FILE:-$SCRIPT_DIR/.env}"
+SUITE_ENV_LOADED=false
 
 C_RESET=""
 C_BOLD=""
@@ -138,16 +141,276 @@ pause_screen() {
 }
 
 detect_default_backend() {
-    if command -v nft >/dev/null 2>&1 && nft list table inet l4d2_filter >/dev/null 2>&1; then
+    if command -v nft >/dev/null 2>&1 && nft_suite_primary_table_exists; then
         ACTIVE_BACKEND="nftables"
     else
         ACTIVE_BACKEND="iptables"
     fi
 }
 
+nft_suite_primary_table_exists() {
+    nft list table inet firewall_main >/dev/null 2>&1 \
+        || nft list table inet l4d2_filter >/dev/null 2>&1
+}
+
+load_suite_env_if_present() {
+    if [ "$SUITE_ENV_LOADED" = "true" ]; then
+        return 0
+    fi
+
+    if [ -f "$SUITE_ENV_FILE" ]; then
+        set -a
+        # shellcheck disable=SC1090
+        . "$SUITE_ENV_FILE"
+        set +a
+        SUITE_ENV_LOADED=true
+        return 0
+    fi
+
+    return 1
+}
+
+iptables_chain_exists() {
+    local chain="$1"
+    iptables -S "$chain" >/dev/null 2>&1
+}
+
+iptables_delete_rule_spec() {
+    local chain="$1"
+    shift
+
+    while iptables -C "$chain" "$@" 2>/dev/null; do
+        iptables -D "$chain" "$@" >/dev/null 2>&1 || break
+    done
+}
+
+iptables_flush_delete_chain_if_exists() {
+    local chain="$1"
+    iptables -F "$chain" 2>/dev/null || true
+    iptables -X "$chain" 2>/dev/null || true
+}
+
+iptables_flush_chain_if_exists() {
+    local chain="$1"
+    iptables -F "$chain" 2>/dev/null || true
+}
+
+iptables_ensure_l4d2_chains() {
+    local chain
+    for chain in \
+        UDP_GAME_NEW_LIMIT \
+        UDP_GAME_NEW_LIMIT_GLOBAL \
+        UDP_GAME_ESTABLISHED_LIMIT \
+        A2S_LIMITS \
+        A2S_PLAYERS_LIMITS \
+        A2S_RULES_LIMITS \
+        STEAM_GROUP_LIMITS \
+        l4d2loginfilter \
+        TCPfilter; do
+        iptables -N "$chain" 2>/dev/null || true
+    done
+}
+
+clear_l4d2_rules_iptables() {
+    local game_ports tv_ports query_ports protected_ports
+    local steam_signatures_csv steam_sig
+    local -a steam_signatures
+    local invalid_log malformed_log tcp_log
+    local chain
+
+    if ! load_suite_env_if_present; then
+        msg_error "Suite env not found at $SUITE_ENV_FILE; cannot safely derive L4D2 iptables rule specs."
+        msg_info "Apply from the repo root with .env present, or use the nftables backend selective cleanup."
+        return 1
+    fi
+
+    game_ports="${L4D2_GAMESERVER_PORTS:-}"
+    tv_ports="${L4D2_TV_PORTS:-}"
+    query_ports="${game_ports},${tv_ports}"
+    query_ports="${query_ports//,,/,}"
+    query_ports="${query_ports#,}"
+    query_ports="${query_ports%,}"
+    protected_ports="${L4D2_TCP_PROTECTION:-$game_ports}"
+
+    invalid_log="${LOG_PREFIX_INVALID_SIZE:-INVALID_SIZE: }"
+    malformed_log="${LOG_PREFIX_MALFORMED:-MALFORMED: }"
+    tcp_log="${LOG_PREFIX_TCP_RCON_BLOCK:-TCP_RCON_BLOCK: }"
+
+    msg_info "Clearing only L4D2 iptables restrictions..."
+
+    for chain in INPUT DOCKER-USER; do
+        iptables_chain_exists "$chain" || continue
+
+        if [ -n "$game_ports" ]; then
+            iptables_delete_rule_spec "$chain" -p udp -m multiport --dports "$game_ports" -m state --state NEW -j UDP_GAME_NEW_LIMIT
+            iptables_delete_rule_spec "$chain" -p udp -m multiport --dports "$game_ports" -m state --state ESTABLISHED -j UDP_GAME_ESTABLISHED_LIMIT
+            iptables_delete_rule_spec "$chain" -p udp -m multiport --dports "$game_ports" -m length --length 0:28 -j DROP
+            iptables_delete_rule_spec "$chain" -p udp -m multiport --dports "$game_ports" -m length --length 2521:65535 -j DROP
+            iptables_delete_rule_spec "$chain" -p udp -m multiport --dports "$game_ports" -m length --length 30:32 -j DROP
+            iptables_delete_rule_spec "$chain" -p udp -m multiport --dports "$game_ports" -m length --length 46:46 -j DROP
+            iptables_delete_rule_spec "$chain" -p udp -m multiport --dports "$game_ports" -m length --length 60:60 -j DROP
+            iptables_delete_rule_spec "$chain" -p udp -m multiport --dports "$game_ports" -m length --length 0:28 -m limit --limit 60/min -j LOG --log-prefix "$invalid_log" --log-level 4
+            iptables_delete_rule_spec "$chain" -p udp -m multiport --dports "$game_ports" -m length --length 2521:65535 -m limit --limit 60/min -j LOG --log-prefix "$invalid_log" --log-level 4
+            iptables_delete_rule_spec "$chain" -p udp -m multiport --dports "$game_ports" -m length --length 30:32 -m limit --limit 60/min -j LOG --log-prefix "$malformed_log" --log-level 4
+            iptables_delete_rule_spec "$chain" -p udp -m multiport --dports "$game_ports" -m length --length 46:46 -m limit --limit 60/min -j LOG --log-prefix "$malformed_log" --log-level 4
+            iptables_delete_rule_spec "$chain" -p udp -m multiport --dports "$game_ports" -m length --length 60:60 -m limit --limit 60/min -j LOG --log-prefix "$malformed_log" --log-level 4
+            iptables_delete_rule_spec "$chain" -p udp -m multiport --dports "$game_ports" -m length --length 1:70 -m string --algo bm --hex-string '|FFFFFFFF71|' -j l4d2loginfilter
+        fi
+
+        if [ -n "$tv_ports" ]; then
+            iptables_delete_rule_spec "$chain" -p udp -m multiport --dports "$tv_ports" -m state --state NEW -j UDP_GAME_NEW_LIMIT
+            iptables_delete_rule_spec "$chain" -p udp -m multiport --dports "$tv_ports" -m state --state ESTABLISHED -j UDP_GAME_ESTABLISHED_LIMIT
+            iptables_delete_rule_spec "$chain" -p udp -m multiport --dports "$tv_ports" -m length --length 0:28 -j DROP
+            iptables_delete_rule_spec "$chain" -p udp -m multiport --dports "$tv_ports" -m length --length 2521:65535 -j DROP
+            iptables_delete_rule_spec "$chain" -p udp -m multiport --dports "$tv_ports" -m length --length 30:32 -j DROP
+            iptables_delete_rule_spec "$chain" -p udp -m multiport --dports "$tv_ports" -m length --length 46:46 -j DROP
+            iptables_delete_rule_spec "$chain" -p udp -m multiport --dports "$tv_ports" -m length --length 60:60 -j DROP
+            iptables_delete_rule_spec "$chain" -p udp -m multiport --dports "$tv_ports" -m length --length 0:28 -m limit --limit 60/min -j LOG --log-prefix "$invalid_log" --log-level 4
+            iptables_delete_rule_spec "$chain" -p udp -m multiport --dports "$tv_ports" -m length --length 2521:65535 -m limit --limit 60/min -j LOG --log-prefix "$invalid_log" --log-level 4
+            iptables_delete_rule_spec "$chain" -p udp -m multiport --dports "$tv_ports" -m length --length 30:32 -m limit --limit 60/min -j LOG --log-prefix "$malformed_log" --log-level 4
+            iptables_delete_rule_spec "$chain" -p udp -m multiport --dports "$tv_ports" -m length --length 46:46 -m limit --limit 60/min -j LOG --log-prefix "$malformed_log" --log-level 4
+            iptables_delete_rule_spec "$chain" -p udp -m multiport --dports "$tv_ports" -m length --length 60:60 -m limit --limit 60/min -j LOG --log-prefix "$malformed_log" --log-level 4
+        fi
+
+        if [ -n "$query_ports" ]; then
+            iptables_delete_rule_spec "$chain" -p udp -m multiport --dports "$query_ports" -m string --algo bm --hex-string '|FFFFFFFF54|' -j A2S_LIMITS
+            iptables_delete_rule_spec "$chain" -p udp -m multiport --dports "$query_ports" -m string --algo bm --hex-string '|FFFFFFFF55|' -j A2S_PLAYERS_LIMITS
+            iptables_delete_rule_spec "$chain" -p udp -m multiport --dports "$query_ports" -m string --algo bm --hex-string '|FFFFFFFF56|' -j A2S_RULES_LIMITS
+            iptables_delete_rule_spec "$chain" -p udp -m multiport --dports "$query_ports" -m length --length 1:70 -m string --algo bm --hex-string '|FFFFFFFF0000|' -j DROP
+
+            steam_signatures_csv="${STEAM_GROUP_SIGNATURES:-69}"
+            steam_signatures_csv="${steam_signatures_csv//[[:space:]]/}"
+            IFS=',' read -r -a steam_signatures <<< "$steam_signatures_csv"
+            for steam_sig in "${steam_signatures[@]}"; do
+                [ -z "$steam_sig" ] && continue
+                steam_sig="${steam_sig^^}"
+                iptables_delete_rule_spec "$chain" -p udp -m multiport --dports "$query_ports" -m string --algo bm --hex-string "|FFFFFFFF${steam_sig}|" -j STEAM_GROUP_LIMITS
+            done
+        fi
+
+        if [ -n "$protected_ports" ]; then
+            iptables_delete_rule_spec "$chain" -p tcp -m multiport --dports "$protected_ports" -m limit --limit 60/min --limit-burst 20 -j LOG --log-prefix "$tcp_log" --log-level 4
+            iptables_delete_rule_spec "$chain" -p tcp -m multiport --dports "$protected_ports" -j DROP
+        fi
+    done
+
+    for chain in \
+        UDP_GAME_NEW_LIMIT \
+        UDP_GAME_NEW_LIMIT_GLOBAL \
+        UDP_GAME_ESTABLISHED_LIMIT \
+        A2S_LIMITS \
+        A2S_PLAYERS_LIMITS \
+        A2S_RULES_LIMITS \
+        STEAM_GROUP_LIMITS \
+        l4d2loginfilter \
+        TCPfilter; do
+        iptables_flush_chain_if_exists "$chain"
+    done
+
+    msg_ok "L4D2 iptables rules cleared (VPN/SSH/Web rules preserved)"
+}
+
+clear_l4d2_rules_nftables() {
+    local chain
+    local table_family="inet"
+    local table_name="firewall_main"
+
+    if ! nft list table "$table_family" "$table_name" >/dev/null 2>&1; then
+        msg_error "Table $table_family $table_name not found. Apply the current nftables.rules.sh layout first."
+        msg_info "Legacy table inet l4d2_filter detected by ipp is not cleaned selectively because domains were mixed there."
+        return 1
+    fi
+
+    msg_info "Clearing only L4D2 nftables chains from $table_family $table_name..."
+
+    for chain in \
+        input_l4d2_tcp \
+        forward_l4d2_tcp \
+        input_l4d2_udp \
+        forward_l4d2_udp; do
+        nft flush chain "$table_family" "$table_name" "$chain" 2>/dev/null || true
+    done
+
+    for chain in \
+        udp_new_limit \
+        udp_new_limit_global \
+        udp_established_limit \
+        a2s_info_limit \
+        a2s_players_limit \
+        a2s_rules_limit \
+        steam_group_limit \
+        login_connect_limit \
+        login_reserve_limit; do
+        nft flush chain "$table_family" "$table_name" "$chain" 2>/dev/null || true
+        nft delete chain "$table_family" "$table_name" "$chain" 2>/dev/null || true
+    done
+
+    msg_ok "L4D2 nftables rules cleared (VPN/SSH/Web rules preserved)"
+}
+
+clear_l4d2_rules() {
+    if [ "$ACTIVE_BACKEND" = "iptables" ]; then
+        clear_l4d2_rules_iptables
+    else
+        clear_l4d2_rules_nftables
+    fi
+}
+
+restore_l4d2_rules_iptables() {
+    if ! load_suite_env_if_present; then
+        msg_error "Suite env not found at $SUITE_ENV_FILE; cannot restore selective L4D2 iptables rules."
+        return 1
+    fi
+
+    clear_l4d2_rules_iptables
+    iptables_ensure_l4d2_chains
+
+    msg_info "Reapplying only L4D2 iptables modules..."
+    "$SCRIPT_DIR/iptables.rules.sh" \
+        --env-file "$SUITE_ENV_FILE" \
+        --set MODULES_ONLY="l4d2_tcpfilter_chain,l4d2_tcp_protect,l4d2_udp_base,l4d2_packet_validation,l4d2_a2s_filters" \
+        --set MODULES_EXCLUDE= \
+        --skip chain_setup \
+        --skip finalize
+
+    msg_ok "L4D2 iptables rules restored"
+}
+
+restore_l4d2_rules_nftables() {
+    if ! load_suite_env_if_present; then
+        msg_error "Suite env not found at $SUITE_ENV_FILE; cannot restore selective L4D2 nftables rules."
+        return 1
+    fi
+
+    if ! nft list table inet firewall_main >/dev/null 2>&1; then
+        msg_error "Table inet firewall_main not found. Apply the current nftables.rules.sh layout first."
+        return 1
+    fi
+
+    clear_l4d2_rules_nftables
+
+    msg_info "Reapplying only L4D2 nftables modules..."
+    "$SCRIPT_DIR/nftables.rules.sh" \
+        --env-file "$SUITE_ENV_FILE" \
+        --set MODULES_ONLY="l4d2_tcp_protect,l4d2_udp_base,l4d2_packet_validation,l4d2_a2s_filters" \
+        --set MODULES_EXCLUDE= \
+        --skip chain_setup \
+        --skip finalize
+
+    msg_ok "L4D2 nftables rules restored"
+}
+
+restore_l4d2_rules() {
+    if [ "$ACTIVE_BACKEND" = "iptables" ]; then
+        restore_l4d2_rules_iptables
+    else
+        restore_l4d2_rules_nftables
+    fi
+}
+
 nft_managed_table_entries_live() {
     nft list tables 2>/dev/null | awk '
-        $1 == "table" && $3 ~ /^l4d2(_|$)/ {
+        $1 == "table" && ($3 == "firewall_main" || $3 == "vpn_s2s_nat" || $3 ~ /^l4d2(_|$)/) {
             print $2 " " $3
         }
     '
@@ -159,7 +422,7 @@ nft_managed_table_entries_file() {
     [ -f "$source_file" ] || return 0
 
     awk '
-        $1 == "table" && $3 ~ /^l4d2(_|$)/ {
+        $1 == "table" && ($3 == "firewall_main" || $3 == "vpn_s2s_nat" || $3 ~ /^l4d2(_|$)/) {
             print $2 " " $3
         }
     ' "$source_file" | awk '!seen[$0]++'
@@ -174,7 +437,7 @@ nft_write_managed_tables() {
     mapfile -t entries < <(nft_managed_table_entries_live)
 
     if [ "${#entries[@]}" -eq 0 ]; then
-        msg_error "No managed nftables tables found (expected names like l4d2_filter or l4d2_*)."
+        msg_error "No managed nftables tables found (expected firewall_main / vpn_s2s_nat or legacy l4d2_*)."
         return 1
     fi
 
@@ -219,6 +482,8 @@ show_menu() {
     print_section_rules "[Rules]"
     print_option 3 "Show current firewall rules"
     print_option 4 "Clear all active firewall rules"
+    print_option 11 "Clear only L4D2 rules"
+    print_option 12 "Restore only L4D2 rules"
     print_option 5 "Save current rules (persistent)"
     print_option 6 "Show saved rules file"
     print_option 7 "Clear saved rules file"
@@ -229,7 +494,7 @@ show_menu() {
     print_option 10 "Switch backend (iptables/nftables)"
     print_option 0 "Exit"
     echo ""
-    echo -ne "${C_BOLD}Select option [0-10]: ${C_RESET}"
+    echo -ne "${C_BOLD}Select option [0-12]: ${C_RESET}"
 }
 
 # Function to install persistent service
@@ -326,8 +591,8 @@ save_rules() {
     else
         msg_info "Saving current nftables rules..."
 
-        if ! nft list table inet l4d2_filter >/dev/null 2>&1; then
-            msg_error "Table inet l4d2_filter not found. Apply nftables.rules.sh first."
+        if ! nft_suite_primary_table_exists; then
+            msg_error "Managed nftables table not found (expected inet firewall_main or legacy inet l4d2_filter). Apply nftables.rules.sh first."
             return 1
         fi
 
@@ -497,6 +762,24 @@ while true; do
                 msg_error "Operation cancelled"
             fi
             ;;
+        11)
+            msg_warn "This will clear only L4D2 rules in backend '$ACTIVE_BACKEND' and keep VPN/SSH/Web rules. Continue? [y/N]"
+            read -r confirm
+            if [[ $confirm =~ ^[Yy]$ ]]; then
+                clear_l4d2_rules
+            else
+                msg_error "Operation cancelled"
+            fi
+            ;;
+        12)
+            msg_warn "This will restore only L4D2 rules in backend '$ACTIVE_BACKEND' and keep VPN/SSH/Web rules untouched. Continue? [y/N]"
+            read -r confirm
+            if [[ $confirm =~ ^[Yy]$ ]]; then
+                restore_l4d2_rules
+            else
+                msg_error "Operation cancelled"
+            fi
+            ;;
         5)
             save_rules
             ;;
@@ -526,7 +809,7 @@ while true; do
             break
             ;;
         *)
-            msg_error "Invalid option. Please select 0-10."
+            msg_error "Invalid option. Please select 0-12."
             ;;
     esac
 

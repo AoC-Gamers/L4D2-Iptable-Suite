@@ -17,4 +17,12 @@ Inicializar cadenas/tablas base y políticas por defecto antes de módulos funci
 
 ## Diferencias por backend
 - `ip`: limpieza amplia de tablas/cadenas y compatibilidad Docker opcional.
-- `nf`: crea tabla `inet l4d2_filter` y cadenas hook `input/forward/output`.
+- `nf`: crea tabla `inet firewall_main` y cadenas hook `input/forward/output`.
+- `nf`: separa reglas por dominio mediante subcadenas regulares:
+  - `input_core_allow`, `forward_core_allow`
+  - `forward_docker_egress`
+  - `input_vpn`, `forward_vpn`
+  - `input_admin`, `forward_admin`
+  - `input_l4d2_tcp`, `forward_l4d2_tcp`
+  - `input_web`, `forward_web`
+  - `input_l4d2_udp`, `forward_l4d2_udp`

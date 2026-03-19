@@ -7,10 +7,10 @@ nf_chain_setup_metadata() {
     cat << 'EOF'
 ID=nf_chain_setup
 ALIASES=chain_setup
-DESCRIPTION=Sets up the nftables ruleset and base chains for L4D2
+DESCRIPTION=Sets up the modular nftables ruleset, base hooks, and domain chains
 REQUIRED_VARS=TYPECHAIN
-OPTIONAL_VARS=
-DEFAULTS=TYPECHAIN=0
+OPTIONAL_VARS=NF_TABLE_FAMILY NF_TABLE_NAME
+DEFAULTS=TYPECHAIN=0 NF_TABLE_FAMILY=inet NF_TABLE_NAME=firewall_main
 EOF
 }
 
@@ -30,10 +30,16 @@ nf_chain_setup_validate() {
 }
 
 nf_chain_setup_apply() {
-    if nft list table inet l4d2_filter >/dev/null 2>&1; then
-        nft delete table inet l4d2_filter
-    fi
-    nft add table inet l4d2_filter
+    local domain
+    local input_domains="core_allow vpn admin l4d2_tcp web l4d2_udp"
+    local forward_domains="core_allow docker_egress vpn admin l4d2_tcp web l4d2_udp"
+
+    nft delete table "$NF_TABLE_FAMILY" "$NF_TABLE_NAME" 2>/dev/null || true
+    nft delete table inet l4d2_filter 2>/dev/null || true
+    nft delete table ip vpn_s2s_nat 2>/dev/null || true
+    nft delete table ip l4d2_s2s_nat 2>/dev/null || true
+
+    nft add table "$NF_TABLE_FAMILY" "$NF_TABLE_NAME"
 
     local input_policy="accept"
     local forward_policy="accept"
@@ -46,15 +52,30 @@ nf_chain_setup_apply() {
         forward_policy="drop"
     fi
 
-    nft add chain inet l4d2_filter input "{ type filter hook input priority 0 ; policy ${input_policy} ; }"
-    nft add chain inet l4d2_filter forward "{ type filter hook forward priority 0 ; policy ${forward_policy} ; }"
-    nft add chain inet l4d2_filter output "{ type filter hook output priority 0 ; policy accept ; }"
+    nft add chain "$NF_TABLE_FAMILY" "$NF_TABLE_NAME" input "{ type filter hook input priority 0 ; policy ${input_policy} ; }"
+    nft add chain "$NF_TABLE_FAMILY" "$NF_TABLE_NAME" forward "{ type filter hook forward priority 0 ; policy ${forward_policy} ; }"
+    nft add chain "$NF_TABLE_FAMILY" "$NF_TABLE_NAME" output "{ type filter hook output priority 0 ; policy accept ; }"
 
-    nft add rule inet l4d2_filter input iifname lo accept
-    nft add rule inet l4d2_filter input ct state established,related accept
-    nft add rule inet l4d2_filter output accept
+    for domain in $input_domains; do
+        nf_add_chain "$(nf_domain_chain_name input "$domain")"
+    done
 
+    for domain in $forward_domains; do
+        nf_add_chain "$(nf_domain_chain_name forward "$domain")"
+    done
+
+    nf_add_rule input iifname lo accept
+    nf_add_rule input ct state established,related accept
     if nf_chain_enabled forward; then
-        nft add rule inet l4d2_filter forward ct state established,related accept
+        nf_add_rule forward ct state established,related accept
     fi
+    nf_add_rule output accept
+
+    for domain in $input_domains; do
+        nf_add_rule input jump "$(nf_domain_chain_name input "$domain")"
+    done
+
+    for domain in $forward_domains; do
+        nf_add_rule forward jump "$(nf_domain_chain_name forward "$domain")"
+    done
 }

@@ -10,6 +10,9 @@ Aplicar base de control UDP para tráfico de juego (NEW/ESTABLISHED) e ICMP.
 ## Variables
 - `L4D2_GAMESERVER_PORTS`, `L4D2_TV_PORTS`, `L4D2_CMD_LIMIT`
 - `LOG_PREFIX_UDP_NEW_LIMIT`, `LOG_PREFIX_UDP_EST_LIMIT`, `LOG_PREFIX_ICMP_FLOOD`
+- `UDP_NEW_SRC_RATE`, `UDP_NEW_SRC_BURST`
+- `UDP_NEW_GLOBAL_RATE`, `UDP_NEW_GLOBAL_BURST`
+- `ENABLE_UDP_NEW_FFFFFFFF_BYPASS`
 - `ENABLE_UDP_BASELINE_LOGS` (`false` recomendado en producción)
 - nftables: `STEAM_GROUP_SIGNATURES` para bypass temprano de firmas `0xFFFFFFFFxx` observadas o documentadas
 
@@ -25,6 +28,17 @@ En backend `nftables`, el módulo deja pasar antes del limitador `ct state new` 
 - firmas extra definidas en `STEAM_GROUP_SIGNATURES`
 
 Esto evita que el módulo base bloquee tráfico que luego será clasificado por `l4d2_a2s_filters`.
+
+## Nota operativa importante
+Si `serverbrowser` o `steamgroup` dejan de mostrar servidores, revisar primero que el backend activo realmente esté leyendo:
+
+- `UDP_NEW_SRC_RATE`
+- `UDP_NEW_SRC_BURST`
+- `UDP_NEW_GLOBAL_RATE`
+- `UDP_NEW_GLOBAL_BURST`
+- `ENABLE_UDP_NEW_FFFFFFFF_BYPASS`
+
+Con el perfil actual del proyecto se recomienda `8/24` por origen+puerto y `240/960` global por puerto como piso operativo para no romper descubrimiento.
 
 ## Politica de logging
 `UDP_NEW_LIMIT` y `UDP_EST_LIMIT` pertenecen al filtro preventivo/base, no a la clasificación final de abuso.

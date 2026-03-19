@@ -69,7 +69,7 @@ nf_22_docker_dns_egress_apply() {
         trimmed="${trimmed%"${trimmed##*[![:space:]]}"}"
         [ -z "$trimmed" ] && continue
 
-        nf_add_rule forward ip saddr "$trimmed" udp dport 53 accept
-        nf_add_rule forward ip saddr "$trimmed" tcp dport 53 accept
+        nf_add_rule "$(nf_domain_chain_name forward docker_egress)" ip saddr "$trimmed" udp dport 53 accept
+        nf_add_rule "$(nf_domain_chain_name forward docker_egress)" ip saddr "$trimmed" tcp dport 53 accept
     done
 }

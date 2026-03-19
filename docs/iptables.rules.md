@@ -182,7 +182,7 @@ Alias S2S para router/LAN solapada:
     - La suite puede abrir el puerto y permitir `docker0`, pero el forwarding real puede requerir reglas dentro del contenedor o routing/NAT adicional.
 
 **Nota operativa para hosts con Docker + backend `nftables`:**
-- Si Docker mantiene una tabla `ip filter` con `FORWARD policy drop`, el tráfico S2S aceptado en `inet l4d2_filter` puede seguir siendo bloqueado después por `DOCKER-USER`/`DOCKER-FORWARD`.
+- Si Docker mantiene una tabla `ip filter` con `FORWARD policy drop`, el tráfico S2S aceptado en `inet firewall_main` puede seguir siendo bloqueado después por `DOCKER-USER`/`DOCKER-FORWARD`.
 - En ese escenario, el módulo `openvpn_sitetosite` debe añadir excepciones equivalentes en `DOCKER-USER` para `OVPNS2S_INTERFACE -> OVPNS2S_LOCAL_INTERFACE` y su retorno `ESTABLISHED,RELATED`.
 
 **Cadena DOCKER en esta suite:**

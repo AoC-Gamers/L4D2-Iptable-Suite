@@ -12,7 +12,7 @@ Objetivo: validar si el host puede ejecutar este proyecto de forma segura para G
 ## 2) Contexto esperado del proyecto
 
 - Backend `iptables` usa cadena `DOCKER-USER` para tráfico Docker.
-- Backend `nftables` NO debe hacer `flush ruleset` global; solo tabla propia `inet l4d2_filter`.
+- Backend `nftables` NO debe hacer `flush ruleset` global; solo sus tablas propias (`inet firewall_main`, `ip vpn_s2s_nat` cuando aplique).
 - Archivo de configuración base: `.env`.
 
 ## 3) Chequeo del entorno (solo lectura)
@@ -53,11 +53,12 @@ Criterios para `iptables`:
 
 ```bash
 nft list ruleset
-nft list table inet l4d2_filter 2>/dev/null || true
+nft list table inet firewall_main 2>/dev/null || true
+nft list table ip vpn_s2s_nat 2>/dev/null || true
 ```
 
 Criterios para `nftables`:
-- PASS si `ruleset` existe y no hay conflictos obvios entre tablas Docker y `inet l4d2_filter`.
+- PASS si `ruleset` existe y no hay conflictos obvios entre tablas Docker y `inet firewall_main`.
 - WARN si hay reglas Docker pero no hooks esperados en `forward` para tráfico contenedor.
 
 ## 5) Validación estática del repo (seguridad de implementación)

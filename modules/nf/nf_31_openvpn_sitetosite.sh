@@ -68,7 +68,7 @@ nf_31_openvpn_sitetosite_cleanup_docker_user_rules() {
 
     mapfile -t handles < <(
         nft -a list chain ip filter DOCKER-USER 2>/dev/null \
-            | awk '/comment "l4d2-s2s-dockeruser-/ {print $NF}' \
+            | awk '/comment "(l4d2|vpn)-s2s-dockeruser-/ {print $NF}' \
             | sort -rn
     )
 
@@ -97,12 +97,12 @@ nf_31_openvpn_sitetosite_apply_docker_user_rules() {
             nft insert rule ip filter DOCKER-USER \
                 iifname "$OVPNS2S_INTERFACE" oifname "$OVPNS2S_LOCAL_INTERFACE" \
                 ip saddr "$remote_subnet" ip daddr "$local_subnet" \
-                accept comment "l4d2-s2s-dockeruser-fwd"
+                accept comment "vpn-s2s-dockeruser-fwd"
             nft insert rule ip filter DOCKER-USER \
                 iifname "$OVPNS2S_LOCAL_INTERFACE" oifname "$OVPNS2S_INTERFACE" \
                 ip saddr "$local_subnet" ip daddr "$remote_subnet" \
                 ct state established,related \
-                accept comment "l4d2-s2s-dockeruser-ret"
+                accept comment "vpn-s2s-dockeruser-ret"
         done < <(nf_31_openvpn_sitetosite_expand_list "$OVPNS2S_LOCAL_SUBNETS")
     done < <(nf_31_openvpn_sitetosite_expand_list "$OVPNS2S_REMOTE_SUBNETS")
 }
@@ -164,7 +164,7 @@ nf_31_openvpn_sitetosite_validate() {
 
 nf_31_openvpn_sitetosite_apply() {
     local local_subnet remote_subnet alias_entry alias_real alias_ip
-    local nat_table="l4d2_s2s_nat"
+    local nat_table="vpn_s2s_nat"
     local need_nat_table=false
 
     if [ "${OVPNS2S_ENABLE_NAT:-false}" = "true" ] || [ -n "$(nf_31_openvpn_sitetosite_router_alias_entries)" ]; then
@@ -174,7 +174,7 @@ nf_31_openvpn_sitetosite_apply() {
     if nf_chain_enabled input; then
         while IFS= read -r remote_subnet; do
             [ -z "$remote_subnet" ] && continue
-            nf_add_rule input iifname "$OVPNS2S_INTERFACE" ip saddr "$remote_subnet" accept
+            nf_add_rule "$(nf_domain_chain_name input vpn)" iifname "$OVPNS2S_INTERFACE" ip saddr "$remote_subnet" accept
         done < <(nf_31_openvpn_sitetosite_expand_list "$OVPNS2S_REMOTE_SUBNETS")
     fi
 
@@ -183,8 +183,8 @@ nf_31_openvpn_sitetosite_apply() {
             [ -z "$remote_subnet" ] && continue
             while IFS= read -r local_subnet; do
                 [ -z "$local_subnet" ] && continue
-                nf_add_rule forward iifname "$OVPNS2S_INTERFACE" ip saddr "$remote_subnet" ip daddr "$local_subnet" accept
-                nf_add_rule forward oifname "$OVPNS2S_INTERFACE" ip saddr "$local_subnet" ip daddr "$remote_subnet" ct state established,related accept
+                nf_add_rule "$(nf_domain_chain_name forward vpn)" iifname "$OVPNS2S_INTERFACE" ip saddr "$remote_subnet" ip daddr "$local_subnet" accept
+                nf_add_rule "$(nf_domain_chain_name forward vpn)" oifname "$OVPNS2S_INTERFACE" ip saddr "$local_subnet" ip daddr "$remote_subnet" ct state established,related accept
             done < <(nf_31_openvpn_sitetosite_expand_list "$OVPNS2S_LOCAL_SUBNETS")
             done < <(nf_31_openvpn_sitetosite_expand_list "$OVPNS2S_REMOTE_SUBNETS")
     fi

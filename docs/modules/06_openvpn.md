@@ -42,4 +42,4 @@ Separar explícitamente los dos modos de operación de OpenVPN:
 
 ## Diferencias por backend
 - `ip` incluye más opciones avanzadas (NAT/log/DNAT).
-- `nf` mantiene implementación directa para input/forward y soporta NAT S2S (tabla `ip l4d2_s2s_nat`) para alias de router y MASQUERADE opcional.
+- `nf` mantiene implementación directa para input/forward y soporta NAT S2S en tabla dedicada `ip vpn_s2s_nat` para alias de router y MASQUERADE opcional.

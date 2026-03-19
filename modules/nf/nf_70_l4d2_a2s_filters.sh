@@ -81,12 +81,12 @@ nf_70_l4d2_a2s_filters_apply() {
     game_ports_expr="$(nf_ports_set_expr "$L4D2_GAMESERVER_PORTS")"
     all_query_ports_expr="{ $(nf_ports_normalize "$L4D2_GAMESERVER_PORTS"), $(nf_ports_normalize "$L4D2_TV_PORTS") }"
 
-    nft add chain inet l4d2_filter a2s_info_limit
-    nft add chain inet l4d2_filter a2s_players_limit
-    nft add chain inet l4d2_filter a2s_rules_limit
-    nft add chain inet l4d2_filter steam_group_limit
-    nft add chain inet l4d2_filter login_connect_limit
-    nft add chain inet l4d2_filter login_reserve_limit
+    nf_add_chain a2s_info_limit
+    nf_add_chain a2s_players_limit
+    nf_add_chain a2s_rules_limit
+    nf_add_chain steam_group_limit
+    nf_add_chain login_connect_limit
+    nf_add_chain login_reserve_limit
 
     log_a2s_info="$(nf_build_log_prefix "$LOG_PREFIX_A2S_INFO" "A2S_INFO_FLOOD" "nf_70_l4d2_a2s_filters" "a2s_info_limit" "drop" "medium")"
     log_a2s_players="$(nf_build_log_prefix "$LOG_PREFIX_A2S_PLAYERS" "A2S_PLAYERS_FLOOD" "nf_70_l4d2_a2s_filters" "a2s_players_limit" "drop" "medium")"
@@ -119,7 +119,7 @@ nf_70_l4d2_a2s_filters_apply() {
     nf_add_rule login_reserve_limit meter login_reserve_over "{ ip saddr . ip daddr . udp dport limit rate over ${L4D2_LOGIN_RATE}/second burst ${L4D2_LOGIN_BURST} packets }" log prefix "\"$log_reserve\""
     nf_add_rule login_reserve_limit meter login_reserve_over_drop "{ ip saddr . ip daddr . udp dport limit rate over ${L4D2_LOGIN_RATE}/second burst ${L4D2_LOGIN_BURST} packets }" drop
 
-    for chain in $(nf_get_target_chains); do
+    for chain in $(nf_get_target_chains_for_domain l4d2_udp); do
         nf_add_rule "$chain" udp dport "$all_query_ports_expr" @th,64,40 0xFFFFFFFF54 jump a2s_info_limit
         nf_add_rule "$chain" udp dport "$all_query_ports_expr" @th,64,40 0xFFFFFFFF55 jump a2s_players_limit
         nf_add_rule "$chain" udp dport "$all_query_ports_expr" @th,64,40 0xFFFFFFFF56 jump a2s_rules_limit

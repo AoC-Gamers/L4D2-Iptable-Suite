@@ -11,9 +11,14 @@ Bloquear tamaños UDP inválidos/malformados típicos de abuso sobre puertos de 
 - `L4D2_GAMESERVER_PORTS`, `L4D2_TV_PORTS`
 - `LOG_PREFIX_INVALID_SIZE`, `LOG_PREFIX_MALFORMED`
 - `ENABLE_PACKET_NORMALIZATION_LOGS` (`false` recomendado en producción)
+- `ENABLE_MALFORMED_FILTER` (`false` recomendado si discovery/Steam Group es sensible)
 
 ## Diferencias por backend
 - Ambos aplican validación de tamaños inválidos/malformados sobre puertos de juego.
+
+## Recomendación práctica
+- Mantener `ENABLE_MALFORMED_FILTER=false` cuando el objetivo principal sea compatibilidad con `serverbrowser` y `steamgroup`.
+- Reservar `ENABLE_MALFORMED_FILTER=true` para entornos donde ya exista captura/pcap que confirme que las longitudes `30-32`, `46` y `60` son realmente basura en tu tráfico.
 
 ## Politica de logging
 Este módulo hace saneamiento/normalización de tráfico, no clasificación principal de abuso.

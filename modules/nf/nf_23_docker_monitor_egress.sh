@@ -109,7 +109,7 @@ nf_23_docker_monitor_egress_apply() {
             subnet="${subnet%"${subnet##*[![:space:]]}"}"
             [ -z "$subnet" ] && continue
 
-            nf_add_rule forward ip saddr "$subnet" ip daddr "$target" tcp dport "$ports_expr" accept
+            nf_add_rule "$(nf_domain_chain_name forward docker_egress)" ip saddr "$subnet" ip daddr "$target" tcp dport "$ports_expr" accept
         done
     done
 

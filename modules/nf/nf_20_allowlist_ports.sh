@@ -37,14 +37,14 @@ nf_20_allowlist_ports_apply() {
 
     if [ -n "${UDP_ALLOW_PORTS:-}" ]; then
         ports_expr="$(nf_ports_set_expr "$UDP_ALLOW_PORTS")"
-        for chain in $(nf_get_target_chains); do
+        for chain in $(nf_get_target_chains_for_domain core_allow); do
             nf_add_rule "$chain" udp dport "$ports_expr" accept
         done
     fi
 
     if [ -n "${TCP_ALLOW_PORTS:-}" ]; then
         ports_expr="$(nf_ports_set_expr "$TCP_ALLOW_PORTS")"
-        for chain in $(nf_get_target_chains); do
+        for chain in $(nf_get_target_chains_for_domain core_allow); do
             nf_add_rule "$chain" tcp dport "$ports_expr" accept
         done
     fi

@@ -79,7 +79,7 @@ nf_10_whitelist_apply() {
     [ -z "$effective_whitelist" ] && return 0
 
     local chain
-    for chain in $(nf_get_target_chains); do
+    for chain in $(nf_get_target_chains_for_domain core_allow); do
         for ip in $effective_whitelist; do
             # Accept single IPv4 and IPv4 CIDR only
             if ! [[ "$ip" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}(/[0-9]{1,2})?$ ]]; then

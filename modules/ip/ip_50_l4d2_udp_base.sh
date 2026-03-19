@@ -6,9 +6,24 @@ ID=ip_l4d2_udp_base
 ALIASES=l4d2_udp_base
 DESCRIPTION=Applies base UDP/state/ICMP rules for GameServer and SourceTV services
 REQUIRED_VARS=TYPECHAIN L4D2_GAMESERVER_PORTS L4D2_TV_PORTS L4D2_CMD_LIMIT LOG_PREFIX_UDP_NEW_LIMIT LOG_PREFIX_UDP_EST_LIMIT LOG_PREFIX_ICMP_FLOOD
-OPTIONAL_VARS=ENABLE_UDP_BASELINE_LOGS
-DEFAULTS=TYPECHAIN=0 L4D2_GAMESERVER_PORTS=27015 L4D2_TV_PORTS=27020 L4D2_CMD_LIMIT=100 LOG_PREFIX_UDP_NEW_LIMIT=UDP_NEW_LIMIT: LOG_PREFIX_UDP_EST_LIMIT=UDP_EST_LIMIT: LOG_PREFIX_ICMP_FLOOD=ICMP_FLOOD: ENABLE_UDP_BASELINE_LOGS=false
+OPTIONAL_VARS=ENABLE_UDP_BASELINE_LOGS UDP_NEW_SRC_RATE UDP_NEW_SRC_BURST UDP_NEW_GLOBAL_RATE UDP_NEW_GLOBAL_BURST ENABLE_UDP_NEW_FFFFFFFF_BYPASS STEAM_GROUP_SIGNATURES
+DEFAULTS=TYPECHAIN=0 L4D2_GAMESERVER_PORTS=27015 L4D2_TV_PORTS=27020 L4D2_CMD_LIMIT=100 LOG_PREFIX_UDP_NEW_LIMIT=UDP_NEW_LIMIT: LOG_PREFIX_UDP_EST_LIMIT=UDP_EST_LIMIT: LOG_PREFIX_ICMP_FLOOD=ICMP_FLOOD: ENABLE_UDP_BASELINE_LOGS=false UDP_NEW_SRC_RATE=8 UDP_NEW_SRC_BURST=24 UDP_NEW_GLOBAL_RATE=240 UDP_NEW_GLOBAL_BURST=960 ENABLE_UDP_NEW_FFFFFFFF_BYPASS=true STEAM_GROUP_SIGNATURES=69
 EOF
+}
+
+ip_50_l4d2_udp_base_validate_positive_int() {
+    local key="$1"
+    local value="$2"
+
+    if ! [[ "$value" =~ ^[0-9]+$ ]]; then
+        echo "ERROR: ip_l4d2_udp_base: $key must be numeric"
+        return 2
+    fi
+
+    if [ "$value" -le 0 ]; then
+        echo "ERROR: ip_l4d2_udp_base: $key must be > 0"
+        return 2
+    fi
 }
 
 ip_50_l4d2_udp_base_validate() {
@@ -30,6 +45,11 @@ ip_50_l4d2_udp_base_validate() {
         return 2
     fi
 
+    local key
+    for key in UDP_NEW_SRC_RATE UDP_NEW_SRC_BURST UDP_NEW_GLOBAL_RATE UDP_NEW_GLOBAL_BURST; do
+        ip_50_l4d2_udp_base_validate_positive_int "$key" "${!key:-}" || return $?
+    done
+
     if [ -n "${L4D2_GAMESERVER_PORTS:-}" ] && ! [[ "${L4D2_GAMESERVER_PORTS}" =~ ^[0-9]+(:[0-9]+)?(,[0-9]+(:[0-9]+)?)*$ ]]; then
         echo "ERROR: ip_l4d2_udp_base: invalid L4D2_GAMESERVER_PORTS format"
         return 2
@@ -47,28 +67,58 @@ ip_50_l4d2_udp_base_validate() {
             return 2
             ;;
     esac
+
+    case "${ENABLE_UDP_NEW_FFFFFFFF_BYPASS:-}" in
+        true|false) ;;
+        *)
+            echo "ERROR: ip_l4d2_udp_base: ENABLE_UDP_NEW_FFFFFFFF_BYPASS must be true or false"
+            return 2
+            ;;
+    esac
+
+    local steam_signatures="${STEAM_GROUP_SIGNATURES//[[:space:]]/}"
+    if [ -n "$steam_signatures" ] && ! [[ "$steam_signatures" =~ ^[0-9A-Fa-f]{2}(,[0-9A-Fa-f]{2})*$ ]]; then
+        echo "ERROR: ip_l4d2_udp_base: STEAM_GROUP_SIGNATURES must be comma-separated hex bytes (example: 69,00)"
+        return 2
+    fi
 }
 
 ip_50_l4d2_udp_base_apply() {
     local cmd_limit_leeway=$((L4D2_CMD_LIMIT + 10))
     local cmd_limit_upper=$((L4D2_CMD_LIMIT + 30))
+    local steam_signatures_csv steam_sig
+    local -a steam_signatures
 
-    # Source query/login signatures are handled by dedicated modules later in
-    # the chain order (A2S + l4d2loginfilter). Bypass generic NEW rate limiting
-    # so legitimate server browser traffic is not dropped too early.
-    iptables -A UDP_GAME_NEW_LIMIT -m string --algo bm --hex-string '|FFFFFFFF54|' -j RETURN
-    iptables -A UDP_GAME_NEW_LIMIT -m string --algo bm --hex-string '|FFFFFFFF55|' -j RETURN
-    iptables -A UDP_GAME_NEW_LIMIT -m string --algo bm --hex-string '|FFFFFFFF56|' -j RETURN
-    iptables -A UDP_GAME_NEW_LIMIT -m string --algo bm --hex-string '|FFFFFFFF00|' -j RETURN
-    iptables -A UDP_GAME_NEW_LIMIT -m string --algo bm --hex-string '|FFFFFFFF71|' -j RETURN
+    if [ "${ENABLE_UDP_NEW_FFFFFFFF_BYPASS}" = "true" ]; then
+        # Source query/login signatures are handled by dedicated modules later
+        # in the chain order (A2S + l4d2loginfilter). Bypass generic NEW rate
+        # limiting so legitimate server browser traffic is not dropped early.
+        iptables -A UDP_GAME_NEW_LIMIT -m string --algo bm --hex-string '|FFFFFFFF54|' -j RETURN
+        iptables -A UDP_GAME_NEW_LIMIT -m string --algo bm --hex-string '|FFFFFFFF55|' -j RETURN
+        iptables -A UDP_GAME_NEW_LIMIT -m string --algo bm --hex-string '|FFFFFFFF56|' -j RETURN
+        iptables -A UDP_GAME_NEW_LIMIT -m string --algo bm --hex-string '|FFFFFFFF57|' -j RETURN
+        iptables -A UDP_GAME_NEW_LIMIT -m string --algo bm --hex-string '|FFFFFFFF69|' -j RETURN
+        iptables -A UDP_GAME_NEW_LIMIT -m string --algo bm --hex-string '|FFFFFFFF71|' -j RETURN
 
-    iptables -A UDP_GAME_NEW_LIMIT -m hashlimit --hashlimit-upto 1/s --hashlimit-burst 3 --hashlimit-mode srcip,dstport --hashlimit-name L4D2_NEW_HASHLIMIT --hashlimit-htable-expire 5000 -j UDP_GAME_NEW_LIMIT_GLOBAL
+        steam_signatures_csv="${STEAM_GROUP_SIGNATURES//[[:space:]]/}"
+        IFS=',' read -r -a steam_signatures <<< "$steam_signatures_csv"
+        for steam_sig in "${steam_signatures[@]}"; do
+            [ -z "$steam_sig" ] && continue
+            steam_sig="${steam_sig^^}"
+            case "$steam_sig" in
+                54|55|56|57|69|71) continue ;;
+            esac
+            iptables -A UDP_GAME_NEW_LIMIT -m string --algo bm --hex-string "|FFFFFFFF${steam_sig}|" -j RETURN
+        done
+    fi
+
+    iptables -A UDP_GAME_NEW_LIMIT -m hashlimit --hashlimit-upto "${UDP_NEW_SRC_RATE}/s" --hashlimit-burst "$UDP_NEW_SRC_BURST" --hashlimit-mode srcip,dstport --hashlimit-name L4D2_NEW_HASHLIMIT --hashlimit-htable-expire 5000 -j UDP_GAME_NEW_LIMIT_GLOBAL
     if [ "${ENABLE_UDP_BASELINE_LOGS}" = "true" ]; then
         iptables -A UDP_GAME_NEW_LIMIT -m limit --limit 60/min --limit-burst 20 -j LOG --log-prefix "$LOG_PREFIX_UDP_NEW_LIMIT" --log-level 4
     fi
     iptables -A UDP_GAME_NEW_LIMIT -j DROP
 
-    iptables -A UDP_GAME_NEW_LIMIT_GLOBAL -m hashlimit --hashlimit-upto 10/s --hashlimit-burst 20 --hashlimit-mode dstport --hashlimit-name L4D2_NEW_HASHLIMIT_GLOBAL --hashlimit-htable-expire 5000 -j ACCEPT
+    iptables -A UDP_GAME_NEW_LIMIT_GLOBAL -m hashlimit --hashlimit-upto "${UDP_NEW_GLOBAL_RATE}/s" --hashlimit-burst "$UDP_NEW_GLOBAL_BURST" --hashlimit-mode dstport --hashlimit-name L4D2_NEW_HASHLIMIT_GLOBAL --hashlimit-htable-expire 5000 -j ACCEPT
     if [ "${ENABLE_UDP_BASELINE_LOGS}" = "true" ]; then
         iptables -A UDP_GAME_NEW_LIMIT_GLOBAL -m limit --limit 60/min --limit-burst 20 -j LOG --log-prefix "$LOG_PREFIX_UDP_NEW_LIMIT" --log-level 4
     fi

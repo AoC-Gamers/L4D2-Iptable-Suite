@@ -1,5 +1,8 @@
 #!/bin/bash
 
+NF_TABLE_FAMILY="${NF_TABLE_FAMILY:-inet}"
+NF_TABLE_NAME="${NF_TABLE_NAME:-firewall_main}"
+
 nf_get_target_chains() {
     case "${TYPECHAIN:-0}" in
         0)
@@ -28,10 +31,43 @@ nf_chain_enabled() {
     return 1
 }
 
+nf_domain_chain_name() {
+    local hook="$1"
+    local domain="$2"
+    echo "${hook}_${domain}"
+}
+
+nf_get_target_chains_for_domain() {
+    local domain="$1"
+
+    case "${TYPECHAIN:-0}" in
+        0)
+            nf_domain_chain_name input "$domain"
+            ;;
+        1)
+            nf_domain_chain_name forward "$domain"
+            ;;
+        2)
+            printf "%s %s\n" \
+                "$(nf_domain_chain_name input "$domain")" \
+                "$(nf_domain_chain_name forward "$domain")"
+            ;;
+        *)
+            return 2
+            ;;
+    esac
+}
+
+nf_add_chain() {
+    local chain="$1"
+    shift || true
+    nft add chain "$NF_TABLE_FAMILY" "$NF_TABLE_NAME" "$chain" "$@"
+}
+
 nf_add_rule() {
     local chain="$1"
     shift
-    nft add rule inet l4d2_filter "$chain" "$@"
+    nft add rule "$NF_TABLE_FAMILY" "$NF_TABLE_NAME" "$chain" "$@"
 }
 
 nf_log_prefix_safe() {

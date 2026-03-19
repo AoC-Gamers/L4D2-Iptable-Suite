@@ -37,7 +37,7 @@ nf_42_l4d2_tcp_protect_apply() {
 
     protected_ports_expr="$(nf_ports_set_expr "${L4D2_TCP_PROTECTION:-$L4D2_GAMESERVER_PORTS}")"
 
-    for chain in $(nf_get_target_chains); do
+    for chain in $(nf_get_target_chains_for_domain l4d2_tcp); do
         log_tcp_rcon="$(nf_build_log_prefix "$LOG_PREFIX_TCP_RCON_BLOCK" "TCP_RCON_BLOCK" "nf_42_l4d2_tcp_protect" "$chain" "drop" "high")"
         nf_add_rule "$chain" tcp dport "$protected_ports_expr" limit rate over 60/minute burst 20 packets log prefix "\"$log_tcp_rcon\""
         nf_add_rule "$chain" tcp dport "$protected_ports_expr" drop

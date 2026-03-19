@@ -32,7 +32,7 @@
 - ✅ Compatible con `iptables.rules.sh`
 - ✅ Compatible con `nftables.rules.sh`
 
-En backend `nftables`, el script guarda y recarga las tablas administradas por la suite cuyo nombre comienza con `l4d2_` o coincide con `l4d2_filter`, usando `/etc/nftables.conf` como archivo persistente.
+En backend `nftables`, el script guarda y recarga las tablas administradas por la suite (`inet firewall_main`, `ip vpn_s2s_nat`) y sigue reconociendo nombres legacy como `l4d2_filter` o `l4d2_*`, usando `/etc/nftables.conf` como archivo persistente.
 
 ## Instalación y Requisitos
 
@@ -88,11 +88,14 @@ Al ejecutar el script, se presenta el siguiente menú interactivo:
 2 - Remove  iptables-persistent
 3 - Show current iptables rules
 4 - Clear all iptables rules
+11 - Clear only L4D2 rules
+12 - Restore only L4D2 rules
 5 - Save current rules (persistent)
 6 - Show saved rules file
 7 - Clear saved rules file
 8 - Reload saved rules
 9 - Status of iptables service
+10 - Switch backend (iptables/nftables)
 0 - Exit
 =========================================
 ```
@@ -191,6 +194,60 @@ Chain PREROUTING (policy ACCEPT 0 packets, 0 bytes)
 
 ---
 
+### 11. Clear only L4D2 rules
+
+**Funcionalidad**: Limpia únicamente las restricciones asociadas a L4D2 y preserva reglas de VPN, SSH, Web, allowlists y otras áreas del firewall.
+
+**Proceso realizado**:
+- Backend `nftables`:
+  - Vacía solo las subcadenas de dominio `l4d2_*` en `inet firewall_main`
+  - Vacía también cadenas auxiliares de rate-limit/queries (`udp_new_limit`, `a2s_*`, `steam_group_limit`, `login_*`)
+  - No toca `input_vpn`, `forward_vpn`, `input_admin`, `input_web`, `forward_docker_egress`, etc.
+- Backend `iptables`:
+  - Carga el `.env` de la suite para identificar puertos y firmas activas de L4D2
+  - Borra saltos y drops L4D2 en `INPUT` / `DOCKER-USER`
+  - Limpia cadenas dedicadas (`UDP_GAME_*`, `A2S_*`, `STEAM_GROUP_LIMITS`, `l4d2loginfilter`, `TCPfilter`)
+
+**Prompt de confirmación**:
+```text
+WARNING: This will clear only L4D2 rules in backend '...'
+```
+
+**Notas**:
+- En `nftables`, esta limpieza selectiva requiere la topología nueva con `inet firewall_main`.
+- Si solo existe la tabla legacy `inet l4d2_filter`, el script te pedirá reaplicar el backend `nf` actual antes de hacer una limpieza parcial segura.
+
+**Cuándo usarlo**: Para pruebas de visibilidad/descubrimiento de servidores sin apagar reglas de VPN o del host completo.
+
+---
+
+### 12. Restore only L4D2 rules
+
+**Funcionalidad**: Restaura únicamente las reglas L4D2 de la suite sin tocar VPN, SSH, Web, allowlists ni otras partes del firewall activo.
+
+**Proceso realizado**:
+- Backend `nftables`:
+  - Limpia primero solo las subcadenas y helpers L4D2
+  - Reejecuta `nftables.rules.sh` con `MODULES_ONLY` para reaplicar exclusivamente módulos L4D2
+  - No vuelve a ejecutar `chain_setup` ni `finalize`, para no reescribir el resto del firewall
+- Backend `iptables`:
+  - Limpia primero solo las restricciones L4D2
+  - Asegura que existan las cadenas dedicadas (`UDP_GAME_*`, `A2S_*`, `STEAM_GROUP_LIMITS`, `l4d2loginfilter`, `TCPfilter`)
+  - Reejecuta `iptables.rules.sh` con `MODULES_ONLY` para restaurar exclusivamente L4D2
+
+**Prompt de confirmación**:
+```text
+WARNING: This will restore only L4D2 rules in backend '...'
+```
+
+**Notas**:
+- Usa el `.env` actual de la suite para reaplicar puertos, firmas y límites.
+- Está pensado para volver desde una prueba de bypass parcial sin recargar todo el firewall.
+
+**Cuándo usarlo**: Después de usar la opción 11 o tras una prueba de visibilidad donde quitaste únicamente la capa L4D2.
+
+---
+
 ### 5. Save current rules (persistent)
 
 **Funcionalidad**: Guarda las reglas actuales del backend activo para que persistan después de reinicios.
@@ -202,7 +259,7 @@ Chain PREROUTING (policy ACCEPT 0 packets, 0 bytes)
   - Establece permisos apropiados (644)
   - Cuenta y reporta el número total de reglas guardadas
 - Backend `nftables`:
-  - Descubre las tablas activas administradas por la suite (`l4d2_filter`, `l4d2_*`)
+  - Descubre las tablas activas administradas por la suite (`firewall_main`, `vpn_s2s_nat`) y nombres legacy (`l4d2_filter`, `l4d2_*`)
   - Exporta cada tabla al archivo `/etc/nftables.conf`
   - Establece permisos apropiados (644)
   - Reporta cuántas tablas gestionadas fueron persistidas

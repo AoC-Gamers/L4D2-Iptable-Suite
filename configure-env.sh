@@ -408,6 +408,11 @@ done
 l4d2_game_ports="27015"
 l4d2_tv_ports="27020"
 l4d2_cmd_limit="100"
+udp_new_src_rate="8"
+udp_new_src_burst="24"
+udp_new_global_rate="240"
+udp_new_global_burst="960"
+enable_udp_new_ffffffff_bypass="true"
 enable_udp_baseline_logs="false"
 a2s_info_rate="16"
 a2s_info_burst="80"
@@ -422,6 +427,7 @@ l4d2_login_burst="16"
 enable_steam_group_filter="true"
 steam_group_signatures="69"
 enable_packet_normalization_logs="false"
+enable_malformed_filter="false"
 ssh_ports="22"
 ssh_docker=""
 ssh_rate="60/min"
@@ -941,6 +947,11 @@ if [ "$has_l4d2_udp_modules" = "true" ]; then
 cat >> "$output_file" <<EOF
 L4D2_TV_PORTS="${l4d2_tv_ports}"
 L4D2_CMD_LIMIT=${l4d2_cmd_limit}
+UDP_NEW_SRC_RATE=${udp_new_src_rate}
+UDP_NEW_SRC_BURST=${udp_new_src_burst}
+UDP_NEW_GLOBAL_RATE=${udp_new_global_rate}
+UDP_NEW_GLOBAL_BURST=${udp_new_global_burst}
+ENABLE_UDP_NEW_FFFFFFFF_BYPASS=${enable_udp_new_ffffffff_bypass}
 ENABLE_UDP_BASELINE_LOGS=${enable_udp_baseline_logs}
 EOF
 fi
@@ -962,9 +973,10 @@ STEAM_GROUP_SIGNATURES="${steam_group_signatures}"
 EOF
 fi
 
-if needs_var "ENABLE_PACKET_NORMALIZATION_LOGS"; then
+if needs_var "ENABLE_PACKET_NORMALIZATION_LOGS" || needs_var "ENABLE_MALFORMED_FILTER"; then
 cat >> "$output_file" <<EOF
 ENABLE_PACKET_NORMALIZATION_LOGS=${enable_packet_normalization_logs}
+ENABLE_MALFORMED_FILTER=${enable_malformed_filter}
 EOF
 fi
 
@@ -1136,6 +1148,11 @@ fi
 if [ "$has_l4d2_udp_modules" = "true" ]; then
 echo "  L4D2_TV_PORTS=$l4d2_tv_ports" >&2
 echo "  L4D2_CMD_LIMIT=$l4d2_cmd_limit" >&2
+echo "  UDP_NEW_SRC_RATE=$udp_new_src_rate" >&2
+echo "  UDP_NEW_SRC_BURST=$udp_new_src_burst" >&2
+echo "  UDP_NEW_GLOBAL_RATE=$udp_new_global_rate" >&2
+echo "  UDP_NEW_GLOBAL_BURST=$udp_new_global_burst" >&2
+echo "  ENABLE_UDP_NEW_FFFFFFFF_BYPASS=$enable_udp_new_ffffffff_bypass" >&2
 echo "  ENABLE_UDP_BASELINE_LOGS=$enable_udp_baseline_logs" >&2
 fi
 
@@ -1156,6 +1173,7 @@ echo "  STEAM_GROUP_SIGNATURES=$steam_group_signatures" >&2
 fi
 fi
 
-if needs_var "ENABLE_PACKET_NORMALIZATION_LOGS"; then
+if needs_var "ENABLE_PACKET_NORMALIZATION_LOGS" || needs_var "ENABLE_MALFORMED_FILTER"; then
 echo "  ENABLE_PACKET_NORMALIZATION_LOGS=$enable_packet_normalization_logs" >&2
+echo "  ENABLE_MALFORMED_FILTER=$enable_malformed_filter" >&2
 fi

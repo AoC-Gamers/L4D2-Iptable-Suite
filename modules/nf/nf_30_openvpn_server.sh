@@ -38,12 +38,12 @@ nf_30_openvpn_server_apply() {
     OVPNSRV_PROTO="$(echo "$OVPNSRV_PROTO" | tr 'A-Z' 'a-z')"
 
     if nf_chain_enabled input; then
-        nf_add_rule input "$OVPNSRV_PROTO" dport "$OVPNSRV_PORT" accept
-        nf_add_rule input iifname "$OVPNSRV_INTERFACE" ip saddr "$OVPNSRV_SUBNET" accept
+        nf_add_rule "$(nf_domain_chain_name input vpn)" "$OVPNSRV_PROTO" dport "$OVPNSRV_PORT" accept
+        nf_add_rule "$(nf_domain_chain_name input vpn)" iifname "$OVPNSRV_INTERFACE" ip saddr "$OVPNSRV_SUBNET" accept
     fi
 
     if nf_chain_enabled forward; then
-        nf_add_rule forward iifname "$OVPNSRV_INTERFACE" ip saddr "$OVPNSRV_SUBNET" ip daddr "$OVPNSRV_LAN_SUBNET" accept
-        nf_add_rule forward oifname "$OVPNSRV_INTERFACE" ip daddr "$OVPNSRV_SUBNET" ct state established,related accept
+        nf_add_rule "$(nf_domain_chain_name forward vpn)" iifname "$OVPNSRV_INTERFACE" ip saddr "$OVPNSRV_SUBNET" ip daddr "$OVPNSRV_LAN_SUBNET" accept
+        nf_add_rule "$(nf_domain_chain_name forward vpn)" oifname "$OVPNSRV_INTERFACE" ip daddr "$OVPNSRV_SUBNET" ct state established,related accept
     fi
 }
