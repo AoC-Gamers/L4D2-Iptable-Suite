@@ -24,6 +24,35 @@ nf_10_whitelist_validate() {
     esac
 }
 
+nf_10_whitelist_is_ipv4() {
+    local value="$1"
+    [[ "$value" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}(/[0-9]{1,2})?$ ]]
+}
+
+nf_10_whitelist_is_ipv6() {
+    local value="$1"
+    [[ "$value" == *:* ]] \
+        && [[ "$value" != ::ffff:* ]] \
+        && [[ "$value" =~ ^[0-9A-Fa-f:.]+(/[0-9]{1,3})?$ ]]
+}
+
+nf_10_whitelist_resolve_domain() {
+    local domain="$1"
+
+    getent ahostsv4 "$domain" 2>/dev/null | awk '{print $1}'
+    getent ahostsv6 "$domain" 2>/dev/null | awk '$1 !~ /^::ffff:/ {print $1}'
+
+    if command -v host >/dev/null 2>&1; then
+        host -t A "$domain" 2>/dev/null | awk '/has address/ {print $4}'
+        host -t AAAA "$domain" 2>/dev/null | awk '/has IPv6 address/ {print $5}'
+    fi
+
+    if command -v dig >/dev/null 2>&1; then
+        dig +short A "$domain" 2>/dev/null | grep -E '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$'
+        dig +short AAAA "$domain" 2>/dev/null | grep -E '^[0-9A-Fa-f:]+$'
+    fi
+}
+
 nf_10_whitelist_apply() {
     local effective_whitelist chain ip domain resolved_count has_static_whitelist
 
@@ -47,29 +76,13 @@ nf_10_whitelist_apply() {
                 [ -z "$ip" ] && continue
                 effective_whitelist="$effective_whitelist $ip"
                 resolved_count=$((resolved_count + 1))
-            done < <(getent ahostsv4 "$domain" 2>/dev/null | awk '{print $1}' | sort -u)
-
-            if [ "$resolved_count" -eq 0 ] && command -v host >/dev/null 2>&1; then
-                while IFS= read -r ip; do
-                    [ -z "$ip" ] && continue
-                    effective_whitelist="$effective_whitelist $ip"
-                    resolved_count=$((resolved_count + 1))
-                done < <(host -t A "$domain" 2>/dev/null | awk '/has address/ {print $4}' | sort -u)
-            fi
-
-            if [ "$resolved_count" -eq 0 ] && command -v dig >/dev/null 2>&1; then
-                while IFS= read -r ip; do
-                    [ -z "$ip" ] && continue
-                    effective_whitelist="$effective_whitelist $ip"
-                    resolved_count=$((resolved_count + 1))
-                done < <(dig +short A "$domain" 2>/dev/null | grep -E '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$' | sort -u)
-            fi
+            done < <(nf_10_whitelist_resolve_domain "$domain" | sort -u)
 
             if [ "$resolved_count" -eq 0 ]; then
                 if [ "$has_static_whitelist" = "true" ]; then
-                    echo "INFO: nf_whitelist: domain '$domain' did not resolve to IPv4; using WHITELISTED_IPS fallback"
+                    echo "INFO: nf_whitelist: domain '$domain' did not resolve to IPv4/IPv6; using WHITELISTED_IPS fallback"
                 else
-                    echo "WARNING: nf_whitelist: domain '$domain' did not resolve to IPv4 and no WHITELISTED_IPS fallback is configured"
+                    echo "WARNING: nf_whitelist: domain '$domain' did not resolve to IPv4/IPv6 and no WHITELISTED_IPS fallback is configured"
                 fi
             fi
         done
@@ -81,12 +94,17 @@ nf_10_whitelist_apply() {
     local chain
     for chain in $(nf_get_target_chains_for_domain core_allow); do
         for ip in $effective_whitelist; do
-            # Accept single IPv4 and IPv4 CIDR only
-            if ! [[ "$ip" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}(/[0-9]{1,2})?$ ]]; then
-                echo "WARNING: nf_whitelist: skipping invalid IPv4/CIDR entry '$ip'"
+            if nf_10_whitelist_is_ipv4 "$ip"; then
+                nf_add_rule "$chain" ip saddr "$ip" accept
                 continue
             fi
-            nf_add_rule "$chain" ip saddr "$ip" accept
+
+            if nf_10_whitelist_is_ipv6 "$ip"; then
+                nf_add_rule "$chain" ip6 saddr "$ip" accept
+                continue
+            fi
+
+            echo "WARNING: nf_whitelist: skipping invalid IP/CIDR entry '$ip'"
         done
     done
 }

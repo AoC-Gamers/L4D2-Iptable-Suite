@@ -33,6 +33,7 @@ nf_chain_setup_apply() {
     local domain
     local input_domains="core_allow vpn admin l4d2_tcp web l4d2_udp"
     local forward_domains="core_allow docker_egress vpn admin l4d2_tcp web l4d2_udp"
+    local icmpv6_types="{ destination-unreachable, packet-too-big, time-exceeded, parameter-problem, echo-request, echo-reply, nd-router-solicit, nd-router-advert, nd-neighbor-solicit, nd-neighbor-advert }"
 
     nft delete table "$NF_TABLE_FAMILY" "$NF_TABLE_NAME" 2>/dev/null || true
     nft delete table inet l4d2_filter 2>/dev/null || true
@@ -66,6 +67,7 @@ nf_chain_setup_apply() {
 
     nf_add_rule input iifname lo accept
     nf_add_rule input ct state established,related accept
+    nf_add_rule input icmpv6 type "$icmpv6_types" accept
     if nf_chain_enabled forward; then
         nf_add_rule forward ct state established,related accept
     fi
