@@ -77,15 +77,15 @@ ip_70_l4d2_a2s_filters_validate() {
 }
 
 ip_70_l4d2_a2s_filters_apply_chains() {
-    iptables -A A2S_LIMITS -m hashlimit --hashlimit-upto "${A2S_INFO_RATE}/sec" --hashlimit-burst "$A2S_INFO_BURST" --hashlimit-mode dstport --hashlimit-name A2SFilter --hashlimit-htable-expire 5000 -j ACCEPT
+    iptables -A A2S_LIMITS -m hashlimit --hashlimit-upto "${A2S_INFO_RATE}/sec" --hashlimit-burst "$A2S_INFO_BURST" --hashlimit-mode srcip,dstport --hashlimit-name A2SFilter --hashlimit-htable-expire 5000 -j ACCEPT
     iptables -A A2S_LIMITS -m limit --limit 60/min --limit-burst 20 -j LOG --log-prefix "$LOG_PREFIX_A2S_INFO" --log-level 4
     iptables -A A2S_LIMITS -j DROP
 
-    iptables -A A2S_PLAYERS_LIMITS -m hashlimit --hashlimit-upto "${A2S_PLAYERS_RATE}/sec" --hashlimit-burst "$A2S_PLAYERS_BURST" --hashlimit-mode dstport --hashlimit-name A2SPlayersFilter --hashlimit-htable-expire 5000 -j ACCEPT
+    iptables -A A2S_PLAYERS_LIMITS -m hashlimit --hashlimit-upto "${A2S_PLAYERS_RATE}/sec" --hashlimit-burst "$A2S_PLAYERS_BURST" --hashlimit-mode srcip,dstport --hashlimit-name A2SPlayersFilter --hashlimit-htable-expire 5000 -j ACCEPT
     iptables -A A2S_PLAYERS_LIMITS -m limit --limit 60/min --limit-burst 20 -j LOG --log-prefix "$LOG_PREFIX_A2S_PLAYERS" --log-level 4
     iptables -A A2S_PLAYERS_LIMITS -j DROP
 
-    iptables -A A2S_RULES_LIMITS -m hashlimit --hashlimit-upto "${A2S_RULES_RATE}/sec" --hashlimit-burst "$A2S_RULES_BURST" --hashlimit-mode dstport --hashlimit-name A2SRulesFilter --hashlimit-htable-expire 5000 -j ACCEPT
+    iptables -A A2S_RULES_LIMITS -m hashlimit --hashlimit-upto "${A2S_RULES_RATE}/sec" --hashlimit-burst "$A2S_RULES_BURST" --hashlimit-mode srcip,dstport --hashlimit-name A2SRulesFilter --hashlimit-htable-expire 5000 -j ACCEPT
     iptables -A A2S_RULES_LIMITS -m limit --limit 60/min --limit-burst 20 -j LOG --log-prefix "$LOG_PREFIX_A2S_RULES" --log-level 4
     iptables -A A2S_RULES_LIMITS -j DROP
 
@@ -124,7 +124,6 @@ ip_70_l4d2_a2s_filters_apply_for_chain() {
         done
     fi
 
-    iptables -A "$chain" -p udp -m multiport --dports "$target_ports" -m length --length 1:70 -m string --algo bm --hex-string '|FFFFFFFF0000|' -j DROP
     iptables -A "$chain" -p udp -m multiport --dports "$L4D2_GAMESERVER_PORTS" -m length --length 1:70 -m string --algo bm --hex-string '|FFFFFFFF71|' -j l4d2loginfilter
 }
 

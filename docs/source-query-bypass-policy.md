@@ -16,7 +16,7 @@ Definir que firmas UDP con prefijo `0xFFFFFFFF` pueden recibir bypass temprano e
 - `69` -> `A2A_PING` legacy
 - `71` -> flujo de heartbeat/login corto asociado a publicacion y conexion Source
 
-Estas firmas pueden recibir bypass temprano en `l4d2_udp_base` para evitar que el limitador generico `ct state new` bloquee trafico legitimo antes de que `l4d2_a2s_filters` lo clasifique.
+Estas firmas pueden recibir bypass temprano en `l4d2_udp_base` solo cuando existe un clasificador downstream activo que las procese; de lo contrario deben permanecer bajo el limitador generico `ct state new` para no caer por el policy final.
 
 ## Firmas empiricas
 - `00` no se considera una firma oficial de Steam Group documentada por Valve.

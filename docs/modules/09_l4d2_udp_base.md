@@ -17,17 +17,15 @@ Aplicar base de control UDP para tráfico de juego (NEW/ESTABLISHED) e ICMP.
 - nftables: `STEAM_GROUP_SIGNATURES` para bypass temprano de firmas `0xFFFFFFFFxx` observadas o documentadas
 
 ## Bypass de firmas Source
-En backend `nftables`, el módulo deja pasar antes del limitador `ct state new` las firmas de consulta/publicación Source que no deberían caer en el rate-limit genérico:
+El módulo deja pasar antes del limitador base solo las firmas que realmente tienen un clasificador downstream en `l4d2_a2s_filters` o `l4d2loginfilter`:
 
 - `54` -> `A2S_INFO`
 - `55` -> `A2S_PLAYER`
 - `56` -> `A2S_RULES`
-- `57` -> `A2S_SERVERQUERY_GETCHALLENGE` legacy
-- `69` -> `A2A_PING` legacy
 - `71` -> heartbeat / login short-query según flujo observado
-- firmas extra definidas en `STEAM_GROUP_SIGNATURES`
+- firmas extra definidas en `STEAM_GROUP_SIGNATURES` cuando `ENABLE_STEAM_GROUP_FILTER=true`
 
-Esto evita que el módulo base bloquee tráfico que luego será clasificado por `l4d2_a2s_filters`.
+Esto evita que el módulo base bloquee tráfico que luego será clasificado por `l4d2_a2s_filters`. Si una firma no tiene clasificador posterior activo, se mantiene bajo el limitador genérico en vez de caer a `DROP` por el policy final.
 
 ## Nota operativa importante
 Si `serverbrowser` o `steamgroup` dejan de mostrar servidores, revisar primero que el backend activo realmente esté leyendo:
@@ -37,6 +35,7 @@ Si `serverbrowser` o `steamgroup` dejan de mostrar servidores, revisar primero q
 - `UDP_NEW_GLOBAL_RATE`
 - `UDP_NEW_GLOBAL_BURST`
 - `ENABLE_UDP_NEW_FFFFFFFF_BYPASS`
+- `ENABLE_STEAM_GROUP_FILTER`
 
 Con el perfil actual del proyecto se recomienda `8/24` por origen+puerto y `240/960` global por puerto como piso operativo para no romper descubrimiento.
 

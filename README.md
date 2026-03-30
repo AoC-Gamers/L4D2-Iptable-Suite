@@ -52,13 +52,13 @@ sudo apt install -y \
 Instala luego las librerías de Python del analizador:
 
 ```bash
-python3 -m pip install -r requirements.txt
+python3 -m pip install -r log-summary/requirements.txt
 ```
 
 Opcional (recomendado, para aislar dependencias):
 
 ```bash
-./venv.loggin.sh
+./log-summary/venv.loggin.sh
 ```
 
 ### Instalación
@@ -82,17 +82,17 @@ sudo ./nftables.rules.sh
 sudo ./ipp.sh
 
 # 5. Configurar entorno Python (Opcional - Recomendado)
-chmod +x venv.loggin.sh
-./venv.loggin.sh
+chmod +x log-summary/venv.loggin.sh
+./log-summary/venv.loggin.sh
 # Seleccionar opción 1: Instalar entorno virtual
 
 # 6. Configurar sistema de logging
 # Método A: Con entorno virtual (recomendado)
-./venv.loggin.sh
+./log-summary/venv.loggin.sh
 # Seleccionar opción 6: Run iptable.loggin.py script
 
 # Método B: Ejecución directa
-sudo python3 iptable.loggin.py
+python3 log-summary/app/iptable.loggin.py --env-file .env
 ```
 
 ### Configuración Básica
@@ -211,18 +211,18 @@ Herramienta avanzada de logging y análisis que configura automáticamente rsysl
 
 Incluye detección de 12 tipos específicos de ataques contra servidores L4D2 con categorización por severidad y recomendaciones de mitigación.
 
-**📖 [Documentación Completa](docs/iptable.loggin.md)**
+**📖 [Documentación Completa](log-summary/docs/iptable.loggin.md)**
 
 ---
 
-### 4. `venv.loggin.sh` - Gestor de Entorno Virtual
+### 4. `log-summary/venv.loggin.sh` - Gestor de Entorno Virtual
 
-Sistema avanzado de gestión de entorno virtual Python con interfaz interactiva de 8 opciones. Facilita la instalación, configuración y uso de `iptable.loggin.py` mediante aislamiento de dependencias y compatibilidad multiplataforma.
+Sistema avanzado de gestión de entorno virtual Python con interfaz interactiva de 8 opciones. Facilita la instalación, configuración y uso de `iptable.loggin.py` ubicado en `log-summary/app/` mediante aislamiento de dependencias y compatibilidad multiplataforma.
 
 **Características principales:**
 - 🖥️ **Compatibilidad multiplataforma**: Windows, Linux, macOS
 - 🔧 **Instalación automática**: Crea y configura el entorno virtual automáticamente
-- 🐍 **Ejecución inteligente**: Maneja sudo automáticamente en Linux, sin sudo en Windows
+- 🐍 **Ejecución guiada**: Ejecuta el analizador desde `log-summary/` con el entorno listo
 - 📊 **Verificación completa**: Confirma dependencias y archivos antes de ejecutar
 - 🎯 **Uso directo**: Opción 6 ejecuta el script sin activación manual del entorno
 
@@ -239,7 +239,7 @@ Available options:
   8. 🚪 Exit
 ```
 
-**📖 [Documentación Completa](docs/venv.loggin.md)**
+**📖 [Documentación Completa](log-summary/docs/venv.loggin.md)**
 
 ---
 
@@ -269,7 +269,7 @@ log-summary
 Documentación:
 
 ```bash
-docs/log-summary-container.md
+log-summary/docs/log-summary-container.md
 ```
 
 ---
@@ -377,19 +377,20 @@ sudo ./iptables.rules.sh
 sudo ./ipp.sh  # Opción 1: Install, Opción 5: Save
 
 # Configurar logging con entorno virtual (recomendado)
-./venv.loggin.sh  # Opción 1: Install, Opción 6: Run script
+./log-summary/venv.loggin.sh  # Opción 1: Install, Opción 6: Run script
 
 # O configurar logging directamente
-sudo python3 iptable.loggin.py  # Opción 1: Install rsyslog
+python3 log-summary/app/iptable.loggin.py --env-file .env
+# Si vas a usar la opción 1 (configurar rsyslog), ejecútalo con sudo
 ```
 
 ### 2. Monitoreo Regular
 ```bash
 # Generar reportes semanales con entorno virtual
-./venv.loggin.sh  # Opción 6: Run script, Opción 4: Analyze logs
+./log-summary/venv.loggin.sh  # Opción 6: Run script, Opción 4: Analyze logs
 
 # O generar reportes directamente
-sudo python3 iptable.loggin.py  # Opción 4: Analyze logs
+python3 log-summary/app/iptable.loggin.py --env-file .env  # Opción 4: Analyze logs
 
 # Verificar estado de reglas
 sudo ./ipp.sh  # Opción 9: Status
@@ -412,10 +413,10 @@ sudo logrotate -f /etc/logrotate.d/l4d2-iptables
 - **[📖 nftables.rules.sh](docs/modular-loader-architecture.md)** - Arquitectura y operación del backend moderno
 - **[📖 Arquitectura Modular](docs/modular-loader-architecture.md)** - Contrato de módulos, paridad y validación
 - **[📖 ipp.sh](docs/ipp.md)** - Guía del gestor de persistencia
-- **[📖 iptable.loggin.py](docs/iptable.loggin.md)** - Manual del sistema de análisis
-- **[📖 venv.loggin.sh](docs/venv.loggin.md)** - Guía del gestor de entorno virtual
+- **[📖 iptable.loggin.py](log-summary/docs/iptable.loggin.md)** - Manual del sistema de análisis
+- **[📖 log-summary/venv.loggin.sh](log-summary/docs/venv.loggin.md)** - Guía del gestor de entorno virtual
 - **[📋 example.env](example.env)** - Archivo de configuración de ejemplo  
-- **[📊 summary_example/](summary_example/)** - Ejemplos de reportes JSON
+- **[📊 log-summary/summary_example/](log-summary/summary_example/)** - Ejemplos de reportes JSON
 - **[📚 Documentación de Módulos](docs/modules/README.md)** - Índice con descripciones breves de cada módulo
 
 ## 🤝 Créditos y Reconocimientos

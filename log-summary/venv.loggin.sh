@@ -16,9 +16,11 @@ CYAN='\033[0;36m'
 NC='\033[0m' # No Color
 
 # Global variables
-VENV_DIR="venv"
-REQUIREMENTS_FILE="requirements.txt"
-PYTHON_SCRIPT="iptable.loggin.py"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+VENV_DIR="${SCRIPT_DIR}/venv"
+REQUIREMENTS_FILE="${SCRIPT_DIR}/requirements.txt"
+PYTHON_SCRIPT="${SCRIPT_DIR}/app/iptable.loggin.py"
 
 # Function to display colored messages
 print_success() {
@@ -89,12 +91,12 @@ run_python_script() {
     
     # Check if script file exists
     if [[ ! -f "$PYTHON_SCRIPT" ]]; then
-        print_error "$PYTHON_SCRIPT not found in current directory"
+        print_error "$PYTHON_SCRIPT not found"
         return 1
     fi
     
     # Check if .env file exists
-    if [[ ! -f ".env" ]]; then
+    if [[ ! -f "${PROJECT_ROOT}/.env" ]]; then
         print_warning ".env file not found"
         print_info "The script may not work properly without configuration"
         echo -n "Do you want to continue anyway? (y/N): "
@@ -106,7 +108,7 @@ run_python_script() {
     fi
     
     local python_path=$(get_venv_python_path)
-    local full_python_path="$(pwd)/$python_path"
+    local full_python_path="$python_path"
     local os_type=$(detect_os)
     
     print_info "Preparing to run $PYTHON_SCRIPT..."
@@ -115,16 +117,14 @@ run_python_script() {
     # Different execution based on OS
     if [[ "$os_type" == "windows" ]]; then
         print_info "Windows detected - Running without sudo:"
-        print_success "Command: $full_python_path $PYTHON_SCRIPT --env-file .env"
+        print_success "Command: $full_python_path $PYTHON_SCRIPT --env-file ${PROJECT_ROOT}/.env"
         echo ""
-        "$full_python_path" "$PYTHON_SCRIPT" --env-file .env
+        "$full_python_path" "$PYTHON_SCRIPT" --env-file "${PROJECT_ROOT}/.env"
     else
-        print_info "Linux/Unix detected - Root privileges required for log access"
-        print_success "Command: sudo $full_python_path $PYTHON_SCRIPT --env-file .env"
+        print_info "Linux/Unix detected - using current user by default"
+        print_success "Command: $full_python_path $PYTHON_SCRIPT --env-file ${PROJECT_ROOT}/.env"
         echo ""
-        print_warning "You may be prompted for your sudo password..."
-        echo ""
-        sudo "$full_python_path" "$PYTHON_SCRIPT" --env-file .env
+        "$full_python_path" "$PYTHON_SCRIPT" --env-file "${PROJECT_ROOT}/.env"
     fi
     
     local exit_code=$?
@@ -485,20 +485,19 @@ show_help() {
     echo "  • python-dotenv >= 0.19.0  - Environment variables"
     echo ""
     echo "Required files:"
-    echo "  • iptable.loggin.py         - Main script"
+    echo "  • log-summary/app/iptable.loggin.py - Main script"
     echo "  • .env                      - Configuration"
-    echo "  • requirements.txt          - Dependencies list (optional)"
+    echo "  • log-summary/requirements.txt          - Dependencies list (optional)"
     echo ""
     echo "Main script usage:"
     echo "  Use option 6 to run the script with proper environment handling"
     echo ""
     echo "Manual execution:"
-    echo "  Linux/Debian: sudo /full/path/to/venv/bin/python iptable.loggin.py --env-file .env"
+    echo "  Linux/Debian: /full/path/to/venv/bin/python log-summary/app/iptable.loggin.py --env-file .env"
     echo ""
-    echo "Why sudo is needed (Linux only):"
-    echo "  • iptable.loggin.py requires root access to read system logs"
-    echo "  • rsyslog configuration requires root privileges"
-    echo "  • Log files in /var/log/ need root access"
+    echo "Privilege notes (Linux only):"
+    echo "  • Analysis can run without sudo if the user can read /var/log/firewall-suite.log"
+    echo "  • rsyslog configuration and adm-group changes still require root privileges"
     echo ""
 }
 

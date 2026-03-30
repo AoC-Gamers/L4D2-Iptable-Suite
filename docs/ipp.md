@@ -489,7 +489,10 @@ Nota: `ipp.sh` no reemplaza la persistencia nativa de nftables.
 
 ```bash
 # Después de configurar logging
-sudo python3 iptable.loggin.py  # Configurar rsyslog
+python3 log-summary/app/iptable.loggin.py --env-file .env  # Analizar logs y generar reportes
+
+# Si necesitas configurar rsyslog desde el menú interactivo
+sudo python3 log-summary/app/iptable.loggin.py --env-file .env
 
 # Verificar que las reglas están activas
 sudo ./ipp.sh  # Opción 3: Show current rules
@@ -725,8 +728,8 @@ sudo ./ipp.sh  # Guardar reglas
 ## Enlaces Relacionados
 
 - [README Principal](../README.md)
-- [Documentación iptables.rules.sh](iptables.rules.md)
-- [Documentación iptable.loggin.py](iptable.loggin.md)
+- [Documentación iptables.rules.sh](../../docs/iptables.rules.md)
+- [Documentación iptable.loggin.py](../log-summary/docs/iptable.loggin.md)
 - [Archivo de Configuración example.env](../example.env)
 
 ---

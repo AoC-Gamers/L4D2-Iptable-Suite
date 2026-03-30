@@ -1,4 +1,4 @@
-# venv.loggin.sh - Gestor de Entorno Virtual para iptable.loggin.py
+# log-summary/venv.loggin.sh - Gestor de Entorno Virtual para iptable.loggin.py
 
 ## Tabla de Contenidos
 
@@ -14,7 +14,7 @@
 
 ## Descripción General
 
-`venv.loggin.sh` es un gestor de entorno virtual automático diseñado específicamente para facilitar la instalación, configuración y uso de `iptable.loggin.py`. Proporciona una interfaz interactiva completa que automatiza todos los aspectos de la gestión del entorno Python.
+`log-summary/venv.loggin.sh` es un gestor de entorno virtual automático diseñado específicamente para facilitar la instalación, configuración y uso de `iptable.loggin.py` dentro del subdirectorio `log-summary/`. Proporciona una interfaz interactiva completa que automatiza los aspectos principales de la gestión del entorno Python.
 
 ### ¿Por qué usar un entorno virtual?
 
@@ -37,7 +37,7 @@ Los entornos virtuales Python proporcionan:
 - Instalación de `pandas >= 1.3.0`
 - Instalación de `python-dotenv >= 0.19.0`
 - Verificación automática de versiones
-- Manejo de archivos `requirements.txt`
+- Manejo de archivos `log-summary/requirements.txt`
 
 ### 🛠️ **Herramientas Avanzadas**
 - Verificación de permisos y configuración
@@ -66,7 +66,7 @@ python3 --version
 python --version
 
 # Verificar permisos
-ls -la venv.loggin.sh
+ls -la log-summary/venv.loggin.sh
 ```
 
 ### Instalación
@@ -77,10 +77,10 @@ git clone https://github.com/AoC-Gamers/L4D2-Iptable-Suite.git
 cd L4D2-Iptable-Suite
 
 # 2. Dar permisos de ejecución
-chmod +x venv.loggin.sh
+chmod +x log-summary/venv.loggin.sh
 
 # 3. Verificar la presencia de archivos requeridos
-ls -la iptable.loggin.py 
+ls -la log-summary/app/iptable.loggin.py 
 ls -la .env
 ```
 
@@ -90,7 +90,7 @@ ls -la .env
 
 ```bash
 # Ejecutar el script
-./venv.loggin.sh
+./log-summary/venv.loggin.sh
 ```
 
 ### Menú Principal
@@ -124,7 +124,7 @@ Select an option [1-8]:
 #### 🚀 **Primera Instalación**
 ```bash
 # 1. Ejecutar script
-./venv.loggin.sh
+./log-summary/venv.loggin.sh
 
 # 2. Seleccionar opción 1 (Install virtual environment)
 # El script automáticamente:
@@ -139,12 +139,12 @@ Select an option [1-8]:
 #### 🔄 **Uso Diario**
 ```bash
 # 1. Activar entorno (opción 2)
-./venv.loggin.sh
+./log-summary/venv.loggin.sh
 # Seleccionar 2
 
 # 2. El script abre un shell interactivo con el entorno activo
 # Ya puedes usar:
-python iptable.loggin.py --env-file .env
+python log-summary/app/iptable.loggin.py --env-file .env
 
 # 3. Para salir del entorno:
 deactivate
@@ -160,11 +160,11 @@ exit
 
 **Proceso automático**:
 1. **Verificación de Python**: Detecta `python3` o `python`
-2. **Creación del entorno**: `python3 -m venv venv`
+2. **Creación del entorno**: `python3 -m venv log-summary/venv`
 3. **Activación automática**: Compatible con el OS detectado
 4. **Actualización de pip**: `pip install --upgrade pip`
 5. **Instalación de dependencias**:
-   - Si existe `requirements.txt`: `pip install -r requirements.txt`
+   - Si existe `log-summary/requirements.txt`: `pip install -r log-summary/requirements.txt`
    - Si no existe: `pip install pandas python-dotenv`
 6. **Verificación final**: Confirma que todas las dependencias funcionan
 
@@ -189,7 +189,7 @@ exit
 ```bash
 === INTERACTIVE SHELL ACTIVE ===
 ℹ️  Virtual environment active. Available commands:
-  • python iptable.loggin.py --env-file .env
+  • python log-summary/app/iptable.loggin.py --env-file .env
   • python test_environment.py
   • deactivate (to exit the environment)
   • exit (to close the shell)
@@ -213,15 +213,15 @@ exit
 
 #### Estado del Entorno Virtual
 ```bash
-✅ Virtual environment exists in: venv
-✅ Virtual environment ACTIVE: venv
+✅ Virtual environment exists in: log-summary/venv
+✅ Virtual environment ACTIVE: log-summary/venv
 ```
 
 #### Información de Python
 ```bash
 ℹ️  Python information:
 Python 3.9.2
-  Executable: /home/user/L4D2-Iptable-Suite/venv/bin/python
+  Executable: /home/user/L4D2-Iptable-Suite/log-summary/venv/bin/python
 ```
 
 #### Verificación de Dependencias
@@ -237,9 +237,9 @@ Python 3.9.2
 #### Archivos del Proyecto
 ```bash
 ℹ️  Project files:
-✅ iptable.loggin.py found
+✅ log-summary/app/iptable.loggin.py found
 ✅ .env file found
-✅ requirements.txt found
+✅ log-summary/requirements.txt found
 ```
 
 ### 5. 🔄 **Reinstall Dependencies**
@@ -250,7 +250,7 @@ Python 3.9.2
 - Dependencias corruptas
 - Actualización de versiones
 - Problemas de importación
-- Cambios en requirements.txt
+- Cambios en log-summary/requirements.txt
 
 **Proceso**:
 1. Activación temporal si no está activo
@@ -270,7 +270,7 @@ Python 3.9.2
 
 **Proceso automático**:
 1. **Verificación del entorno**: Confirma que el venv existe
-2. **Verificación del script**: Confirma que iptable.loggin.py existe
+2. **Verificación del script**: Confirma que log-summary/app/iptable.loggin.py existe
 3. **Verificación de configuración**: Chequea el archivo .env
 4. **Detección de OS**: Determina el método de ejecución apropiado
 5. **Ejecución**: Lanza el script con los parámetros correctos
@@ -280,13 +280,13 @@ Python 3.9.2
 #### Windows
 ```bash
 ℹ️  Windows detected - Running without sudo:
-✅ Command: C:/GitHub/L4D2-Iptable-Suite/venv/Scripts/python.exe iptable.loggin.py --env-file .env
+✅ Command: C:/GitHub/L4D2-Iptable-Suite/venv/Scripts/python.exe log-summary/app/iptable.loggin.py --env-file .env
 ```
 
 #### Linux/Unix
 ```bash
 ℹ️  Linux/Unix detected - Root privileges required for log access
-✅ Command: sudo /home/user/L4D2-Iptable-Suite/venv/bin/python iptable.loggin.py --env-file .env
+✅ Command: sudo /home/user/L4D2-Iptable-Suite/venv/bin/python log-summary/app/iptable.loggin.py --env-file .env
 ⚠️  You may be prompted for your sudo password...
 ```
 
@@ -323,18 +323,18 @@ Salida controlada del script con:
 
 ```bash
 # Instalar en entorno virtual (no requiere sudo para pip)
-./venv.loggin.sh
+./log-summary/venv.loggin.sh
 # Opción 1: Install
 
 # Uso en producción - MÉTODO RECOMENDADO
-./venv.loggin.sh
+./log-summary/venv.loggin.sh
 # Opción 6: Run iptable.loggin.py script
 # (Maneja sudo automáticamente en Linux)
 
 # Uso alternativo manual
-./venv.loggin.sh
+./log-summary/venv.loggin.sh
 # Opción 2: Activate
-sudo python iptable.loggin.py --env-file .env
+python log-summary/app/iptable.loggin.py --env-file .env --env-file .env
 ```
 
 ### 🖥️ **Uso Multiplataforma**
@@ -343,12 +343,12 @@ sudo python iptable.loggin.py --env-file .env
 
 ```bash
 # En Windows (desarrollo)
-./venv.loggin.sh
+./log-summary/venv.loggin.sh
 # Opción 1: Install (instala sin sudo)
 # Opción 6: Run script (ejecuta sin sudo)
 
 # En Linux (producción)  
-./venv.loggin.sh
+./log-summary/venv.loggin.sh
 # Opción 1: Install (instala dependencias)
 # Opción 6: Run script (ejecuta con sudo automático)
 ```
@@ -359,7 +359,7 @@ sudo python iptable.loggin.py --env-file .env
 
 ```bash
 # Método más rápido - Una sola acción
-./venv.loggin.sh
+./log-summary/venv.loggin.sh
 # Opción 6: Ejecuta directamente el script
 
 # Ventajas:
@@ -385,22 +385,23 @@ sudo python iptable.loggin.py --env-file .env
 
 ```bash
 # Síntoma
-bash: ./venv.loggin.sh: Permission denied
+bash: ./log-summary/venv.loggin.sh: Permission denied
 
 # Solución
-chmod +x venv.loggin.sh
+chmod +x log-summary/venv.loggin.sh
 ```
 
-### ❌ **Error: "iptable.loggin.py script not found"**
+### ❌ **Error: "log-summary/app/iptable.loggin.py script not found"**
 
 ```bash
 # Síntoma
-❌ iptable.loggin.py script not found in current directory
+❌ /path/to/L4D2-Iptable-Suite/log-summary/app/iptable.loggin.py script not found
 
 # Solución
-# Ejecutar desde el directorio correcto
+# Verificar que el repositorio esté completo y usar la ruta correcta
 cd /path/to/L4D2-Iptable-Suite
-./venv.loggin.sh
+ls -la log-summary/app/iptable.loggin.py
+./log-summary/venv.loggin.sh
 ```
 
 ### ❌ **Error: "Python is not installed"**
@@ -435,11 +436,11 @@ sudo dnf install python3
 ❌ Could not activate virtual environment
 
 # Diagnóstico
-./venv.loggin.sh
+./log-summary/venv.loggin.sh
 # Opción 4: Check status
 
 # Solución 1: Reinstalar entorno
-./venv.loggin.sh
+./log-summary/venv.loggin.sh
 # Opción 1: Install (confirmará reinstalación)
 
 # Solución 2: Verificar permisos
@@ -454,11 +455,11 @@ chmod -R 755 venv/
 ModuleNotFoundError: No module named 'pandas'
 
 # Solución 1: Reinstalar dependencias
-./venv.loggin.sh
+./log-summary/venv.loggin.sh
 # Opción 5: Reinstall dependencies
 
 # Solución 2: Verificar activación
-./venv.loggin.sh
+./log-summary/venv.loggin.sh
 # Opción 4: Check status
 # Debe mostrar "Virtual environment ACTIVE"
 ```
@@ -483,7 +484,7 @@ deactivate
 
 ### 📊 **Tabla Comparativa**
 
-| Aspecto | Entorno Virtual (`venv.loggin.sh`) | Instalación Directa (`apt install`) |
+| Aspecto | Entorno Virtual (`log-summary/venv.loggin.sh`) | Instalación Directa (`apt install`) |
 |---------|-----------------------------------|-------------------------------------|
 | **Aislamiento** | ✅ Dependencias aisladas | ❌ Afecta todo el sistema |
 | **Versiones** | ✅ Control específico de versiones | ⚠️ Versiones del repositorio |
@@ -502,7 +503,7 @@ deactivate
 - **Script principal**: [iptable.loggin.py](iptable.loggin.md)
 - **Configuración**: [example.env](../example.env)
 - **Documentación principal**: [README.md](../README.md)
-- **Reglas iptables**: [iptables.rules.md](iptables.rules.md)
+- **Reglas iptables**: [iptables.rules.md](../../docs/iptables.rules.md)
 
 ---
 

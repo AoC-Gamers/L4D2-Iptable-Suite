@@ -33,7 +33,6 @@ El módulo inspecciona el prefijo Source `0xFFFFFFFF` y luego clasifica por byte
 - `54` -> A2S_INFO (`A2S_LIMITS`)
 - `55` -> A2S_PLAYERS (`A2S_PLAYERS_LIMITS`)
 - `56` -> A2S_RULES (`A2S_RULES_LIMITS`)
-- `57` -> `A2S_SERVERQUERY_GETCHALLENGE` legacy/obsoleto en documentación Valve
 - `69` -> `A2A_PING` legacy/obsoleto en documentación Valve
 - `71` -> Login short-query L4D2 (subfiltro `connect/reserve`)
 - `00` -> compatibilidad legacy observada en despliegues reales (si `ENABLE_STEAM_GROUP_FILTER=true`)
@@ -69,6 +68,7 @@ En consecuencia, el firewall no debería asumir que existe una firma pública ex
 - A2S se aplica sobre `L4D2_GAMESERVER_PORTS + L4D2_TV_PORTS`.
 - Steam Group (`00` y firmas configuradas): entra a `STEAM_GROUP_LIMITS`.
 - Steam Group se aplica sobre `L4D2_GAMESERVER_PORTS + L4D2_TV_PORTS`.
+- Si `ENABLE_STEAM_GROUP_FILTER=false`, las firmas Steam Group dejan de clasificarse aquí y quedan gobernadas por el limitador base (`l4d2_udp_base`) en vez de ser dropeadas por una regla fija.
 - Login (`71`):
   - acepta a tasa controlada paquetes que contienen `connect`
   - acepta a tasa controlada paquetes que contienen `reserve`
@@ -86,7 +86,7 @@ Antes de aplicar reglas, el módulo valida:
 
 ## Diferencias por backend
 - Ambos aplican mitigaciones A2S/Steam y patrones de login equivalentes por área.
-- `iptables` usa `-m string --hex-string '|FFFFFFFF..|'`.
+- `iptables` usa `-m string --hex-string '|FFFFFFFF..|'` con rate-limit por `srcip,dstport`, alineado con el backend `nftables`.
 - `nftables` usa payload match (`@th,64,40 0xFFFFFFFF..`) con meter/rate.
 
 ## Qué mejorar con esta información

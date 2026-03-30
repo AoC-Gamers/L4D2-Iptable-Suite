@@ -8,17 +8,17 @@ DESCRIPTION:
     and detailed JSON report generation by IP and general statistics.
 
 USAGE:
-    sudo python3 iptable.loggin.py [--env-file ENV_PATH]
+    python3 log-summary/app/iptable.loggin.py [--env-file ENV_PATH]
 
 COMPLETE COMMANDS:
     # Execute with default .env file (same directory)
-    sudo python3 ./iptable.loggin.py
+    python3 ./log-summary/app/iptable.loggin.py --env-file .env
 
     # Execute specifying custom .env file
-    sudo python3 ./iptable.loggin.py --env-file /custom/path/.env
+    python3 ./log-summary/app/iptable.loggin.py --env-file /custom/path/.env
 
     # From any directory (specify .env path)
-    sudo python3 ./iptable.loggin.py --env-file ./.env
+    python3 /path/to/L4D2-Iptable-Suite/log-summary/app/iptable.loggin.py --env-file /path/to/L4D2-Iptable-Suite/.env
 
 MENU OPTIONS:
     1. Install rsyslog and configure automatic logging
@@ -62,11 +62,13 @@ ATTACK TYPES SUPPORTED:
     STEAM_GROUP_FLOOD, L4D2_CONNECT_FLOOD, L4D2_RESERVE_FLOOD, UDP_NEW_LIMIT,
     UDP_EST_LIMIT, TCP_RCON_BLOCK, ICMP_FLOOD
 
-NOTE: Requires sudo permissions to configure rsyslog and access system logs.
+NOTE: Analysis can run without sudo if the user can read the configured log file.
+      rsyslog configuration and adm-group changes still require root privileges.
 """
 
 import argparse
 import os
+import pwd
 import subprocess
 import re
 import json
@@ -79,6 +81,10 @@ TIME_FORMAT = "%H:%M:%S"
 ISO_TIMESTAMP_FORMAT = "%Y-%m-%dT%H:%M:%S"
 ANALYSIS_YEAR = None
 FW_EVT_MARKER = "FW_EVT "
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+PROJECT_ROOT = os.path.abspath(os.path.join(SCRIPT_DIR, "..", ".."))
+DEFAULT_REPORTS_DIR = os.path.join(PROJECT_ROOT, "tmp", "reports")
+REPORTS_DIR = DEFAULT_REPORTS_DIR
 
 # Default values - will be overridden by .env file
 LOGFILE = "/var/log/firewall-suite.log"
@@ -87,6 +93,9 @@ RSYSLOG_CONF = "/etc/rsyslog.d/firewall-suite.conf"
 def load_config(env_file):
     """Load configuration from .env file and update global variables"""
     global LOGFILE, RSYSLOG_CONF
+
+    if not env_file:
+        return True
     
     if not os.path.exists(env_file):
         print(f"ERROR: .env file not found: {env_file}")
@@ -142,8 +151,17 @@ def classify_port(port, game_ports, tv_ports):
         return "Other"
 
 
-def _extract_timestamp(timestamp_re, line, active_year, last_timestamp, year_hint):
-    timestamp_match = timestamp_re.search(line)
+def _extract_timestamp(iso_timestamp_re, syslog_timestamp_re, line, active_year, last_timestamp, year_hint):
+    iso_match = iso_timestamp_re.search(line)
+    if iso_match:
+        timestamp_str = iso_match.group(1)
+        try:
+            dt = datetime.fromisoformat(timestamp_str)
+            return dt.replace(tzinfo=None), active_year
+        except ValueError:
+            pass
+
+    timestamp_match = syslog_timestamp_re.search(line)
     if not timestamp_match:
         return None, active_year
 
@@ -232,7 +250,8 @@ def parse_log(log_path, game_ports, tv_ports, year_hint=None):
     ip_re = re.compile(r'SRC=(\S+)')
     port_re = re.compile(r'DPT=(\d+)')
     length_re = re.compile(r'LEN=(\d+)')
-    timestamp_re = re.compile(r'^(\w+\s+\d+\s+\d+:\d+:\d+)')
+    iso_timestamp_re = re.compile(r'^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})?)')
+    syslog_timestamp_re = re.compile(r'^(\w+\s+\d+\s+\d+:\d+:\d+)')
     
     entries = []
     active_year = year_hint if year_hint is not None else datetime.now().year
@@ -240,7 +259,14 @@ def parse_log(log_path, game_ports, tv_ports, year_hint=None):
     
     with open(log_path, "r") as f:
         for line in f:
-            dt, active_year = _extract_timestamp(timestamp_re, line, active_year, last_timestamp, year_hint)
+            dt, active_year = _extract_timestamp(
+                iso_timestamp_re,
+                syslog_timestamp_re,
+                line,
+                active_year,
+                last_timestamp,
+                year_hint,
+            )
             if dt is None:
                 continue
 
@@ -641,16 +667,16 @@ def menu_analysis_options():
     
     analysis_type = analysis_types[choice]
     
-    # Generate JSON filename in script directory
-    script_dir = os.path.dirname(os.path.abspath(__file__))
+    # Generate JSON filename in the temporary reports directory
+    ensure_reports_dir()
     filename = f"summary_{analysis_type}.json"
-    filepath = os.path.join(script_dir, filename)
+    filepath = os.path.join(REPORTS_DIR, filename)
     
     return filepath, analysis_type
 
 def generate_all_reports(df):
     """Generate all analysis types in JSON format"""
-    script_dir = os.path.dirname(os.path.abspath(__file__))
+    ensure_reports_dir()
     
     reports = {
         "by_ip": generate_summary_by_ip,
@@ -674,11 +700,12 @@ def generate_all_reports(df):
             
             # Create filepath
             filename = f"summary_{analysis_type}.json"
-            filepath = os.path.join(script_dir, filename)
+            filepath = os.path.join(REPORTS_DIR, filename)
             
             # Export to JSON
             with open(filepath, 'w', encoding='utf-8') as f:
                 json.dump(summary_data, f, indent=2, ensure_ascii=False, default=str)
+            align_output_ownership(filepath)
             
             generated_files.append({
                 'type': analysis_type,
@@ -693,11 +720,57 @@ def generate_all_reports(df):
     
     return generated_files
 
+def get_current_user():
+    import getpass
+    return os.environ.get("SUDO_USER") or getpass.getuser()
+
+
+def ensure_reports_dir():
+    os.makedirs(REPORTS_DIR, exist_ok=True)
+
+
+def align_output_ownership(path):
+    sudo_user = os.environ.get("SUDO_USER")
+    if os.geteuid() != 0 or not sudo_user:
+        return
+
+    try:
+        pw_entry = pwd.getpwnam(sudo_user)
+    except KeyError:
+        return
+
+    uid = pw_entry.pw_uid
+    gid = pw_entry.pw_gid
+
+    for candidate in [REPORTS_DIR, path]:
+        if not os.path.exists(candidate):
+            continue
+        try:
+            os.chown(candidate, uid, gid)
+        except OSError:
+            pass
+
+
+def resolve_output_path(analysis_type):
+    ensure_reports_dir()
+    filename = f"summary_{analysis_type}.json"
+    return os.path.join(REPORTS_DIR, filename)
+
+
 def check_permissions():
     import getpass
     user = os.environ.get("SUDO_USER") or getpass.getuser()
     result = subprocess.run(["id", "-nG", user], capture_output=True, text=True)
     return "adm" in result.stdout.split()
+
+
+def require_root_for(action_description):
+    if os.geteuid() == 0:
+        return True
+
+    print(f"ERROR: {action_description} requires root privileges.")
+    print(f"INFO: Re-run with sudo to continue: sudo {__file__}")
+    return False
 
 def install_rsyslog_and_config():
     print("[1] Installing rsyslog and creating custom configuration...")
@@ -719,7 +792,7 @@ def install_rsyslog_and_config():
     print("INFO: Optimized configuration: structured FW_EVT capture enabled")
 
 def verify_permissions():
-    user = os.environ.get("SUDO_USER") or os.getlogin()
+    user = get_current_user()
     print(f"[2] Verifying if '{user}' belongs to 'adm' group...")
     if check_permissions():
         print(f"OK: User '{user}' belongs to 'adm' and can read logs.")
@@ -727,7 +800,7 @@ def verify_permissions():
         print(f"ERROR: User '{user}' does NOT belong to 'adm' group.")
 
 def add_permissions():
-    user = os.environ.get("SUDO_USER") or os.getlogin()
+    user = get_current_user()
     print(f"[3] Adding permissions for '{user}'...")
     if check_permissions():
         print(f"OK: User '{user}' already belongs to 'adm' group. Nothing to do.")
@@ -735,7 +808,7 @@ def add_permissions():
         subprocess.call(["usermod", "-aG", "adm", user])
         print("OK: Permissions added. Please log out and log back in for changes to take effect.")
 
-def run_analysis(env_file):
+def run_analysis(env_file, selected_analysis_type=None):
     if not load_config(env_file):
         return
 
@@ -760,10 +833,14 @@ def run_analysis(env_file):
     print(f"INFO: Found {len(df)} events from {df['IP'].nunique()} different IPs")
     print(f"INFO: Temporal coverage: {df['Date'].nunique()} unique days")
 
-    output_path, analysis_type = menu_analysis_options()
-    if not output_path:
-        print("ERROR: Operation cancelled.")
-        return
+    if selected_analysis_type:
+        analysis_type = selected_analysis_type
+        output_path = None if analysis_type == "all" else resolve_output_path(analysis_type)
+    else:
+        output_path, analysis_type = menu_analysis_options()
+        if not output_path:
+            print("ERROR: Operation cancelled.")
+            return
 
     if analysis_type == "all":
         # Generate all reports
@@ -771,7 +848,7 @@ def run_analysis(env_file):
         
         if generated_files:
             print("\nOK: All analysis reports generated successfully!")
-            print(f"INFO: Location: {os.path.dirname(os.path.abspath(__file__))}")
+            print(f"INFO: Location: {REPORTS_DIR}")
             print(f"INFO: Summary: {len(generated_files)} files generated")
             
             # Show detailed summary
@@ -825,8 +902,10 @@ def run_analysis(env_file):
         summary_data = generator(df)
         
         # Export to JSON with proper formatting
+        ensure_reports_dir()
         with open(output_path, 'w', encoding='utf-8') as f:
             json.dump(summary_data, f, indent=2, ensure_ascii=False, default=str)
+        align_output_ownership(output_path)
 
         print(f"OK: Analysis exported successfully to: {output_path}")
         print(f"INFO: Location: {os.path.abspath(output_path)}")
@@ -850,12 +929,13 @@ def main_menu(env_file):
         opt = input("Select an option [1-5]: ").strip()
 
         if opt == "1":
-            if load_config(env_file):
+            if require_root_for("Installing and configuring rsyslog") and load_config(env_file):
                 install_rsyslog_and_config()
         elif opt == "2":
             verify_permissions()
         elif opt == "3":
-            add_permissions()
+            if require_root_for("Adding users to the 'adm' group"):
+                add_permissions()
         elif opt == "4":
             run_analysis(env_file)
         elif opt == "5":
@@ -866,11 +946,6 @@ def main_menu(env_file):
 
 
 if __name__ == "__main__":
-    if os.geteuid() != 0:
-        print("ERROR: This script must be run as root or with sudo.")
-        print(f"INFO: Use: sudo {__file__}")
-        exit(1)
-
     parser = argparse.ArgumentParser(description="L4D2 iptables Log Manager")
     parser.add_argument(
         "--env-file",
@@ -878,10 +953,21 @@ if __name__ == "__main__":
         help="Path to .env file (default: .env in current directory)"
     )
     parser.add_argument(
+        "--output-dir",
+        default=None,
+        help="Directory where generated JSON reports will be written"
+    )
+    parser.add_argument(
         "--year",
         type=int,
         default=None,
         help="Force year for syslog timestamps (default: auto with Dec->Jan rollover handling)"
+    )
+    parser.add_argument(
+        "--analysis-type",
+        choices=["by_ip", "by_port", "by_day", "by_week", "by_month", "by_attack_type", "all"],
+        default=None,
+        help="Run analysis directly without the interactive menu"
     )
     args = parser.parse_args()
 
@@ -890,4 +976,10 @@ if __name__ == "__main__":
         print("ERROR: --year must be between 1970 and 2100")
         exit(2)
 
-    main_menu(args.env_file)
+    if args.output_dir:
+        REPORTS_DIR = os.path.abspath(args.output_dir)
+
+    if args.analysis_type:
+        run_analysis(args.env_file, selected_analysis_type=args.analysis_type)
+    else:
+        main_menu(args.env_file)

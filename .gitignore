@@ -10,3 +10,9 @@ __pycache__/
 /log-summary/.env
 /log-summary/output/*.json
 /log-summary/output/*.txt
+/log-summary/output/**/*.json
+/log-summary/output/**/*.txt
+
+# Temporary local analysis outputs
+/tmp/*
+!/tmp/.gitkeep

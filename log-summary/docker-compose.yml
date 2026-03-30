@@ -1,12 +1,13 @@
 services:
   log-summary:
     build:
-      context: .
-      dockerfile: Dockerfile
+      context: ..
+      dockerfile: log-summary/Dockerfile
     container_name: firewall-log-summary
     restart: unless-stopped
     env_file:
       - .env
+      - ../.env
     environment:
       - SUMMARY_LOG_PATH=${SUMMARY_LOG_PATH}
       - SUMMARY_OUTPUT_DIR=${SUMMARY_OUTPUT_DIR}
@@ -18,7 +19,7 @@ services:
       - SUMMARY_HEALTHCHECK_MAX_EMPTY_CYCLES=${SUMMARY_HEALTHCHECK_MAX_EMPTY_CYCLES}
     volumes:
       - ${SUMMARY_LOG_MOUNT_DIR}:${SUMMARY_LOG_MOUNT_DIR}:ro
-      - ./output:${SUMMARY_OUTPUT_DIR}
+      - ./output:/output
     healthcheck:
       test:
         [
@@ -29,3 +30,33 @@ services:
       timeout: 5s
       retries: 2
       start_period: 120s
+
+  log-reports:
+    build:
+      context: ..
+      dockerfile: log-summary/Dockerfile
+    container_name: firewall-log-reports
+    restart: unless-stopped
+    env_file:
+      - .env
+      - ../.env
+    environment:
+      - LOGFILE=${SUMMARY_LOG_PATH}
+      - REPORTS_OUTPUT_DIR=${REPORTS_OUTPUT_DIR:-/output/reports}
+      - REPORTS_ANALYSIS_TYPE=${REPORTS_ANALYSIS_TYPE:-all}
+      - SUMMARY_POLL_SECONDS=${SUMMARY_POLL_SECONDS}
+    volumes:
+      - ${SUMMARY_LOG_MOUNT_DIR}:${SUMMARY_LOG_MOUNT_DIR}:ro
+      - ./output:/output
+    entrypoint:
+      - /bin/sh
+      - -lc
+      - |
+        while true; do
+          mkdir -p "${REPORTS_OUTPUT_DIR}" && \
+          python /app/iptable.loggin.py \
+            --env-file '' \
+            --output-dir "${REPORTS_OUTPUT_DIR}" \
+            --analysis-type "${REPORTS_ANALYSIS_TYPE}";
+          sleep "${SUMMARY_POLL_SECONDS}";
+        done

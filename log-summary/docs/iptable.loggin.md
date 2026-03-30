@@ -14,7 +14,7 @@
 
 ## Descripción General
 
-`iptable.loggin.py` es una herramienta avanzada de análisis de logs para iptables específicamente diseñada para servidores L4D2. Proporciona capacidades de logging automático, análisis temporal detallado y generación de reportes JSON comprehensivos sobre diferentes tipos de ataques DDoS.
+`iptable.loggin.py` es una herramienta avanzada de análisis de logs para iptables específicamente diseñada para servidores L4D2. Actualmente vive en `log-summary/app/iptable.loggin.py`. Proporciona capacidades de logging automático, análisis temporal detallado y generación de reportes JSON comprehensivos sobre diferentes tipos de ataques DDoS.
 
 ### Características Principales
 
@@ -85,7 +85,7 @@ Para desarrollo, testing o si prefieres mantener las dependencias aisladas del s
 
 ```bash
 # Ejecutar el gestor de entorno virtual
-./venv.loggin.sh
+./log-summary/venv.loggin.sh
 
 # Seguir las opciones del menú interactivo
 # Opción 1: Instalar entorno virtual
@@ -99,14 +99,15 @@ Para desarrollo, testing o si prefieres mantener las dependencias aisladas del s
 git clone https://github.com/AoC-Gamers/L4D2-Iptable-Suite.git
 cd L4D2-Iptable-Suite
 
-# O descargar solo el script
-wget https://raw.githubusercontent.com/AoC-Gamers/L4D2-Iptable-Suite/main/iptable.loggin.py
-chmod +x iptable.loggin.py
+# O descargar el directorio del analizador
+git clone https://github.com/AoC-Gamers/L4D2-Iptable-Suite.git
+cd L4D2-Iptable-Suite
+chmod +x log-summary/app/iptable.loggin.py
 ```
 
 ## Gestor de Entorno Virtual
 
-Para facilitar la gestión de dependencias y el desarrollo en diferentes entornos, el proyecto incluye un gestor de entorno virtual automático (`venv.loggin.sh`). Este script proporciona una interfaz interactiva para:
+Para facilitar la gestión de dependencias y el desarrollo en diferentes entornos, el proyecto incluye un gestor de entorno virtual automático (`log-summary/venv.loggin.sh`). Este script proporciona una interfaz interactiva para:
 
 - **Instalación automática** de entorno virtual Python
 - **Gestión de dependencias** aisladas del sistema
@@ -118,7 +119,7 @@ Para facilitar la gestión de dependencias y el desarrollo en diferentes entorno
 
 ```bash
 # Ejecutar el gestor
-./venv.loggin.sh
+./log-summary/venv.loggin.sh
 
 # Seleccionar opciones del menú:
 # 1. Instalar entorno virtual
@@ -189,7 +190,7 @@ id | grep adm
 
 ```bash
 # Usar el gestor de entorno virtual para ejecución automática
-./venv.loggin.sh
+./log-summary/venv.loggin.sh
 
 # Seleccionar opción 6: 🐍 Run iptable.loggin.py script
 # El script maneja automáticamente:
@@ -210,24 +211,24 @@ id | grep adm
 
 ```bash
 # Ejecutar con archivo .env en el directorio actual
-sudo python3 iptable.loggin.py
+python3 log-summary/app/iptable.loggin.py --env-file .env
 
 # Ejecutar especificando ruta del archivo .env
-sudo python3 iptable.loggin.py --env-file /ruta/al/archivo/.env
+python3 log-summary/app/iptable.loggin.py --env-file /ruta/al/archivo/.env
 
 # Ejecutar desde cualquier directorio
-sudo python3 /ruta/completa/iptable.loggin.py --env-file /ruta/al/.env
+python3 /ruta/completa/L4D2-Iptable-Suite/log-summary/app/iptable.loggin.py --env-file /ruta/al/.env
 ```
 
 #### Método 3: Con Entorno Virtual Activado Manualmente
 
 ```bash
 # Activar el entorno virtual
-./venv.loggin.sh
+./log-summary/venv.loggin.sh
 # Opción 2: Activate virtual environment
 
 # En el shell interactivo del entorno virtual:
-sudo python iptable.loggin.py --env-file .env
+python log-summary/app/iptable.loggin.py --env-file .env
 
 # Salir del entorno
 deactivate
@@ -371,7 +372,7 @@ Categorización por patrón de ataque:
 
 ## Estructura de Reportes JSON
 
-Todos los reportes generados siguen una estructura JSON bien definida que facilita su procesamiento automatizado y análisis posterior. Los archivos se generan en la carpeta `summary_example/` del repositorio.
+Todos los reportes generados siguen una estructura JSON bien definida que facilita su procesamiento automatizado y análisis posterior. Los archivos se generan en la carpeta `log-summary/summary_example/` del repositorio.
 
 ### Ejemplos de Estructura
 
@@ -399,28 +400,28 @@ Todos los reportes JSON incluyen:
 
 #### INVALID_SIZE
 - **Descripción**: Paquetes UDP con tamaños específicos usados en ataques
-- **Detalles técnicos**: Ver [Ataques de Validación de Paquetes](iptables.rules.md#ataques-validacion-paquetes)
+- **Detalles técnicos**: Ver [Ataques de Validación de Paquetes](../../docs/iptables.rules.md#ataques-validacion-paquetes)
 
 #### MALFORMED
 - **Descripción**: Paquetes UDP malformados o con contenido inválido
-- **Detalles técnicos**: Ver [Ataques de Validación de Paquetes](iptables.rules.md#ataques-validacion-paquetes)
+- **Detalles técnicos**: Ver [Ataques de Validación de Paquetes](../../docs/iptables.rules.md#ataques-validacion-paquetes)
 
 ### Ataques de Consulta A2S (Server Query)
 
 #### A2S_INFO_FLOOD
 - **Descripción**: Flood de consultas A2S_INFO (0x54)
 - **Puertos afectados**: Solo GameServer (no SourceTV)
-- **Detalles técnicos**: Ver [Ataques de Consulta A2S](iptables.rules.md#ataques-consulta-a2s)
+- **Detalles técnicos**: Ver [Ataques de Consulta A2S](../../docs/iptables.rules.md#ataques-consulta-a2s)
 
 #### A2S_PLAYERS_FLOOD
 - **Descripción**: Flood de consultas A2S_PLAYERS (0x55)
 - **Puertos afectados**: Solo GameServer
-- **Detalles técnicos**: Ver [Ataques de Consulta A2S](iptables.rules.md#ataques-consulta-a2s)
+- **Detalles técnicos**: Ver [Ataques de Consulta A2S](../../docs/iptables.rules.md#ataques-consulta-a2s)
 
 #### A2S_RULES_FLOOD
 - **Descripción**: Flood de consultas A2S_RULES (0x56)
 - **Puertos afectados**: Solo GameServer
-- **Detalles técnicos**: Ver [Ataques de Consulta A2S](iptables.rules.md#ataques-consulta-a2s)
+- **Detalles técnicos**: Ver [Ataques de Consulta A2S](../../docs/iptables.rules.md#ataques-consulta-a2s)
 
 ### Ataques Específicos de L4D2
 
@@ -429,20 +430,20 @@ Todos los reportes JSON incluyen:
 - **Propósito**: Saturar el proceso de conexión de jugadores
 - **Impacto**: Puede prevenir conexiones legítimas
 - **Mitigación**: Rate limiting específico por IP
-- **Detalles técnicos**: Ver [Ataques Específicos de L4D2](iptables.rules.md#ataques-especificos-l4d2)
+- **Detalles técnicos**: Ver [Ataques Específicos de L4D2](../../docs/iptables.rules.md#ataques-especificos-l4d2)
 
 #### L4D2_RESERVE_FLOOD
 - **Descripción**: Flood de paquetes con string "reserve"
 - **Propósito**: Atacar el sistema de reserva de slots
 - **Impacto**: Puede causar inestabilidad en lobby management
 - **Mitigación**: Rate limiting estricto
-- **Detalles técnicos**: Ver [Ataques Específicos de L4D2](iptables.rules.md#ataques-especificos-l4d2)
+- **Detalles técnicos**: Ver [Ataques Específicos de L4D2](../../docs/iptables.rules.md#ataques-especificos-l4d2)
 
 ### Ataques de Limitación UDP
 
 #### UDP_NEW_LIMIT y UDP_EST_LIMIT
 - **Descripción**: Protección contra floods UDP en conexiones nuevas y establecidas
-- **Detalles técnicos**: Ver [Ataques de Rate Limiting UDP](iptables.rules.md#ataques-rate-limiting-udp)
+- **Detalles técnicos**: Ver [Ataques de Rate Limiting UDP](../../docs/iptables.rules.md#ataques-rate-limiting-udp)
 - **Configuración**: Basada en `L4D2_CMD_LIMIT` y algoritmos hashlimit específicos
 - **Nota operativa**: Estas categorías pueden deshabilitarse en logs si `ENABLE_UDP_BASELINE_LOGS=false`
 
@@ -453,21 +454,21 @@ Todos los reportes JSON incluyen:
 - **Propósito**: Saturar consultas de información de grupos
 - **Impacto**: Consumo de recursos del servidor Steam API
 - **Mitigación**: Rate limiting específico
-- **Detalles técnicos**: Ver [Ataques de Consulta A2S](iptables.rules.md#ataques-consulta-a2s)
+- **Detalles técnicos**: Ver [Ataques de Consulta A2S](../../docs/iptables.rules.md#ataques-consulta-a2s)
 
 #### TCP_RCON_BLOCK
 - **Descripción**: Bloqueo de conexiones TCP maliciosas
 - **Propósito**: Proteger puertos RCON de spam/brute force
 - **Impacto**: Previene ataques administrativos
 - **Mitigación**: Bloqueo completo o rate limiting según configuración
-- **Detalles técnicos**: Ver [Ataques TCP/RCON](iptables.rules.md#ataques-tcp-rcon)
+- **Detalles técnicos**: Ver [Ataques TCP/RCON](../../docs/iptables.rules.md#ataques-tcp-rcon)
 
 #### ICMP_FLOOD
 - **Descripción**: Flood de pings ICMP
 - **Propósito**: Saturar conectividad de red
 - **Impacto**: Degradación general de performance de red
 - **Mitigación**: Rate limiting de paquetes ICMP
-- **Detalles técnicos**: Ver [Ataques ICMP/Ping Flood](iptables.rules.md#ataques-icmp-ping-flood)
+- **Detalles técnicos**: Ver [Ataques ICMP/Ping Flood](../../docs/iptables.rules.md#ataques-icmp-ping-flood)
 
 ## Interpretación de Resultados
 
@@ -561,7 +562,7 @@ sudo journalctl -u rsyslog -f
 **Solución**:
 ```bash
 # Reconfigurar rsyslog usando el script
-sudo python3 iptable.loggin.py
+python3 log-summary/app/iptable.loggin.py --env-file .env
 # Seleccionar opción 1
 
 # Reiniciar rsyslog
@@ -620,7 +621,7 @@ grep LOG_PREFIX .env
 **Solución**:
 ```bash
 # Especificar ruta correcta del archivo .env
-sudo python3 iptable.loggin.py --env-file /ruta/correcta/.env
+python3 log-summary/app/iptable.loggin.py --env-file .env --env-file /ruta/correcta/.env
 
 # O copiar example.env como .env
 cp example.env .env
@@ -676,8 +677,8 @@ EOF
 ## Enlaces Relacionados
 
 - [README Principal](../README.md)
-- [Gestor de Entorno Virtual - venv.loggin.sh](venv.loggin.md)
-- [Documentación iptables.rules.sh](iptables.rules.md)
+- [Gestor de Entorno Virtual - log-summary/venv.loggin.sh](venv.loggin.md)
+- [Documentación iptables.rules.sh](../../docs/iptables.rules.md)
 - [Documentación ipp.sh](ipp.md)
 - [Archivo de Configuración example.env](../example.env)
 

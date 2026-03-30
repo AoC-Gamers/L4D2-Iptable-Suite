@@ -133,7 +133,6 @@ nf_70_l4d2_a2s_filters_apply() {
             done
         fi
 
-        nf_add_rule "$chain" udp dport "$all_query_ports_expr" meta length 1-70 @th,64,48 0xFFFFFFFF0000 drop
         nf_add_rule "$chain" udp dport "$game_ports_expr" meta length 1-70 @th,64,40 0xFFFFFFFF71 @th,104,56 0x636f6e6e656374 jump login_connect_limit
         nf_add_rule "$chain" udp dport "$game_ports_expr" meta length 1-70 @th,64,40 0xFFFFFFFF71 @th,104,56 0x72657365727665 jump login_reserve_limit
         nf_add_rule "$chain" udp dport "$game_ports_expr" meta length 1-70 @th,64,40 0xFFFFFFFF71 drop

@@ -447,18 +447,18 @@ iptables -A INPUT -p udp --dports $L4D2_GAMESERVER_PORTS \
 **Rate Limiting Aplicado**:
 ```bash
 iptables -A A2S_LIMITS \
-    -m hashlimit --hashlimit-upto 8/sec \
-    --hashlimit-burst 30 \
-    --hashlimit-mode dstport \
+    -m hashlimit --hashlimit-upto 16/sec \
+    --hashlimit-burst 80 \
+    --hashlimit-mode srcip,dstport \
     --hashlimit-name A2SFilter \
     --hashlimit-htable-expire 5000 \
     -j ACCEPT
 ```
 
 **Parámetros Técnicos**:
-- **8/sec**: Máximo 8 consultas por segundo (normal: 1-2/sec)
-- **burst 30**: Permite ráfagas iniciales de hasta 30 consultas
-- **modo dstport**: Rate limiting por puerto de destino (protege todos los IPs)
+- **16/sec**: Máximo 16 consultas por segundo por origen+puerto en el perfil equilibrado actual
+- **burst 80**: Permite ráfagas iniciales más amplias para discovery legítimo
+- **modo srcip,dstport**: Rate limiting por IP origen + puerto destino para evitar falsos positivos globales
 - **expire 5000ms**: Ventana de seguimiento de 5 segundos
 
 #### A2S_PLAYERS (0x55) - Flood de Lista de Jugadores
@@ -1238,8 +1238,11 @@ tail /var/log/firewall-suite.log
 
 **Soluciones**:
 ```bash
-# Reconfigurar logging completo
-sudo python3 iptable.loggin.py  # Opción 1
+# Analizar logs y generar reportes
+python3 log-summary/app/iptable.loggin.py --env-file .env
+
+# Si necesitas reconfigurar rsyslog desde el menú interactivo
+sudo python3 log-summary/app/iptable.loggin.py --env-file .env
 
 # Reiniciar rsyslog
 sudo systemctl restart rsyslog
@@ -1342,7 +1345,7 @@ done
 
 - [README Principal](../README.md)
 - [Documentación ipp.sh](ipp.md)
-- [Documentación iptable.loggin.py](iptable.loggin.md)
+- [Documentación iptable.loggin.py](../log-summary/docs/iptable.loggin.md)
 - [Archivo de Configuración example.env](../example.env)
 
 ---

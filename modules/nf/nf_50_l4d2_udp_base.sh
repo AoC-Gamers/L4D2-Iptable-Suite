@@ -9,8 +9,8 @@ ID=nf_l4d2_udp_base
 ALIASES=l4d2_udp_base
 DESCRIPTION=Applies base UDP/state/ICMP rules in the nftables backend
 REQUIRED_VARS=TYPECHAIN L4D2_GAMESERVER_PORTS L4D2_TV_PORTS L4D2_CMD_LIMIT LOG_PREFIX_UDP_NEW_LIMIT LOG_PREFIX_UDP_EST_LIMIT LOG_PREFIX_ICMP_FLOOD
-OPTIONAL_VARS=FIREWALL_HOST_ALIAS STEAM_GROUP_SIGNATURES ENABLE_UDP_BASELINE_LOGS UDP_NEW_SRC_RATE UDP_NEW_SRC_BURST UDP_NEW_GLOBAL_RATE UDP_NEW_GLOBAL_BURST ENABLE_UDP_NEW_FFFFFFFF_BYPASS
-DEFAULTS=TYPECHAIN=0 L4D2_GAMESERVER_PORTS=27015 L4D2_TV_PORTS=27020 L4D2_CMD_LIMIT=100 LOG_PREFIX_UDP_NEW_LIMIT=UDP_NEW_LIMIT: LOG_PREFIX_UDP_EST_LIMIT=UDP_EST_LIMIT: LOG_PREFIX_ICMP_FLOOD=ICMP_FLOOD: FIREWALL_HOST_ALIAS= STEAM_GROUP_SIGNATURES=69 ENABLE_UDP_BASELINE_LOGS=false UDP_NEW_SRC_RATE=8 UDP_NEW_SRC_BURST=24 UDP_NEW_GLOBAL_RATE=240 UDP_NEW_GLOBAL_BURST=960 ENABLE_UDP_NEW_FFFFFFFF_BYPASS=true
+OPTIONAL_VARS=FIREWALL_HOST_ALIAS STEAM_GROUP_SIGNATURES ENABLE_STEAM_GROUP_FILTER ENABLE_UDP_BASELINE_LOGS UDP_NEW_SRC_RATE UDP_NEW_SRC_BURST UDP_NEW_GLOBAL_RATE UDP_NEW_GLOBAL_BURST ENABLE_UDP_NEW_FFFFFFFF_BYPASS
+DEFAULTS=TYPECHAIN=0 L4D2_GAMESERVER_PORTS=27015 L4D2_TV_PORTS=27020 L4D2_CMD_LIMIT=100 LOG_PREFIX_UDP_NEW_LIMIT=UDP_NEW_LIMIT: LOG_PREFIX_UDP_EST_LIMIT=UDP_EST_LIMIT: LOG_PREFIX_ICMP_FLOOD=ICMP_FLOOD: FIREWALL_HOST_ALIAS= STEAM_GROUP_SIGNATURES=69 ENABLE_STEAM_GROUP_FILTER=true ENABLE_UDP_BASELINE_LOGS=false UDP_NEW_SRC_RATE=8 UDP_NEW_SRC_BURST=24 UDP_NEW_GLOBAL_RATE=240 UDP_NEW_GLOBAL_BURST=960 ENABLE_UDP_NEW_FFFFFFFF_BYPASS=true
 EOF
 }
 
@@ -77,6 +77,14 @@ nf_50_l4d2_udp_base_validate() {
             return 2
             ;;
     esac
+
+    case "${ENABLE_STEAM_GROUP_FILTER:-}" in
+        true|false) ;;
+        *)
+            echo "ERROR: nf_l4d2_udp_base: ENABLE_STEAM_GROUP_FILTER must be true or false"
+            return 2
+            ;;
+    esac
 }
 
 nf_50_l4d2_udp_base_apply() {
@@ -99,25 +107,25 @@ nf_50_l4d2_udp_base_apply() {
     log_udp_est="$(nf_build_log_prefix "$LOG_PREFIX_UDP_EST_LIMIT" "UDP_EST_LIMIT" "nf_50_l4d2_udp_base" "udp_established_limit" "drop" "high")"
 
     if [ "${ENABLE_UDP_NEW_FFFFFFFF_BYPASS}" = "true" ]; then
-        # Valve documents Source query headers 54/55/56/57/69 and the legacy
-        # heartbeat/login short query 71. Return to caller so dedicated
-        # downstream filters classify them instead of the generic NEW limiter.
+        # Only bypass signatures that have a downstream classifier. Otherwise
+        # they should remain under the generic NEW limiter instead of falling
+        # through to the table policy.
         nf_add_rule udp_new_limit @th,64,40 0xFFFFFFFF54 return
         nf_add_rule udp_new_limit @th,64,40 0xFFFFFFFF55 return
         nf_add_rule udp_new_limit @th,64,40 0xFFFFFFFF56 return
-        nf_add_rule udp_new_limit @th,64,40 0xFFFFFFFF57 return
-        nf_add_rule udp_new_limit @th,64,40 0xFFFFFFFF69 return
         nf_add_rule udp_new_limit @th,64,40 0xFFFFFFFF71 return
-        steam_signatures_csv="${STEAM_GROUP_SIGNATURES//[[:space:]]/}"
-        IFS=',' read -r -a steam_signatures <<< "$steam_signatures_csv"
-        for steam_sig in "${steam_signatures[@]}"; do
-            [ -z "$steam_sig" ] && continue
-            steam_sig="${steam_sig^^}"
-            case "$steam_sig" in
-                54|55|56|57|69|71) continue ;;
-            esac
-            nf_add_rule udp_new_limit @th,64,40 "0xFFFFFFFF${steam_sig}" return
-        done
+        if [ "${ENABLE_STEAM_GROUP_FILTER}" = "true" ]; then
+            steam_signatures_csv="${STEAM_GROUP_SIGNATURES//[[:space:]]/}"
+            IFS=',' read -r -a steam_signatures <<< "$steam_signatures_csv"
+            for steam_sig in "${steam_signatures[@]}"; do
+                [ -z "$steam_sig" ] && continue
+                steam_sig="${steam_sig^^}"
+                case "$steam_sig" in
+                    54|55|56|71) continue ;;
+                esac
+                nf_add_rule udp_new_limit @th,64,40 "0xFFFFFFFF${steam_sig}" return
+            done
+        fi
     fi
 
     nf_add_rule udp_new_limit meter udp_new_src_under '{ ip saddr . udp dport limit rate '"${UDP_NEW_SRC_RATE}"'/second burst '"${UDP_NEW_SRC_BURST}"' packets }' jump udp_new_limit_global

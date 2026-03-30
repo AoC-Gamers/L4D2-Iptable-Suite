@@ -21,6 +21,7 @@ SRC_RE = re.compile(r"SRC=([^\s]+)")
 DPT_RE = re.compile(r"DPT=(\d+)")
 LEN_RE = re.compile(r"LEN=(\d+)")
 TS_RE = re.compile(r"^(\w+\s+\d+\s+\d+:\d+:\d+)")
+ISO_TS_RE = re.compile(r"^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})?)")
 
 
 MONTHS = {
@@ -50,6 +51,13 @@ def print_startup_banner():
 
 
 def parse_syslog_timestamp(line: str, now: datetime):
+    iso_match = ISO_TS_RE.search(line)
+    if iso_match:
+        try:
+            return datetime.fromisoformat(iso_match.group(1)).replace(tzinfo=None)
+        except ValueError:
+            pass
+
     match = TS_RE.search(line)
     if not match:
         return None
