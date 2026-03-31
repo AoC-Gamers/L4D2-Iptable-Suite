@@ -6,8 +6,8 @@ ID=ip_l4d2_udp_base
 ALIASES=l4d2_udp_base
 DESCRIPTION=Applies base UDP/state/ICMP rules for GameServer and SourceTV services
 REQUIRED_VARS=TYPECHAIN L4D2_GAMESERVER_PORTS L4D2_TV_PORTS L4D2_CMD_LIMIT LOG_PREFIX_UDP_NEW_LIMIT LOG_PREFIX_UDP_EST_LIMIT LOG_PREFIX_ICMP_FLOOD
-OPTIONAL_VARS=ENABLE_UDP_BASELINE_LOGS UDP_NEW_SRC_RATE UDP_NEW_SRC_BURST UDP_NEW_GLOBAL_RATE UDP_NEW_GLOBAL_BURST ENABLE_UDP_NEW_FFFFFFFF_BYPASS ENABLE_STEAM_GROUP_FILTER STEAM_GROUP_SIGNATURES
-DEFAULTS=TYPECHAIN=0 L4D2_GAMESERVER_PORTS=27015 L4D2_TV_PORTS=27020 L4D2_CMD_LIMIT=100 LOG_PREFIX_UDP_NEW_LIMIT=UDP_NEW_LIMIT: LOG_PREFIX_UDP_EST_LIMIT=UDP_EST_LIMIT: LOG_PREFIX_ICMP_FLOOD=ICMP_FLOOD: ENABLE_UDP_BASELINE_LOGS=false UDP_NEW_SRC_RATE=8 UDP_NEW_SRC_BURST=24 UDP_NEW_GLOBAL_RATE=240 UDP_NEW_GLOBAL_BURST=960 ENABLE_UDP_NEW_FFFFFFFF_BYPASS=true ENABLE_STEAM_GROUP_FILTER=true STEAM_GROUP_SIGNATURES=69
+OPTIONAL_VARS=ENABLE_UDP_BASELINE_LOGS UDP_NEW_SRC_RATE UDP_NEW_SRC_BURST UDP_NEW_GLOBAL_RATE UDP_NEW_GLOBAL_BURST ENABLE_UDP_NEW_FFFFFFFF_BYPASS ENABLE_STEAM_GROUP_FILTER STEAM_GROUP_SIGNATURES ENABLE_UDP_NEW_LARGE_FILTER UDP_NEW_LARGE_DROP_MIN_LEN
+DEFAULTS=TYPECHAIN=0 L4D2_GAMESERVER_PORTS=27015 L4D2_TV_PORTS=27020 L4D2_CMD_LIMIT=100 LOG_PREFIX_UDP_NEW_LIMIT=UDP_NEW_LIMIT: LOG_PREFIX_UDP_EST_LIMIT=UDP_EST_LIMIT: LOG_PREFIX_ICMP_FLOOD=ICMP_FLOOD: ENABLE_UDP_BASELINE_LOGS=false UDP_NEW_SRC_RATE=8 UDP_NEW_SRC_BURST=24 UDP_NEW_GLOBAL_RATE=240 UDP_NEW_GLOBAL_BURST=960 ENABLE_UDP_NEW_FFFFFFFF_BYPASS=true ENABLE_STEAM_GROUP_FILTER=true STEAM_GROUP_SIGNATURES=69 ENABLE_UDP_NEW_LARGE_FILTER=false UDP_NEW_LARGE_DROP_MIN_LEN=1024
 EOF
 }
 
@@ -46,9 +46,14 @@ ip_50_l4d2_udp_base_validate() {
     fi
 
     local key
-    for key in UDP_NEW_SRC_RATE UDP_NEW_SRC_BURST UDP_NEW_GLOBAL_RATE UDP_NEW_GLOBAL_BURST; do
+    for key in UDP_NEW_SRC_RATE UDP_NEW_SRC_BURST UDP_NEW_GLOBAL_RATE UDP_NEW_GLOBAL_BURST UDP_NEW_LARGE_DROP_MIN_LEN; do
         ip_50_l4d2_udp_base_validate_positive_int "$key" "${!key:-}" || return $?
     done
+
+    if [ "$UDP_NEW_LARGE_DROP_MIN_LEN" -lt 69 ] || [ "$UDP_NEW_LARGE_DROP_MIN_LEN" -gt 65535 ]; then
+        echo "ERROR: ip_l4d2_udp_base: UDP_NEW_LARGE_DROP_MIN_LEN must be between 69 and 65535"
+        return 2
+    fi
 
     if [ -n "${L4D2_GAMESERVER_PORTS:-}" ] && ! [[ "${L4D2_GAMESERVER_PORTS}" =~ ^[0-9]+(:[0-9]+)?(,[0-9]+(:[0-9]+)?)*$ ]]; then
         echo "ERROR: ip_l4d2_udp_base: invalid L4D2_GAMESERVER_PORTS format"
@@ -72,6 +77,14 @@ ip_50_l4d2_udp_base_validate() {
         true|false) ;;
         *)
             echo "ERROR: ip_l4d2_udp_base: ENABLE_UDP_NEW_FFFFFFFF_BYPASS must be true or false"
+            return 2
+            ;;
+    esac
+
+    case "${ENABLE_UDP_NEW_LARGE_FILTER:-}" in
+        true|false) ;;
+        *)
+            echo "ERROR: ip_l4d2_udp_base: ENABLE_UDP_NEW_LARGE_FILTER must be true or false"
             return 2
             ;;
     esac
@@ -118,6 +131,13 @@ ip_50_l4d2_udp_base_apply() {
                 iptables -A UDP_GAME_NEW_LIMIT -m string --algo bm --hex-string "|FFFFFFFF${steam_sig}|" -j RETURN
             done
         fi
+    fi
+
+    if [ "${ENABLE_UDP_NEW_LARGE_FILTER}" = "true" ]; then
+        if [ "${ENABLE_UDP_BASELINE_LOGS}" = "true" ]; then
+            iptables -A UDP_GAME_NEW_LIMIT -m length --length "${UDP_NEW_LARGE_DROP_MIN_LEN}:65535" -m limit --limit 60/min --limit-burst 20 -j LOG --log-prefix "$LOG_PREFIX_UDP_NEW_LIMIT" --log-level 4
+        fi
+        iptables -A UDP_GAME_NEW_LIMIT -m length --length "${UDP_NEW_LARGE_DROP_MIN_LEN}:65535" -j DROP
     fi
 
     iptables -A UDP_GAME_NEW_LIMIT -m hashlimit --hashlimit-upto "${UDP_NEW_SRC_RATE}/s" --hashlimit-burst "$UDP_NEW_SRC_BURST" --hashlimit-mode srcip,dstport --hashlimit-name L4D2_NEW_HASHLIMIT --hashlimit-htable-expire 5000 -j UDP_GAME_NEW_LIMIT_GLOBAL

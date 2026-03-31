@@ -13,6 +13,7 @@ Aplicar base de control UDP para tráfico de juego (NEW/ESTABLISHED) e ICMP.
 - `UDP_NEW_SRC_RATE`, `UDP_NEW_SRC_BURST`
 - `UDP_NEW_GLOBAL_RATE`, `UDP_NEW_GLOBAL_BURST`
 - `ENABLE_UDP_NEW_FFFFFFFF_BYPASS`
+- `ENABLE_UDP_NEW_LARGE_FILTER`, `UDP_NEW_LARGE_DROP_MIN_LEN`
 - `ENABLE_UDP_BASELINE_LOGS` (`false` recomendado en producción)
 - nftables: `STEAM_GROUP_SIGNATURES` para bypass temprano de firmas `0xFFFFFFFFxx` observadas o documentadas
 
@@ -38,6 +39,15 @@ Si `serverbrowser` o `steamgroup` dejan de mostrar servidores, revisar primero q
 - `ENABLE_STEAM_GROUP_FILTER`
 
 Con el perfil actual del proyecto se recomienda `8/24` por origen+puerto y `240/960` global por puerto como piso operativo para no romper descubrimiento.
+
+## Hardening para sprays UDP grandes
+Cuando `UDP_NEW_LIMIT` muestra datagramas `NEW` claramente sobredimensionados y sin firma Source clasificada downstream, el módulo puede cortar ese tráfico antes del rate limit genérico:
+
+- `ENABLE_UDP_NEW_LARGE_FILTER=true` activa el pre-filtro.
+- `UDP_NEW_LARGE_DROP_MIN_LEN` usa longitud IP total, no el `LEN` final de cabecera UDP del log.
+- Un umbral conservador como `1024` corta sprays cercanos a MTU (por ejemplo paquetes de ~1228 bytes IP totales) sin tocar short queries/login.
+
+Si el patrón observado es de paquetes pequeños y repetitivos, el endurecimiento principal sigue siendo `UDP_NEW_SRC_RATE` y `UDP_NEW_SRC_BURST`; para clasificar mejor esos casos hace falta captura `pcap` del payload.
 
 ## Politica de logging
 `UDP_NEW_LIMIT` y `UDP_EST_LIMIT` pertenecen al filtro preventivo/base, no a la clasificación final de abuso.

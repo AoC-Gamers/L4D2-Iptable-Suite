@@ -413,6 +413,8 @@ udp_new_src_burst="24"
 udp_new_global_rate="240"
 udp_new_global_burst="960"
 enable_udp_new_ffffffff_bypass="true"
+enable_udp_new_large_filter="false"
+udp_new_large_drop_min_len="1024"
 enable_udp_baseline_logs="false"
 a2s_info_rate="16"
 a2s_info_burst="80"
@@ -706,6 +708,27 @@ if [ "${module_enabled[ip_l4d2_udp_base]:-false}" = "true" ] || [ "${module_enab
         "100" \
         "is_cmd_limit" \
         "L4D2_CMD_LIMIT debe ser numérico entre 10 y 10000.")"
+
+    enable_udp_new_large_filter="$(ask_with_context \
+        "ENABLE_UDP_NEW_LARGE_FILTER" \
+        "Drop temprano para UDP NEW sobredimensionado que no parece query/login Source." \
+        "docs/modules/09_l4d2_udp_base.md" \
+        "ENABLE_UDP_NEW_LARGE_FILTER (true/false)" \
+        "$enable_udp_new_large_filter" \
+        "is_bool" \
+        "ENABLE_UDP_NEW_LARGE_FILTER debe ser true o false.")"
+    enable_udp_new_large_filter="${enable_udp_new_large_filter,,}"
+
+    if [ "$enable_udp_new_large_filter" = "true" ]; then
+        udp_new_large_drop_min_len="$(ask_with_context \
+            "UDP_NEW_LARGE_DROP_MIN_LEN" \
+            "Longitud IP total mínima para dropear UDP NEW sobredimensionado." \
+            "docs/modules/09_l4d2_udp_base.md" \
+            "UDP_NEW_LARGE_DROP_MIN_LEN" \
+            "$udp_new_large_drop_min_len" \
+            "is_cmd_limit" \
+            "UDP_NEW_LARGE_DROP_MIN_LEN debe ser numérico entre 69 y 65535.")"
+    fi
 else
     say_info "Módulos de juego no incluidos: se mantienen defaults mínimos (sin activar protección de juego)."
 fi
@@ -952,6 +975,8 @@ UDP_NEW_SRC_BURST=${udp_new_src_burst}
 UDP_NEW_GLOBAL_RATE=${udp_new_global_rate}
 UDP_NEW_GLOBAL_BURST=${udp_new_global_burst}
 ENABLE_UDP_NEW_FFFFFFFF_BYPASS=${enable_udp_new_ffffffff_bypass}
+ENABLE_UDP_NEW_LARGE_FILTER=${enable_udp_new_large_filter}
+UDP_NEW_LARGE_DROP_MIN_LEN=${udp_new_large_drop_min_len}
 ENABLE_UDP_BASELINE_LOGS=${enable_udp_baseline_logs}
 EOF
 fi
