@@ -1,0 +1,4 @@
+# One IPv4 or CIDR per line to block regardless of country policy for game UDP only.
+# Example:
+# 203.0.113.200
+# 198.51.100.128/25

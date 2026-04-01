@@ -363,7 +363,7 @@ modules/
   - Variables: `SSH_PORT`, `SSH_DOCKER`, `SSH_RATE`, `SSH_BURST`, `LOG_PREFIX_SSH_ABUSE`
 - **Protección TCP L4D2 (separada)**
   - `ip_l4d2_tcp_protect` / `nf_l4d2_tcp_protect`
-  - Variables: `L4D2_GAMESERVER_PORTS`, `L4D2_TCP_PROTECTION`, `LOG_PREFIX_TCP_RCON_BLOCK`
+  - Variables: `L4D2_GAMESERVER_PORTS`, `LOG_PREFIX_TCP_RCON_BLOCK`
 - **Cadena anti-spam TCP (ip específico)**
   - `ip_l4d2_tcpfilter_chain` / `nf_l4d2_tcpfilter_chain` (compatibilidad)
   - En `nftables`, la protección efectiva la aplica `nf_l4d2_tcp_protect`.

@@ -16,3 +16,11 @@ __pycache__/
 # Temporary local analysis outputs
 /tmp/*
 !/tmp/.gitkeep
+
+# GeoIP generated country prefix files
+/geoip/generated/countries/*.txt
+!/geoip/generated/countries/.gitkeep
+
+# GeoIP updater local env
+/geoip-updater/.env
+/geoip-updater/geoip-updater.log

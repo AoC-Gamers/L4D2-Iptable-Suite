@@ -102,8 +102,8 @@ L4D2_TV_PORTS="27020"          # Puertos de SourceTV
 L4D2_CMD_LIMIT=100              # Tickrate base para cálculos
 
 # === PROTECCIÓN TCP ===
-ENABLE_L4D2_TCP_PROTECT=true    # Activar bloqueo TCP de juego
-L4D2_TCP_PROTECTION=""          # Puertos TCP de juego específicos (vacío = L4D2_GAMESERVER_PORTS)
+ENABLE_L4D2_TCP_PROTECT=true    # Activar limitación TCP de juego
+L4D2_GAMESERVER_PORTS="27015"   # Referencia para protección TCP y UDP de juego
 
 # === ACCESO ADMINISTRATIVO ===
 SSH_PORT="22"                   # Puertos SSH del sistema
@@ -655,14 +655,9 @@ Los ataques TCP/RCON se dirigen a los puertos de administración remota (RCON) d
 iptables -A INPUT -p tcp --dports $SSH_PORT -j ACCEPT
 # Nota: WHITELISTED_IPS ya tienen acceso completo a TODO el sistema
 
-# 2. Bloquear TCP de juego en puertos definidos
-if [ -n "$L4D2_TCP_PROTECTION" ]; then
-    # Solo puertos específicos
-    iptables -A INPUT -p tcp --dports $L4D2_TCP_PROTECTION -j DROP
-else
-    # Todos los puertos de juego
-    iptables -A INPUT -p tcp --dports $L4D2_GAMESERVER_PORTS -j DROP
-fi
+# 2. Limitar TCP NEW de juego por origen/puerto y descartar exceso
+iptables -A INPUT -p tcp --dports $L4D2_GAMESERVER_PORTS -m conntrack --ctstate NEW -m hashlimit --hashlimit-upto 600/min --hashlimit-burst 200 --hashlimit-mode srcip,dstport --hashlimit-name L4D2TCPINPUT -j ACCEPT
+iptables -A INPUT -p tcp --dports $L4D2_GAMESERVER_PORTS -m conntrack --ctstate NEW -j DROP
 ```
 
 **Filosofía de Seguridad**:

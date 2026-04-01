@@ -170,7 +170,7 @@ module_default_include() {
         ip_loopback|ip_whitelist|ip_allowlist_ports|ip_docker_dns_egress|ip_openvpn_server|ip_tcp_ssh|ip_http_https_protect)
             echo "true"
             ;;
-        ip_docker_monitor_egress|ip_openvpn_sitetosite|ip_l4d2_tcpfilter_chain|ip_l4d2_tcp_protect|ip_l4d2_udp_base|ip_l4d2_packet_validation|ip_l4d2_a2s_filters)
+        ip_docker_monitor_egress|ip_openvpn_sitetosite|ip_geo_country_filter|ip_l4d2_tcpfilter_chain|ip_l4d2_tcp_protect|ip_l4d2_udp_base|ip_l4d2_packet_validation|ip_l4d2_a2s_filters)
             echo "false"
             ;;
         *)
@@ -196,6 +196,7 @@ module_token_to_module_ids() {
         chain_setup) echo "ip_chain_setup nf_chain_setup" ;;
         finalize) echo "ip_finalize nf_finalize" ;;
         whitelist) echo "ip_whitelist nf_whitelist" ;;
+        geo_country_filter|geo_filter) echo "nf_geo_country_filter" ;;
         allowlist_ports) echo "ip_allowlist_ports nf_allowlist_ports" ;;
         docker_dns_egress) echo "ip_docker_dns_egress nf_docker_dns_egress" ;;
         docker_monitor_egress) echo "ip_docker_monitor_egress nf_docker_monitor_egress" ;;
@@ -354,6 +355,7 @@ module_enabled[ip_finalize]="true"
 declare -a selectable_modules=(
     "ip_loopback|Loopback local"
     "ip_whitelist|Whitelist por IP/dominio"
+    "ip_geo_country_filter|Geo allow/deny por país (nft, solo UDP juego)"
     "ip_allowlist_ports|Allowlist de puertos manual"
     "ip_openvpn_server|OpenVPN modo servidor (clientes remotos)"
     "ip_openvpn_sitetosite|OpenVPN modo site-to-site"
@@ -436,6 +438,12 @@ ssh_rate="60/min"
 ssh_burst="20"
 whitelist=""
 whitelist_domains=""
+geo_policy_mode="off"
+geo_policy_allowed_countries="CL,AR,PE,CO,MX,BO,US"
+geo_policy_denied_countries="RU,CN"
+geo_policy_data_dir="./geoip/generated/countries"
+geo_policy_manual_allow_file="./geoip/manual/allow_ipv4.txt"
+geo_policy_manual_deny_file="./geoip/manual/deny_ipv4.txt"
 udp_allow=""
 tcp_allow=""
 docker_dns_egress_subnets="172.16.0.0/12"
@@ -452,7 +460,6 @@ ovpnsrv_proto="udp"
 ovpns2s_interface="tun0"
 ovpns2s_local_subnets="192.168.1.0/24"
 ovpns2s_remote_subnets=""
-l4d2_tcp_protection=""
 
 if needs_var "SSH_PORT"; then
     say_section "SSH"
@@ -480,30 +487,17 @@ if needs_var "SSH_PORT"; then
 
 fi
 
-if needs_var "L4D2_TCP_PROTECTION" || needs_var "L4D2_GAMESERVER_PORTS"; then
+if needs_var "L4D2_GAMESERVER_PORTS"; then
     say_section "TCP L4D2"
 
-    if needs_var "L4D2_TCP_PROTECTION"; then
-        l4d2_tcp_protection="$(ask_with_context \
-            "L4D2_TCP_PROTECTION" \
-            "Puertos TCP específicos a proteger (opcional). Vacío=usa L4D2_GAMESERVER_PORTS." \
-            "docs/modules/15_l4d2_tcp_protect.md" \
-            "L4D2_TCP_PROTECTION (optional, ej: 27015 o 27015:27020)" \
-            "" \
-            "is_optional_ports_expr" \
-            "Formato inválido. Usa puertos/rangos separados por coma.")"
-    fi
-
-    if [ -z "$l4d2_tcp_protection" ] && needs_var "L4D2_GAMESERVER_PORTS"; then
-        l4d2_game_ports="$(ask_with_context \
-            "L4D2_GAMESERVER_PORTS" \
-            "Puertos usados para protección TCP de juego/RCON." \
-            "docs/modules/15_l4d2_tcp_protect.md" \
-            "L4D2_GAMESERVER_PORTS (ej: 27015 o 27015:27020)" \
-            "27015" \
-            "is_required_ports_expr" \
-            "Formato inválido. Usa puertos/rangos separados por coma.")"
-    fi
+    l4d2_game_ports="$(ask_with_context \
+        "L4D2_GAMESERVER_PORTS" \
+        "Puertos usados para protección TCP de juego/RCON." \
+        "docs/modules/15_l4d2_tcp_protect.md" \
+        "L4D2_GAMESERVER_PORTS (ej: 27015 o 27015:27020)" \
+        "27015" \
+        "is_required_ports_expr" \
+        "Formato inválido. Usa puertos/rangos separados por coma.")"
 fi
 
 if [ "${module_enabled[ip_whitelist]:-false}" = "true" ]; then
@@ -523,6 +517,67 @@ if [ "${module_enabled[ip_whitelist]:-false}" = "true" ]; then
         "docs/modules/04_whitelist.md" \
         "WHITELISTED_DOMAINS (espacio separado, optional)" \
         "" \
+        "true" \
+        "")"
+fi
+
+if [ "${module_enabled[ip_geo_country_filter]:-false}" = "true" ] || needs_var "GEO_POLICY_MODE" || needs_var "GEO_POLICY_ALLOWED_COUNTRIES" || needs_var "GEO_POLICY_DENIED_COUNTRIES" || needs_var "GEO_POLICY_DATA_DIR" || needs_var "GEO_POLICY_MANUAL_ALLOW_FILE" || needs_var "GEO_POLICY_MANUAL_DENY_FILE"; then
+    say_section "Geo allow/deny UDP"
+
+    geo_policy_mode="$(ask_with_context \
+        "GEO_POLICY_MODE" \
+        "Modo geo para UDP de juego: off, allowlist o denylist." \
+        "docs/modules/18_geo_country_filter.md" \
+        "GEO_POLICY_MODE (off/allowlist/denylist)" \
+        "$geo_policy_mode" \
+        "true" \
+        "")"
+    geo_policy_mode="${geo_policy_mode,,}"
+
+    geo_policy_allowed_countries="$(ask_with_context \
+        "GEO_POLICY_ALLOWED_COUNTRIES" \
+        "Países permitidos en formato ISO CSV; útil para modo allowlist." \
+        "docs/modules/18_geo_country_filter.md" \
+        "GEO_POLICY_ALLOWED_COUNTRIES (ej: CL,AR,PE,CO,MX,BO,US)" \
+        "$geo_policy_allowed_countries" \
+        "true" \
+        "")"
+    geo_policy_allowed_countries="${geo_policy_allowed_countries^^}"
+
+    geo_policy_denied_countries="$(ask_with_context \
+        "GEO_POLICY_DENIED_COUNTRIES" \
+        "Países bloqueados en formato ISO CSV; útil para modo denylist." \
+        "docs/modules/18_geo_country_filter.md" \
+        "GEO_POLICY_DENIED_COUNTRIES (ej: RU,CN)" \
+        "$geo_policy_denied_countries" \
+        "true" \
+        "")"
+    geo_policy_denied_countries="${geo_policy_denied_countries^^}"
+
+    geo_policy_data_dir="$(ask_with_context \
+        "GEO_POLICY_DATA_DIR" \
+        "Directorio con archivos CC.ipv4.txt generados desde MaxMind CSV." \
+        "docs/modules/18_geo_country_filter.md" \
+        "GEO_POLICY_DATA_DIR" \
+        "$geo_policy_data_dir" \
+        "true" \
+        "")"
+
+    geo_policy_manual_allow_file="$(ask_with_context \
+        "GEO_POLICY_MANUAL_ALLOW_FILE" \
+        "Archivo de IPv4/CIDR permitidos dentro de la política geo." \
+        "docs/modules/18_geo_country_filter.md" \
+        "GEO_POLICY_MANUAL_ALLOW_FILE" \
+        "$geo_policy_manual_allow_file" \
+        "true" \
+        "")"
+
+    geo_policy_manual_deny_file="$(ask_with_context \
+        "GEO_POLICY_MANUAL_DENY_FILE" \
+        "Archivo de IPv4/CIDR bloqueados dentro de la política geo." \
+        "docs/modules/18_geo_country_filter.md" \
+        "GEO_POLICY_MANUAL_DENY_FILE" \
+        "$geo_policy_manual_deny_file" \
         "true" \
         "")"
 fi
@@ -891,7 +946,7 @@ fi
 has_l4d2_ports_needed="false"
 if [ "$has_l4d2_udp_modules" = "true" ]; then
     has_l4d2_ports_needed="true"
-elif [ "$has_l4d2_tcp_modules" = "true" ] && [ -z "$l4d2_tcp_protection" ] && needs_var "L4D2_GAMESERVER_PORTS"; then
+elif [ "$has_l4d2_tcp_modules" = "true" ] && needs_var "L4D2_GAMESERVER_PORTS"; then
     has_l4d2_ports_needed="true"
 fi
 
@@ -919,6 +974,12 @@ DOCKER_INPUT_COMPAT=${docker_input_compat}
 DOCKER_CHAIN_AUTORECOVER=${docker_chain_autorecover}
 WHITELISTED_IPS="${whitelist}"
 WHITELISTED_DOMAINS="${whitelist_domains}"
+GEO_POLICY_MODE=${geo_policy_mode}
+GEO_POLICY_ALLOWED_COUNTRIES="${geo_policy_allowed_countries}"
+GEO_POLICY_DENIED_COUNTRIES="${geo_policy_denied_countries}"
+GEO_POLICY_DATA_DIR="${geo_policy_data_dir}"
+GEO_POLICY_MANUAL_ALLOW_FILE="${geo_policy_manual_allow_file}"
+GEO_POLICY_MANUAL_DENY_FILE="${geo_policy_manual_deny_file}"
 
 UDP_ALLOW_PORTS="${udp_allow}"
 TCP_ALLOW_PORTS="${tcp_allow}"
@@ -948,16 +1009,6 @@ SSH_DOCKER="${ssh_docker}"
 SSH_RATE="${ssh_rate}"
 SSH_BURST=${ssh_burst}
 EOF
-fi
-
-if [ "$has_l4d2_tcp_modules" = "true" ]; then
-cat >> "$output_file" <<EOF
-EOF
-    if [ -n "$l4d2_tcp_protection" ]; then
-cat >> "$output_file" <<EOF
-L4D2_TCP_PROTECTION="${l4d2_tcp_protection}"
-EOF
-    fi
 fi
 
 if [ "$has_l4d2_ports_needed" = "true" ]; then

@@ -175,7 +175,7 @@ L4D2_CMD_LIMIT=60  # Reducir de 100 a 60
 # Agregar usuario al grupo 'adm' (para acceso a logs)
 sudo usermod -a -G adm $USER
 ENABLE_L4D2_TCP_PROTECT=true
-L4D2_TCP_PROTECTION="27015:27020"
+L4D2_GAMESERVER_PORTS="27015:27020"
 newgrp adm
 
 # Verificar permisos
@@ -503,7 +503,7 @@ L4D2_CMD_LIMIT=60  # Reducir de 100 a 60
 ```bash
 # Habilitar protección TCP completa
 ENABLE_L4D2_TCP_PROTECT=true
-L4D2_TCP_PROTECTION=\"27015:27020\"
+L4D2_GAMESERVER_PORTS=\"27015:27020\"
 ```
 
 #### Si hay ataques persistentes de una IP:

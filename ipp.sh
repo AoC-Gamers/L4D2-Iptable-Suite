@@ -230,7 +230,7 @@ clear_l4d2_rules_iptables() {
     query_ports="${query_ports//,,/,}"
     query_ports="${query_ports#,}"
     query_ports="${query_ports%,}"
-    protected_ports="${L4D2_TCP_PROTECTION:-$game_ports}"
+    protected_ports="$game_ports"
 
     invalid_log="${LOG_PREFIX_INVALID_SIZE:-INVALID_SIZE: }"
     malformed_log="${LOG_PREFIX_MALFORMED:-MALFORMED: }"
@@ -289,6 +289,12 @@ clear_l4d2_rules_iptables() {
         fi
 
         if [ -n "$protected_ports" ]; then
+            iptables_delete_rule_spec "$chain" -p tcp -m multiport --dports "$protected_ports" -m conntrack --ctstate NEW -m hashlimit --hashlimit-upto 600/min --hashlimit-burst 200 --hashlimit-mode srcip,dstport --hashlimit-name L4D2TCPINPUT --hashlimit-htable-expire 60000 --hashlimit-htable-max 999999 -j ACCEPT
+            iptables_delete_rule_spec "$chain" -p tcp -m multiport --dports "$protected_ports" -m conntrack --ctstate NEW -m hashlimit --hashlimit-above 600/min --hashlimit-burst 200 --hashlimit-mode srcip,dstport --hashlimit-name L4D2TCPINPUT --hashlimit-htable-expire 60000 --hashlimit-htable-max 999999 -m limit --limit 60/min --limit-burst 20 -j LOG --log-prefix "$tcp_log" --log-level 4
+            iptables_delete_rule_spec "$chain" -p tcp -m multiport --dports "$protected_ports" -m conntrack --ctstate NEW -j DROP
+            iptables_delete_rule_spec "$chain" -p tcp -m multiport --dports "$protected_ports" -m conntrack --ctstate NEW -m hashlimit --hashlimit-upto 600/min --hashlimit-burst 200 --hashlimit-mode srcip,dstport --hashlimit-name L4D2TCPDOCKER --hashlimit-htable-expire 60000 --hashlimit-htable-max 999999 -j ACCEPT
+            iptables_delete_rule_spec "$chain" -p tcp -m multiport --dports "$protected_ports" -m conntrack --ctstate NEW -m hashlimit --hashlimit-above 600/min --hashlimit-burst 200 --hashlimit-mode srcip,dstport --hashlimit-name L4D2TCPDOCKER --hashlimit-htable-expire 60000 --hashlimit-htable-max 999999 -m limit --limit 60/min --limit-burst 20 -j LOG --log-prefix "$tcp_log" --log-level 4
+            iptables_delete_rule_spec "$chain" -p tcp -m multiport --dports "$protected_ports" -m conntrack --ctstate NEW -j DROP
             iptables_delete_rule_spec "$chain" -p tcp -m multiport --dports "$protected_ports" -m limit --limit 60/min --limit-burst 20 -j LOG --log-prefix "$tcp_log" --log-level 4
             iptables_delete_rule_spec "$chain" -p tcp -m multiport --dports "$protected_ports" -j DROP
         fi

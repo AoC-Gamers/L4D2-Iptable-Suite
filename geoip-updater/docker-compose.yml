@@ -1,0 +1,12 @@
+services:
+  geoip-updater:
+    build:
+      context: ..
+      dockerfile: geoip-updater/Dockerfile
+    container_name: geoip-updater
+    restart: "no"
+    env_file:
+      - .env
+    volumes:
+      - ..:/workspace
+    working_dir: /workspace

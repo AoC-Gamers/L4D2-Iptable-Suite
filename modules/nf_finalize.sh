@@ -27,7 +27,7 @@ nf_finalize_apply() {
     if [ -n "${L4D2_TV_PORTS:-}" ]; then
         echo "   - SourceTV reference ports: $L4D2_TV_PORTS"
     fi
-    if [ -n "${L4D2_TCP_PROTECTION:-}" ]; then
-        echo "   - TCP Protection ports: $L4D2_TCP_PROTECTION"
+    if [ -n "${L4D2_GAMESERVER_PORTS:-}" ]; then
+        echo "   - TCP Protection reference ports: $L4D2_GAMESERVER_PORTS"
     fi
 }

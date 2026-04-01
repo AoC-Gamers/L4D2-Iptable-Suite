@@ -1,0 +1,85 @@
+.DEFAULT_GOAL := help
+
+COMPOSE ?= docker compose
+SUDO ?= sudo
+ROOT_DIR := $(dir $(abspath $(lastword $(MAKEFILE_LIST))))
+GEOIP_UPDATER_COMPOSE := geoip-updater/docker-compose.yml
+LOG_SUMMARY_COMPOSE := log-summary/docker-compose.yml
+GEOIP_LOCK_FILE ?= /tmp/l4d2-geoip-refresh.lock
+
+.PHONY: help
+help:
+	@printf "Available targets:\n"
+	@printf "  %-22s %s\n" "geoip-update" "Download MaxMind CSV and regenerate allowed country prefixes"
+	@printf "  %-22s %s\n" "geoip-apply" "Reload nftables with current GeoIP-generated files"
+	@printf "  %-22s %s\n" "geoip-refresh" "Run updater and then reload nftables"
+	@printf "  %-22s %s\n" "geoip-refresh-safe" "Run geoip-refresh under flock for cron-safe execution"
+	@printf "  %-22s %s\n" "geoip-list" "List generated country prefix files"
+	@printf "  %-22s %s\n" "geoip-check" "Validate GeoIP updater compose and shell scripts"
+	@printf "  %-22s %s\n" "geoip-show" "Show live nftables geo allowlist objects"
+	@printf "  %-22s %s\n" "status" "Show GeoIP policy, generated files, and live firewall geo state"
+	@printf "  %-22s %s\n" "firewall-nft" "Apply nftables backend"
+	@printf "  %-22s %s\n" "firewall-ip" "Apply iptables backend"
+	@printf "  %-22s %s\n" "firewall-validate" "Validate main shell scripts with bash -n"
+	@printf "  %-22s %s\n" "log-summary-up" "Build and start the log-summary stack"
+	@printf "  %-22s %s\n" "log-summary-down" "Stop the log-summary stack"
+
+.PHONY: geoip-update
+geoip-update:
+	cd $(ROOT_DIR) && $(COMPOSE) -f $(GEOIP_UPDATER_COMPOSE) run --rm geoip-updater
+
+.PHONY: geoip-apply
+geoip-apply:
+	cd $(ROOT_DIR) && $(SUDO) ./nftables.rules.sh
+
+.PHONY: geoip-refresh
+geoip-refresh:
+	$(MAKE) geoip-update
+	$(MAKE) geoip-apply
+
+.PHONY: geoip-refresh-safe
+geoip-refresh-safe:
+	cd $(ROOT_DIR) && flock -n $(GEOIP_LOCK_FILE) $(MAKE) geoip-refresh
+
+.PHONY: geoip-list
+geoip-list:
+	cd $(ROOT_DIR) && ls -1 geoip/generated/countries | sort
+
+.PHONY: geoip-check
+geoip-check:
+	cd $(ROOT_DIR) && bash -n geoip-updater/run-update.sh
+	cd $(ROOT_DIR) && bash -n scripts/geoip/update_geo_country_sets.sh
+	cd $(ROOT_DIR) && bash -n modules/nf/nf_15_geo_country_filter.sh
+	cd $(ROOT_DIR) && $(COMPOSE) -f $(GEOIP_UPDATER_COMPOSE) config >/tmp/geoip-updater-compose.out
+
+.PHONY: geoip-show
+geoip-show:
+	cd $(ROOT_DIR) && $(SUDO) -n nft list ruleset | grep -E 'geo_country_(allow|deny|gate)_v4|geo_manual_(allow|deny)_v4' | head -n 20
+
+.PHONY: status
+status:
+	@cd $(ROOT_DIR) && printf "Geo policy from .env:\n" && grep -E '^GEO_POLICY_' .env || true
+	@cd $(ROOT_DIR) && printf "\nGenerated country files:\n" && ls -1 geoip/generated/countries | sort || true
+	@cd $(ROOT_DIR) && printf "\nLive firewall geo objects:\n" && ($(SUDO) -n nft list ruleset | grep -E 'geo_country_(allow|deny|gate)_v4|geo_manual_(allow|deny)_v4' | head -n 20) || printf "nft ruleset unavailable with current privileges\n"
+
+.PHONY: firewall-nft
+firewall-nft:
+	cd $(ROOT_DIR) && $(SUDO) ./nftables.rules.sh
+
+.PHONY: firewall-ip
+firewall-ip:
+	cd $(ROOT_DIR) && $(SUDO) ./iptables.rules.sh
+
+.PHONY: firewall-validate
+firewall-validate:
+	cd $(ROOT_DIR) && bash -n configure-env.sh
+	cd $(ROOT_DIR) && bash -n nftables.rules.sh
+	cd $(ROOT_DIR) && bash -n iptables.rules.sh
+
+.PHONY: log-summary-up
+log-summary-up:
+	cd $(ROOT_DIR) && $(COMPOSE) -f $(LOG_SUMMARY_COMPOSE) up -d --build
+
+.PHONY: log-summary-down
+log-summary-down:
+	cd $(ROOT_DIR) && $(COMPOSE) -f $(LOG_SUMMARY_COMPOSE) down
