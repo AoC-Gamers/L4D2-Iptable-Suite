@@ -33,11 +33,11 @@ ip_finalize_apply() {
     fi
 
     echo "OK: iptables rules applied successfully"
-    if [ -n "${L4D2_TV_PORTS:-}" ]; then
-        echo "   - SourceTV separated: Ports $L4D2_TV_PORTS"
+    if [ -n "${L4D2_SOURCETV_UDP_PORTS:-}" ]; then
+        echo "   - SourceTV separated: Ports $L4D2_SOURCETV_UDP_PORTS"
     fi
-    if [ -n "${L4D2_GAMESERVER_PORTS:-}" ]; then
-        echo "   - TCP Protection reference ports: $L4D2_GAMESERVER_PORTS"
+    if [ -n "${L4D2_GAMESERVER_TCP_PORTS:-}" ]; then
+        echo "   - TCP Protection reference ports: $L4D2_GAMESERVER_TCP_PORTS"
     fi
     echo "   - Chain type: $TYPECHAIN (0=INPUT, 1=DOCKER-USER, 2=BOTH)"
     echo "   - Docker INPUT compatibility: $DOCKER_INPUT_COMPAT"

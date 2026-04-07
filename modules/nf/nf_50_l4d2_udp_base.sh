@@ -8,9 +8,9 @@ nf_50_l4d2_udp_base_metadata() {
 ID=nf_l4d2_udp_base
 ALIASES=l4d2_udp_base
 DESCRIPTION=Applies base UDP/state/ICMP rules in the nftables backend
-REQUIRED_VARS=TYPECHAIN L4D2_GAMESERVER_PORTS L4D2_TV_PORTS L4D2_CMD_LIMIT LOG_PREFIX_UDP_NEW_LIMIT LOG_PREFIX_UDP_EST_LIMIT LOG_PREFIX_ICMP_FLOOD
+REQUIRED_VARS=TYPECHAIN L4D2_GAMESERVER_UDP_PORTS L4D2_SOURCETV_UDP_PORTS L4D2_CMD_LIMIT LOG_PREFIX_UDP_NEW_LIMIT LOG_PREFIX_UDP_EST_LIMIT LOG_PREFIX_ICMP_FLOOD
 OPTIONAL_VARS=FIREWALL_HOST_ALIAS STEAM_GROUP_SIGNATURES ENABLE_STEAM_GROUP_FILTER ENABLE_UDP_BASELINE_LOGS UDP_NEW_SRC_RATE UDP_NEW_SRC_BURST UDP_NEW_GLOBAL_RATE UDP_NEW_GLOBAL_BURST ENABLE_UDP_NEW_FFFFFFFF_BYPASS ENABLE_UDP_NEW_LARGE_FILTER UDP_NEW_LARGE_DROP_MIN_LEN
-DEFAULTS=TYPECHAIN=0 L4D2_GAMESERVER_PORTS=27015 L4D2_TV_PORTS=27020 L4D2_CMD_LIMIT=100 LOG_PREFIX_UDP_NEW_LIMIT=UDP_NEW_LIMIT: LOG_PREFIX_UDP_EST_LIMIT=UDP_EST_LIMIT: LOG_PREFIX_ICMP_FLOOD=ICMP_FLOOD: FIREWALL_HOST_ALIAS= STEAM_GROUP_SIGNATURES=69 ENABLE_STEAM_GROUP_FILTER=true ENABLE_UDP_BASELINE_LOGS=false UDP_NEW_SRC_RATE=8 UDP_NEW_SRC_BURST=24 UDP_NEW_GLOBAL_RATE=240 UDP_NEW_GLOBAL_BURST=960 ENABLE_UDP_NEW_FFFFFFFF_BYPASS=true ENABLE_UDP_NEW_LARGE_FILTER=false UDP_NEW_LARGE_DROP_MIN_LEN=1024
+DEFAULTS=TYPECHAIN=0 L4D2_GAMESERVER_UDP_PORTS=27015 L4D2_SOURCETV_UDP_PORTS=27020 L4D2_CMD_LIMIT=100 LOG_PREFIX_UDP_NEW_LIMIT=UDP_NEW_LIMIT: LOG_PREFIX_UDP_EST_LIMIT=UDP_EST_LIMIT: LOG_PREFIX_ICMP_FLOOD=ICMP_FLOOD: FIREWALL_HOST_ALIAS= STEAM_GROUP_SIGNATURES=69 ENABLE_STEAM_GROUP_FILTER=true ENABLE_UDP_BASELINE_LOGS=false UDP_NEW_SRC_RATE=8 UDP_NEW_SRC_BURST=24 UDP_NEW_GLOBAL_RATE=240 UDP_NEW_GLOBAL_BURST=960 ENABLE_UDP_NEW_FFFFFFFF_BYPASS=true ENABLE_UDP_NEW_LARGE_FILTER=false UDP_NEW_LARGE_DROP_MIN_LEN=1024
 EOF
 }
 
@@ -58,8 +58,8 @@ nf_50_l4d2_udp_base_validate() {
         return 2
     fi
 
-    nf_validate_ports_spec "$L4D2_GAMESERVER_PORTS" "nf_l4d2_udp_base: L4D2_GAMESERVER_PORTS" || return $?
-    nf_validate_ports_spec "$L4D2_TV_PORTS" "nf_l4d2_udp_base: L4D2_TV_PORTS" || return $?
+    nf_validate_ports_spec "$L4D2_GAMESERVER_UDP_PORTS" "nf_l4d2_udp_base: L4D2_GAMESERVER_UDP_PORTS" || return $?
+    nf_validate_ports_spec "$L4D2_SOURCETV_UDP_PORTS" "nf_l4d2_udp_base: L4D2_SOURCETV_UDP_PORTS" || return $?
 
     local steam_signatures="${STEAM_GROUP_SIGNATURES//[[:space:]]/}"
     if [ -n "$steam_signatures" ] && ! [[ "$steam_signatures" =~ ^[0-9A-Fa-f]{2}(,[0-9A-Fa-f]{2})*$ ]]; then
@@ -110,8 +110,8 @@ nf_50_l4d2_udp_base_apply() {
     cmd_limit_leeway=$((L4D2_CMD_LIMIT + 10))
     cmd_limit_upper=$((L4D2_CMD_LIMIT + 30))
 
-    game_ports_expr="$(nf_ports_set_expr "$L4D2_GAMESERVER_PORTS")"
-    tv_ports_expr="$(nf_ports_set_expr "$L4D2_TV_PORTS")"
+    game_ports_expr="$(nf_ports_set_expr "$L4D2_GAMESERVER_UDP_PORTS")"
+    tv_ports_expr="$(nf_ports_set_expr "$L4D2_SOURCETV_UDP_PORTS")"
 
     nf_add_chain udp_new_limit
     nf_add_chain udp_new_limit_global
@@ -167,7 +167,7 @@ nf_50_l4d2_udp_base_apply() {
     fi
     nf_add_rule udp_established_limit meter udp_est_over_drop '{ ip saddr . udp sport . udp dport limit rate over '"${cmd_limit_leeway}"'/second burst '"${cmd_limit_upper}"' packets }' drop
 
-    all_udp_ports_expr="{ $(nf_ports_normalize "$L4D2_GAMESERVER_PORTS"), $(nf_ports_normalize "$L4D2_TV_PORTS") }"
+    all_udp_ports_expr="{ $(nf_ports_normalize "$L4D2_GAMESERVER_UDP_PORTS"), $(nf_ports_normalize "$L4D2_SOURCETV_UDP_PORTS") }"
 
     for chain in $(nf_get_target_chains_for_domain l4d2_udp); do
         log_icmp="$(nf_build_log_prefix "$LOG_PREFIX_ICMP_FLOOD" "ICMP_FLOOD" "nf_50_l4d2_udp_base" "$chain" "drop" "low")"

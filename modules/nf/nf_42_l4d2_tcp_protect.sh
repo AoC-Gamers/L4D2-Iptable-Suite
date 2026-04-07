@@ -9,8 +9,8 @@ ID=nf_l4d2_tcp_protect
 ALIASES=l4d2_tcp_protect
 DESCRIPTION=Applies L4D2 TCP protection (RCON/game ports) in the nftables backend
 REQUIRED_VARS=TYPECHAIN
-OPTIONAL_VARS=L4D2_GAMESERVER_PORTS LOG_PREFIX_TCP_RCON_BLOCK FIREWALL_HOST_ALIAS
-DEFAULTS=TYPECHAIN=0 L4D2_GAMESERVER_PORTS=27015 LOG_PREFIX_TCP_RCON_BLOCK=TCP_RCON_BLOCK: FIREWALL_HOST_ALIAS=
+OPTIONAL_VARS=L4D2_GAMESERVER_TCP_PORTS LOG_PREFIX_TCP_RCON_BLOCK FIREWALL_HOST_ALIAS
+DEFAULTS=TYPECHAIN=0 L4D2_GAMESERVER_TCP_PORTS= LOG_PREFIX_TCP_RCON_BLOCK=TCP_RCON_BLOCK: FIREWALL_HOST_ALIAS=
 EOF
 }
 
@@ -23,7 +23,9 @@ nf_42_l4d2_tcp_protect_validate() {
             ;;
     esac
 
-    nf_validate_ports_spec "$L4D2_GAMESERVER_PORTS" "nf_l4d2_tcp_protect: L4D2_GAMESERVER_PORTS" || return $?
+    if [ -n "${L4D2_GAMESERVER_TCP_PORTS:-}" ]; then
+        nf_validate_ports_spec "$L4D2_GAMESERVER_TCP_PORTS" "nf_l4d2_tcp_protect: L4D2_GAMESERVER_TCP_PORTS" || return $?
+    fi
 }
 
 nf_42_l4d2_tcp_protect_apply() {
@@ -32,7 +34,12 @@ nf_42_l4d2_tcp_protect_apply() {
     local tcp_rate="600/minute"
     local tcp_burst="200"
 
-    protected_ports_expr="$(nf_ports_set_expr "$L4D2_GAMESERVER_PORTS")"
+    if [ -z "${L4D2_GAMESERVER_TCP_PORTS:-}" ]; then
+        echo "INFO: nf_l4d2_tcp_protect: L4D2_GAMESERVER_TCP_PORTS is empty; skipping TCP protection"
+        return 0
+    fi
+
+    protected_ports_expr="$(nf_ports_set_expr "$L4D2_GAMESERVER_TCP_PORTS")"
 
     for chain in $(nf_get_target_chains_for_domain l4d2_tcp); do
         log_tcp_rcon="$(nf_build_log_prefix "$LOG_PREFIX_TCP_RCON_BLOCK" "TCP_RCON_BLOCK" "nf_42_l4d2_tcp_protect" "$chain" "drop" "high")"

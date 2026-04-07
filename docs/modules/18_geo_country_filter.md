@@ -7,7 +7,7 @@ Aplicar política geográfica IPv4 sobre los puertos UDP de juego usando allowli
 - nftables: `modules/nf/nf_15_geo_country_filter.sh` (`ID=nf_geo_country_filter`)
 
 ## Alcance
-- Solo afecta tráfico IPv4 hacia `L4D2_GAMESERVER_PORTS` y `L4D2_TV_PORTS`.
+- Solo afecta tráfico IPv4 hacia `L4D2_GAMESERVER_UDP_PORTS` y `L4D2_SOURCETV_UDP_PORTS`.
 - No toca SSH, HTTP/HTTPS ni otros puertos del host.
 - No reemplaza rate limits ni filtros A2S; corre antes y reduce superficie.
 

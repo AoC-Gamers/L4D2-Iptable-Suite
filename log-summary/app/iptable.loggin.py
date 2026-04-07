@@ -818,8 +818,8 @@ def run_analysis(env_file, selected_analysis_type=None):
 
     print(f"INFO: Reading logs from: {LOGFILE}")
     try:
-        game_ports = expand_ports(os.getenv("L4D2_GAMESERVER_PORTS", ""))
-        tv_ports = expand_ports(os.getenv("L4D2_TV_PORTS", ""))
+        game_ports = expand_ports(os.getenv("L4D2_GAMESERVER_UDP_PORTS", ""))
+        tv_ports = expand_ports(os.getenv("L4D2_SOURCETV_UDP_PORTS", ""))
     except ValueError as e:
         print(f"ERROR: Invalid port configuration in .env: {e}")
         return

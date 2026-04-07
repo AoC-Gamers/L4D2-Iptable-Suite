@@ -8,9 +8,9 @@ nf_15_geo_country_filter_metadata() {
 ID=nf_geo_country_filter
 ALIASES=geo_country_filter geo_filter
 DESCRIPTION=Applies IPv4 geo allow/deny policy for L4D2 UDP ports in the nftables backend
-REQUIRED_VARS=TYPECHAIN L4D2_GAMESERVER_PORTS L4D2_TV_PORTS GEO_POLICY_MODE GEO_POLICY_DATA_DIR GEO_POLICY_MANUAL_ALLOW_FILE GEO_POLICY_MANUAL_DENY_FILE
+REQUIRED_VARS=TYPECHAIN L4D2_GAMESERVER_UDP_PORTS L4D2_SOURCETV_UDP_PORTS GEO_POLICY_MODE GEO_POLICY_DATA_DIR GEO_POLICY_MANUAL_ALLOW_FILE GEO_POLICY_MANUAL_DENY_FILE
 OPTIONAL_VARS=GEO_POLICY_ALLOWED_COUNTRIES GEO_POLICY_DENIED_COUNTRIES
-DEFAULTS=TYPECHAIN=0 L4D2_GAMESERVER_PORTS=27015 L4D2_TV_PORTS=27020 GEO_POLICY_MODE=off GEO_POLICY_ALLOWED_COUNTRIES=CL,AR,PE,CO,MX,BO,US GEO_POLICY_DENIED_COUNTRIES= GEO_POLICY_DATA_DIR=./geoip/generated/countries GEO_POLICY_MANUAL_ALLOW_FILE=./geoip/manual/allow_ipv4.txt GEO_POLICY_MANUAL_DENY_FILE=./geoip/manual/deny_ipv4.txt
+DEFAULTS=TYPECHAIN=0 L4D2_GAMESERVER_UDP_PORTS=27015 L4D2_SOURCETV_UDP_PORTS=27020 GEO_POLICY_MODE=off GEO_POLICY_ALLOWED_COUNTRIES=CL,AR,PE,CO,MX,BO,US GEO_POLICY_DENIED_COUNTRIES= GEO_POLICY_DATA_DIR=./geoip/generated/countries GEO_POLICY_MANUAL_ALLOW_FILE=./geoip/manual/allow_ipv4.txt GEO_POLICY_MANUAL_DENY_FILE=./geoip/manual/deny_ipv4.txt
 EOF
 }
 
@@ -100,8 +100,8 @@ nf_15_geo_country_filter_validate() {
             ;;
     esac
 
-    nf_validate_ports_spec "$L4D2_GAMESERVER_PORTS" "nf_geo_country_filter: L4D2_GAMESERVER_PORTS" || return $?
-    nf_validate_ports_spec "$L4D2_TV_PORTS" "nf_geo_country_filter: L4D2_TV_PORTS" || return $?
+    nf_validate_ports_spec "$L4D2_GAMESERVER_UDP_PORTS" "nf_geo_country_filter: L4D2_GAMESERVER_UDP_PORTS" || return $?
+    nf_validate_ports_spec "$L4D2_SOURCETV_UDP_PORTS" "nf_geo_country_filter: L4D2_SOURCETV_UDP_PORTS" || return $?
 
     mode="${GEO_POLICY_MODE,,}"
     case "$mode" in
@@ -247,7 +247,7 @@ nf_15_geo_country_filter_apply() {
         nf_add_rule "$gate_chain" drop
     fi
 
-    all_ports_expr="{ $(nf_ports_normalize "$L4D2_GAMESERVER_PORTS"), $(nf_ports_normalize "$L4D2_TV_PORTS") }"
+    all_ports_expr="{ $(nf_ports_normalize "$L4D2_GAMESERVER_UDP_PORTS"), $(nf_ports_normalize "$L4D2_SOURCETV_UDP_PORTS") }"
     for chain in $(nf_get_target_chains_for_domain l4d2_udp); do
         nf_add_rule "$chain" meta nfproto ipv4 udp dport "$all_ports_expr" jump "$gate_chain"
     done

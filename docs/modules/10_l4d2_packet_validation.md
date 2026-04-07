@@ -8,7 +8,7 @@ Bloquear tamaños UDP inválidos/malformados típicos de abuso sobre puertos de 
 - nftables: `modules/nf/nf_60_l4d2_packet_validation.sh` (`ID=nf_l4d2_packet_validation`)
 
 ## Variables
-- `L4D2_GAMESERVER_PORTS`, `L4D2_TV_PORTS`
+- `L4D2_GAMESERVER_UDP_PORTS`, `L4D2_SOURCETV_UDP_PORTS`
 - `LOG_PREFIX_INVALID_SIZE`, `LOG_PREFIX_MALFORMED`
 - `ENABLE_PACKET_NORMALIZATION_LOGS` (`false` recomendado en producción)
 - `ENABLE_MALFORMED_FILTER` (`false` recomendado si discovery/Steam Group es sensible)

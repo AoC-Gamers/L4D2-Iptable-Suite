@@ -8,7 +8,7 @@ Aplicar protección TCP específica para puertos de juego/RCON de L4D2.
 - nftables: `modules/nf/nf_42_l4d2_tcp_protect.sh` (`ID=nf_l4d2_tcp_protect`)
 
 ## Variables
-- `L4D2_GAMESERVER_PORTS`
+- `L4D2_GAMESERVER_TCP_PORTS`
 - `LOG_PREFIX_TCP_RCON_BLOCK`
 - `TYPECHAIN`
 
@@ -19,4 +19,6 @@ Aplicar protección TCP específica para puertos de juego/RCON de L4D2.
 ## Nota operativa
 - Se activa al incluir `l4d2_tcp_protect` en `MODULES_ONLY`.
 - La exposición SSH se gestiona en `tcp_ssh`, separado de este módulo.
-- Usa siempre `L4D2_GAMESERVER_PORTS` como referencia TCP y deja pasar tráfico normal; sólo registra y descarta exceso de conexiones nuevas.
+- No usa `L4D2_GAMESERVER_UDP_PORTS` ni `L4D2_SOURCETV_UDP_PORTS` como acoplamiento automático.
+- Solo protege los puertos declarados explícitamente en `L4D2_GAMESERVER_TCP_PORTS`.
+- Si `L4D2_GAMESERVER_TCP_PORTS` está vacío, el módulo se omite sin error.

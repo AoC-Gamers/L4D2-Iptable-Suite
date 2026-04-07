@@ -163,8 +163,8 @@ LOG_PREFIX_TCP_RCON_BLOCK=\"TCP_RCON_BLOCK: \"
 LOG_PREFIX_ICMP_FLOOD=\"ICMP_FLOOD: \"
 
 # Configuración de Puertos (para clasificación en reportes)
-L4D2_GAMESERVER_PORTS="27015"
-L4D2_TV_PORTS="27020"
+L4D2_GAMESERVER_UDP_PORTS="27015"
+L4D2_SOURCETV_UDP_PORTS="27020"
 ```
 
 Si `ENABLE_UDP_BASELINE_LOGS=false` o `ENABLE_PACKET_NORMALIZATION_LOGS=false`, las categorías `UDP_NEW_LIMIT`, `UDP_EST_LIMIT`, `INVALID_SIZE` y `MALFORMED` pueden no aparecer en los reportes. Eso no implica ausencia de filtro, solo ausencia de logging para saneamiento/base.
@@ -175,7 +175,7 @@ L4D2_CMD_LIMIT=60  # Reducir de 100 a 60
 # Agregar usuario al grupo 'adm' (para acceso a logs)
 sudo usermod -a -G adm $USER
 ENABLE_L4D2_TCP_PROTECT=true
-L4D2_GAMESERVER_PORTS="27015:27020"
+L4D2_GAMESERVER_UDP_PORTS="27015:27020"
 newgrp adm
 
 # Verificar permisos
@@ -503,7 +503,7 @@ L4D2_CMD_LIMIT=60  # Reducir de 100 a 60
 ```bash
 # Habilitar protección TCP completa
 ENABLE_L4D2_TCP_PROTECT=true
-L4D2_GAMESERVER_PORTS=\"27015:27020\"
+L4D2_GAMESERVER_UDP_PORTS=\"27015:27020\"
 ```
 
 #### Si hay ataques persistentes de una IP:

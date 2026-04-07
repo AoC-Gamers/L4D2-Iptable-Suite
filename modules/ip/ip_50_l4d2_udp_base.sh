@@ -5,9 +5,9 @@ ip_50_l4d2_udp_base_metadata() {
 ID=ip_l4d2_udp_base
 ALIASES=l4d2_udp_base
 DESCRIPTION=Applies base UDP/state/ICMP rules for GameServer and SourceTV services
-REQUIRED_VARS=TYPECHAIN L4D2_GAMESERVER_PORTS L4D2_TV_PORTS L4D2_CMD_LIMIT LOG_PREFIX_UDP_NEW_LIMIT LOG_PREFIX_UDP_EST_LIMIT LOG_PREFIX_ICMP_FLOOD
+REQUIRED_VARS=TYPECHAIN L4D2_GAMESERVER_UDP_PORTS L4D2_SOURCETV_UDP_PORTS L4D2_CMD_LIMIT LOG_PREFIX_UDP_NEW_LIMIT LOG_PREFIX_UDP_EST_LIMIT LOG_PREFIX_ICMP_FLOOD
 OPTIONAL_VARS=ENABLE_UDP_BASELINE_LOGS UDP_NEW_SRC_RATE UDP_NEW_SRC_BURST UDP_NEW_GLOBAL_RATE UDP_NEW_GLOBAL_BURST ENABLE_UDP_NEW_FFFFFFFF_BYPASS ENABLE_STEAM_GROUP_FILTER STEAM_GROUP_SIGNATURES ENABLE_UDP_NEW_LARGE_FILTER UDP_NEW_LARGE_DROP_MIN_LEN
-DEFAULTS=TYPECHAIN=0 L4D2_GAMESERVER_PORTS=27015 L4D2_TV_PORTS=27020 L4D2_CMD_LIMIT=100 LOG_PREFIX_UDP_NEW_LIMIT=UDP_NEW_LIMIT: LOG_PREFIX_UDP_EST_LIMIT=UDP_EST_LIMIT: LOG_PREFIX_ICMP_FLOOD=ICMP_FLOOD: ENABLE_UDP_BASELINE_LOGS=false UDP_NEW_SRC_RATE=8 UDP_NEW_SRC_BURST=24 UDP_NEW_GLOBAL_RATE=240 UDP_NEW_GLOBAL_BURST=960 ENABLE_UDP_NEW_FFFFFFFF_BYPASS=true ENABLE_STEAM_GROUP_FILTER=true STEAM_GROUP_SIGNATURES=69 ENABLE_UDP_NEW_LARGE_FILTER=false UDP_NEW_LARGE_DROP_MIN_LEN=1024
+DEFAULTS=TYPECHAIN=0 L4D2_GAMESERVER_UDP_PORTS=27015 L4D2_SOURCETV_UDP_PORTS=27020 L4D2_CMD_LIMIT=100 LOG_PREFIX_UDP_NEW_LIMIT=UDP_NEW_LIMIT: LOG_PREFIX_UDP_EST_LIMIT=UDP_EST_LIMIT: LOG_PREFIX_ICMP_FLOOD=ICMP_FLOOD: ENABLE_UDP_BASELINE_LOGS=false UDP_NEW_SRC_RATE=8 UDP_NEW_SRC_BURST=24 UDP_NEW_GLOBAL_RATE=240 UDP_NEW_GLOBAL_BURST=960 ENABLE_UDP_NEW_FFFFFFFF_BYPASS=true ENABLE_STEAM_GROUP_FILTER=true STEAM_GROUP_SIGNATURES=69 ENABLE_UDP_NEW_LARGE_FILTER=false UDP_NEW_LARGE_DROP_MIN_LEN=1024
 EOF
 }
 
@@ -55,13 +55,13 @@ ip_50_l4d2_udp_base_validate() {
         return 2
     fi
 
-    if [ -n "${L4D2_GAMESERVER_PORTS:-}" ] && ! [[ "${L4D2_GAMESERVER_PORTS}" =~ ^[0-9]+(:[0-9]+)?(,[0-9]+(:[0-9]+)?)*$ ]]; then
-        echo "ERROR: ip_l4d2_udp_base: invalid L4D2_GAMESERVER_PORTS format"
+    if [ -n "${L4D2_GAMESERVER_UDP_PORTS:-}" ] && ! [[ "${L4D2_GAMESERVER_UDP_PORTS}" =~ ^[0-9]+(:[0-9]+)?(,[0-9]+(:[0-9]+)?)*$ ]]; then
+        echo "ERROR: ip_l4d2_udp_base: invalid L4D2_GAMESERVER_UDP_PORTS format"
         return 2
     fi
 
-    if [ -n "${L4D2_TV_PORTS:-}" ] && ! [[ "${L4D2_TV_PORTS}" =~ ^[0-9]+(:[0-9]+)?(,[0-9]+(:[0-9]+)?)*$ ]]; then
-        echo "ERROR: ip_l4d2_udp_base: invalid L4D2_TV_PORTS format"
+    if [ -n "${L4D2_SOURCETV_UDP_PORTS:-}" ] && ! [[ "${L4D2_SOURCETV_UDP_PORTS}" =~ ^[0-9]+(:[0-9]+)?(,[0-9]+(:[0-9]+)?)*$ ]]; then
+        echo "ERROR: ip_l4d2_udp_base: invalid L4D2_SOURCETV_UDP_PORTS format"
         return 2
     fi
 
@@ -167,11 +167,11 @@ ip_50_l4d2_udp_base_apply() {
             continue
         fi
 
-        iptables -A "$chain" -p udp -m multiport --dports "$L4D2_GAMESERVER_PORTS" -m state --state NEW -j UDP_GAME_NEW_LIMIT
-        iptables -A "$chain" -p udp -m multiport --dports "$L4D2_TV_PORTS" -m state --state NEW -j UDP_GAME_NEW_LIMIT
+        iptables -A "$chain" -p udp -m multiport --dports "$L4D2_GAMESERVER_UDP_PORTS" -m state --state NEW -j UDP_GAME_NEW_LIMIT
+        iptables -A "$chain" -p udp -m multiport --dports "$L4D2_SOURCETV_UDP_PORTS" -m state --state NEW -j UDP_GAME_NEW_LIMIT
 
-        iptables -A "$chain" -p udp -m multiport --dports "$L4D2_GAMESERVER_PORTS" -m state --state ESTABLISHED -j UDP_GAME_ESTABLISHED_LIMIT
-        iptables -A "$chain" -p udp -m multiport --dports "$L4D2_TV_PORTS" -m state --state ESTABLISHED -j UDP_GAME_ESTABLISHED_LIMIT
+        iptables -A "$chain" -p udp -m multiport --dports "$L4D2_GAMESERVER_UDP_PORTS" -m state --state ESTABLISHED -j UDP_GAME_ESTABLISHED_LIMIT
+        iptables -A "$chain" -p udp -m multiport --dports "$L4D2_SOURCETV_UDP_PORTS" -m state --state ESTABLISHED -j UDP_GAME_ESTABLISHED_LIMIT
     done
 
     iptables -A INPUT -m state --state ESTABLISHED,RELATED -j ACCEPT

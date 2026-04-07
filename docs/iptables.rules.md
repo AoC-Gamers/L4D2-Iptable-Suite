@@ -97,13 +97,14 @@ El script utiliza variables de entorno definidas en `.env`:
 ```bash
 # === CONFIGURACIÓN FUNDAMENTAL ===
 TYPECHAIN=0                     # 0=INPUT, 1=DOCKER, 2=AMBOS
-L4D2_GAMESERVER_PORTS="27015"  # Puertos del servidor de juego
-L4D2_TV_PORTS="27020"          # Puertos de SourceTV
+L4D2_GAMESERVER_UDP_PORTS="27015"  # Puertos del servidor de juego
+L4D2_SOURCETV_UDP_PORTS="27020"          # Puertos de SourceTV
 L4D2_CMD_LIMIT=100              # Tickrate base para cálculos
 
 # === PROTECCIÓN TCP ===
 ENABLE_L4D2_TCP_PROTECT=true    # Activar limitación TCP de juego
-L4D2_GAMESERVER_PORTS="27015"   # Referencia para protección TCP y UDP de juego
+L4D2_GAMESERVER_UDP_PORTS="27015"   # Referencia para puertos UDP / consultas de juego
+L4D2_GAMESERVER_TCP_PORTS="27015"  # Protección TCP explícita (RCON / endpoints TCP expuestos)
 
 # === ACCESO ADMINISTRATIVO ===
 SSH_PORT="22"                   # Puertos SSH del sistema
@@ -337,13 +338,13 @@ Los ataques de validación de paquetes explotan debilidades en el procesamiento 
 **Algoritmo de Detección**:
 ```bash
 # Paquetes demasiado pequeños (0-28 bytes)
-iptables -A INPUT -p udp --dports $L4D2_GAMESERVER_PORTS \
+iptables -A INPUT -p udp --dports $L4D2_GAMESERVER_UDP_PORTS \
     -m length --length 0:28 \
     -m limit --limit 60/min \
     -j LOG --log-prefix "INVALID_SIZE: "
 
 # Paquetes demasiado grandes (2521+ bytes)  
-iptables -A INPUT -p udp --dports $L4D2_GAMESERVER_PORTS \
+iptables -A INPUT -p udp --dports $L4D2_GAMESERVER_UDP_PORTS \
     -m length --length 2521:65535 \
     -m limit --limit 60/min \
     -j LOG --log-prefix "INVALID_SIZE: "
@@ -359,17 +360,17 @@ iptables -A INPUT -p udp --dports $L4D2_GAMESERVER_PORTS \
 **Tamaños Específicos de Ataques Conocidos**:
 ```bash
 # 30-32 bytes: Exploit específico de buffer overflow
-iptables -A INPUT -p udp --dports $L4D2_GAMESERVER_PORTS \
+iptables -A INPUT -p udp --dports $L4D2_GAMESERVER_UDP_PORTS \
     -m length --length 30:32 \
     -j LOG --log-prefix "MALFORMED: " && DROP
 
 # 46 bytes: Attack vector conocido para crash de servidor
-iptables -A INPUT -p udp --dports $L4D2_GAMESERVER_PORTS \
+iptables -A INPUT -p udp --dports $L4D2_GAMESERVER_UDP_PORTS \
     -m length --length 46:46 \
     -j LOG --log-prefix "MALFORMED: " && DROP
 
 # 60 bytes: Patrón de ataque de saturación específico
-iptables -A INPUT -p udp --dports $L4D2_GAMESERVER_PORTS \
+iptables -A INPUT -p udp --dports $L4D2_GAMESERVER_UDP_PORTS \
     -m length --length 60:60 \
     -j LOG --log-prefix "MALFORMED: " && DROP
 ```
@@ -389,7 +390,7 @@ Antes de las reglas específicas de cada tipo de consulta, Netfilter realiza un 
 
 ##### **1. Encaminamiento a Cadena A2S**
 ```bash
-iptables -A INPUT -p udp --dports $L4D2_GAMESERVER_PORTS \
+iptables -A INPUT -p udp --dports $L4D2_GAMESERVER_UDP_PORTS \
     -m string --algo bm --hex-string '|FFFFFFFF..|' -j <Cadena_A2S>
 ```
 - Cualquier paquete UDP al puerto de juego que contenga el prefijo `0xFF FF FF FF` se redirige a la cadena correspondiente (`A2S_LIMITS`, `A2S_PLAYERS_LIMITS`, etc.)
@@ -434,7 +435,7 @@ iptables -A <Cadena_A2S> -j DROP
 **Patrón Hexadecimal**:
 ```bash
 # Detección por signature hexadecimal
-iptables -A INPUT -p udp --dports $L4D2_GAMESERVER_PORTS \
+iptables -A INPUT -p udp --dports $L4D2_GAMESERVER_UDP_PORTS \
     -m string --algo bm --hex-string '|FFFFFFFF54|' \
     -j A2S_LIMITS
 ```
@@ -465,7 +466,7 @@ iptables -A A2S_LIMITS \
 
 **Detección**:
 ```bash
-iptables -A INPUT -p udp --dports $L4D2_GAMESERVER_PORTS \
+iptables -A INPUT -p udp --dports $L4D2_GAMESERVER_UDP_PORTS \
     -m string --algo bm --hex-string '|FFFFFFFF55|' \
     -j A2S_PLAYERS_LIMITS
 ```
@@ -481,7 +482,7 @@ iptables -A INPUT -p udp --dports $L4D2_GAMESERVER_PORTS \
 
 **Detección**:
 ```bash
-iptables -A INPUT -p udp --dports $L4D2_GAMESERVER_PORTS \
+iptables -A INPUT -p udp --dports $L4D2_GAMESERVER_UDP_PORTS \
     -m string --algo bm --hex-string '|FFFFFFFF56|' \
     -j A2S_RULES_LIMITS
 ```
@@ -495,7 +496,7 @@ iptables -A INPUT -p udp --dports $L4D2_GAMESERVER_PORTS \
 
 **Detección**:
 ```bash
-iptables -A INPUT -p udp --dports $L4D2_GAMESERVER_PORTS \
+iptables -A INPUT -p udp --dports $L4D2_GAMESERVER_UDP_PORTS \
     -m string --algo bm --hex-string '|FFFFFFFF00|' \
     -j STEAM_GROUP_LIMITS
 ```
@@ -552,7 +553,7 @@ iptables -A l4d2loginfilter -j DROP
 **Activación del Filtro**:
 ```bash
 # Se activa con patrón específico + rango de tamaño
-iptables -A INPUT -p udp --dports $L4D2_GAMESERVER_PORTS \
+iptables -A INPUT -p udp --dports $L4D2_GAMESERVER_UDP_PORTS \
     -m length --length 1:70 \
     -m string --algo bm --hex-string '|FFFFFFFF71|' \
     -j l4d2loginfilter
@@ -656,8 +657,8 @@ iptables -A INPUT -p tcp --dports $SSH_PORT -j ACCEPT
 # Nota: WHITELISTED_IPS ya tienen acceso completo a TODO el sistema
 
 # 2. Limitar TCP NEW de juego por origen/puerto y descartar exceso
-iptables -A INPUT -p tcp --dports $L4D2_GAMESERVER_PORTS -m conntrack --ctstate NEW -m hashlimit --hashlimit-upto 600/min --hashlimit-burst 200 --hashlimit-mode srcip,dstport --hashlimit-name L4D2TCPINPUT -j ACCEPT
-iptables -A INPUT -p tcp --dports $L4D2_GAMESERVER_PORTS -m conntrack --ctstate NEW -j DROP
+iptables -A INPUT -p tcp --dports $L4D2_GAMESERVER_UDP_PORTS -m conntrack --ctstate NEW -m hashlimit --hashlimit-upto 600/min --hashlimit-burst 200 --hashlimit-mode srcip,dstport --hashlimit-name L4D2TCPINPUT -j ACCEPT
+iptables -A INPUT -p tcp --dports $L4D2_GAMESERVER_UDP_PORTS -m conntrack --ctstate NEW -j DROP
 ```
 
 **Filosofía de Seguridad**:
@@ -891,7 +892,7 @@ static bool string_mt(const struct sk_buff *skb,
 ```bash
 # .env optimizado para alta performance
 L4D2_CMD_LIMIT=128              # Tickrate alto
-L4D2_GAMESERVER_PORTS="27015:27030"  # Múltiples servidores
+L4D2_GAMESERVER_UDP_PORTS="27015:27030"  # Múltiples servidores
 
 # Ajustes más permisivos para A2S
 # Modificar directamente en el script:
@@ -915,8 +916,8 @@ ENABLE_L4D2_TCP_PROTECT=true    # Bloqueo TCP completo
 
 ```bash
 # Múltiples rangos de puertos
-L4D2_GAMESERVER_PORTS="27015:27030,27100:27110"
-L4D2_TV_PORTS="27200:27215,27300:27310"
+L4D2_GAMESERVER_UDP_PORTS="27015:27030,27100:27110"
+L4D2_SOURCETV_UDP_PORTS="27200:27215,27300:27310"
 
 # Docker + nativo
 TYPECHAIN=2
@@ -1269,7 +1270,7 @@ echo "2. ARCHIVO .ENV"
 if [ -f ".env" ]; then
     echo "   ✅ Archivo .env existe"
     echo "   - TYPECHAIN: $(grep "^TYPECHAIN=" .env | cut -d= -f2)"
-    echo "   - L4D2_GAMESERVER_PORTS: $(grep "^L4D2_GAMESERVER_PORTS=" .env | cut -d= -f2)"
+    echo "   - L4D2_GAMESERVER_UDP_PORTS: $(grep "^L4D2_GAMESERVER_UDP_PORTS=" .env | cut -d= -f2)"
     echo "   - L4D2_CMD_LIMIT: $(grep "^L4D2_CMD_LIMIT=" .env | cut -d= -f2)"
 else
     echo "   ❌ Archivo .env NO existe"

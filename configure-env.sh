@@ -407,8 +407,9 @@ for selected_module in "${selected_only[@]}"; do
     done
 done
 
-l4d2_game_ports="27015"
-l4d2_tv_ports="27020"
+l4d2_game_udp_ports="27015"
+l4d2_sourcetv_udp_ports="27020"
+l4d2_game_tcp_ports=""
 l4d2_cmd_limit="100"
 udp_new_src_rate="8"
 udp_new_src_burst="24"
@@ -487,16 +488,16 @@ if needs_var "SSH_PORT"; then
 
 fi
 
-if needs_var "L4D2_GAMESERVER_PORTS"; then
+if needs_var "L4D2_GAMESERVER_TCP_PORTS"; then
     say_section "TCP L4D2"
 
-    l4d2_game_ports="$(ask_with_context \
-        "L4D2_GAMESERVER_PORTS" \
-        "Puertos usados para protección TCP de juego/RCON." \
+    l4d2_game_tcp_ports="$(ask_with_context \
+        "L4D2_GAMESERVER_TCP_PORTS" \
+        "Puertos TCP expuestos que quieres endurecer para juego/RCON." \
         "docs/modules/15_l4d2_tcp_protect.md" \
-        "L4D2_GAMESERVER_PORTS (ej: 27015 o 27015:27020)" \
-        "27015" \
-        "is_required_ports_expr" \
+        "L4D2_GAMESERVER_TCP_PORTS (ej: 27015 o 27015,27030)" \
+        "" \
+        "is_optional_ports_expr" \
         "Formato inválido. Usa puertos/rangos separados por coma.")"
 fi
 
@@ -737,20 +738,20 @@ fi
 
 if [ "${module_enabled[ip_l4d2_udp_base]:-false}" = "true" ] || [ "${module_enabled[ip_l4d2_packet_validation]:-false}" = "true" ] || [ "${module_enabled[ip_l4d2_a2s_filters]:-false}" = "true" ]; then
     say_section "Servicios de juego (UDP)"
-    l4d2_game_ports="$(ask_with_context \
-        "L4D2_GAMESERVER_PORTS" \
+    l4d2_game_udp_ports="$(ask_with_context \
+        "L4D2_GAMESERVER_UDP_PORTS" \
         "Puertos UDP principales del GameServer." \
         "docs/modules/09_l4d2_udp_base.md" \
-        "L4D2_GAMESERVER_PORTS (ej: 27015 o 27015:27020)" \
-        "$l4d2_game_ports" \
+        "L4D2_GAMESERVER_UDP_PORTS (ej: 27015 o 27015:27020)" \
+        "$l4d2_game_udp_ports" \
         "is_required_ports_expr" \
         "Formato inválido. Usa puertos/rangos separados por coma (ej: 27015 o 27015:27020).")"
 
-    l4d2_tv_ports="$(ask_with_context \
-        "L4D2_TV_PORTS" \
-        "Puertos SourceTV/separados para espectadores." \
+    l4d2_sourcetv_udp_ports="$(ask_with_context \
+        "L4D2_SOURCETV_UDP_PORTS" \
+        "Puertos UDP de SourceTV para espectadores/relay." \
         "docs/modules/09_l4d2_udp_base.md" \
-        "L4D2_TV_PORTS (ej: 27020 o 27115:27120)" \
+        "L4D2_SOURCETV_UDP_PORTS (ej: 27020 o 27115:27120)" \
         "27020" \
         "is_required_ports_expr" \
         "Formato inválido. Usa puertos/rangos separados por coma (ej: 27020 o 27115:27120).")"
@@ -946,7 +947,7 @@ fi
 has_l4d2_ports_needed="false"
 if [ "$has_l4d2_udp_modules" = "true" ]; then
     has_l4d2_ports_needed="true"
-elif [ "$has_l4d2_tcp_modules" = "true" ] && needs_var "L4D2_GAMESERVER_PORTS"; then
+elif [ "$has_l4d2_tcp_modules" = "true" ] && needs_var "L4D2_GAMESERVER_TCP_PORTS"; then
     has_l4d2_ports_needed="true"
 fi
 
@@ -1013,13 +1014,13 @@ fi
 
 if [ "$has_l4d2_ports_needed" = "true" ]; then
 cat >> "$output_file" <<EOF
-L4D2_GAMESERVER_PORTS="${l4d2_game_ports}"
+L4D2_GAMESERVER_UDP_PORTS="${l4d2_game_udp_ports}"
 EOF
 fi
 
 if [ "$has_l4d2_udp_modules" = "true" ]; then
 cat >> "$output_file" <<EOF
-L4D2_TV_PORTS="${l4d2_tv_ports}"
+L4D2_SOURCETV_UDP_PORTS="${l4d2_sourcetv_udp_ports}"
 L4D2_CMD_LIMIT=${l4d2_cmd_limit}
 UDP_NEW_SRC_RATE=${udp_new_src_rate}
 UDP_NEW_SRC_BURST=${udp_new_src_burst}
@@ -1029,6 +1030,12 @@ ENABLE_UDP_NEW_FFFFFFFF_BYPASS=${enable_udp_new_ffffffff_bypass}
 ENABLE_UDP_NEW_LARGE_FILTER=${enable_udp_new_large_filter}
 UDP_NEW_LARGE_DROP_MIN_LEN=${udp_new_large_drop_min_len}
 ENABLE_UDP_BASELINE_LOGS=${enable_udp_baseline_logs}
+EOF
+fi
+
+if [ "$has_l4d2_tcp_modules" = "true" ]; then
+cat >> "$output_file" <<EOF
+L4D2_GAMESERVER_TCP_PORTS="${l4d2_game_tcp_ports}"
 EOF
 fi
 
@@ -1218,11 +1225,11 @@ echo "  OVPNS2S_REMOTE_SUBNETS=$ovpns2s_remote_subnets" >&2
 fi
 
 if [ "$has_l4d2_ports_needed" = "true" ]; then
-echo "  L4D2_GAMESERVER_PORTS=$l4d2_game_ports" >&2
+echo "  L4D2_GAMESERVER_UDP_PORTS=$l4d2_game_udp_ports" >&2
 fi
 
 if [ "$has_l4d2_udp_modules" = "true" ]; then
-echo "  L4D2_TV_PORTS=$l4d2_tv_ports" >&2
+echo "  L4D2_SOURCETV_UDP_PORTS=$l4d2_sourcetv_udp_ports" >&2
 echo "  L4D2_CMD_LIMIT=$l4d2_cmd_limit" >&2
 echo "  UDP_NEW_SRC_RATE=$udp_new_src_rate" >&2
 echo "  UDP_NEW_SRC_BURST=$udp_new_src_burst" >&2
@@ -1230,6 +1237,10 @@ echo "  UDP_NEW_GLOBAL_RATE=$udp_new_global_rate" >&2
 echo "  UDP_NEW_GLOBAL_BURST=$udp_new_global_burst" >&2
 echo "  ENABLE_UDP_NEW_FFFFFFFF_BYPASS=$enable_udp_new_ffffffff_bypass" >&2
 echo "  ENABLE_UDP_BASELINE_LOGS=$enable_udp_baseline_logs" >&2
+fi
+
+if [ "$has_l4d2_tcp_modules" = "true" ]; then
+echo "  L4D2_GAMESERVER_TCP_PORTS=$l4d2_game_tcp_ports" >&2
 fi
 
 if [ "$has_l4d2_a2s_module" = "true" ]; then

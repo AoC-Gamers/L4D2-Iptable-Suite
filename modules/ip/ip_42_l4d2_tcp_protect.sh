@@ -6,8 +6,8 @@ ID=ip_l4d2_tcp_protect
 ALIASES=l4d2_tcp_protect
 DESCRIPTION=Applies L4D2 TCP protection (RCON/game ports) in the iptables backend
 REQUIRED_VARS=TYPECHAIN
-OPTIONAL_VARS=L4D2_GAMESERVER_PORTS LOG_PREFIX_TCP_RCON_BLOCK
-DEFAULTS=TYPECHAIN=0 L4D2_GAMESERVER_PORTS=27015 LOG_PREFIX_TCP_RCON_BLOCK=TCP_RCON_BLOCK:
+OPTIONAL_VARS=L4D2_GAMESERVER_TCP_PORTS LOG_PREFIX_TCP_RCON_BLOCK
+DEFAULTS=TYPECHAIN=0 L4D2_GAMESERVER_TCP_PORTS= LOG_PREFIX_TCP_RCON_BLOCK=TCP_RCON_BLOCK:
 EOF
 }
 
@@ -29,7 +29,12 @@ ip_42_l4d2_tcp_protect_apply() {
     local input_hashlimit_name="L4D2TCPINPUT"
     local docker_hashlimit_name="L4D2TCPDOCKER"
 
-    protected_ports="$L4D2_GAMESERVER_PORTS"
+    protected_ports="${L4D2_GAMESERVER_TCP_PORTS:-}"
+
+    if [ -z "$protected_ports" ]; then
+        echo "INFO: ip_l4d2_tcp_protect: L4D2_GAMESERVER_TCP_PORTS is empty; skipping TCP protection"
+        return 0
+    fi
 
     echo "L4D2 TCP protection enabled by module inclusion: rate-limiting NEW TCP by source/destination port"
 

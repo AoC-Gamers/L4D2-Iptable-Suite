@@ -104,8 +104,8 @@ Edita el archivo `.env` según tu configuración:
 TYPECHAIN=0
 
 # Puertos de tu servidor L4D2
-L4D2_GAMESERVER_PORTS="27015"
-L4D2_TV_PORTS="27020"
+L4D2_GAMESERVER_UDP_PORTS="27015"
+L4D2_SOURCETV_UDP_PORTS="27020"
 
 # Protección TCP RCON
 # Incluir l4d2_tcp_protect en MODULES_ONLY para activar
@@ -280,8 +280,8 @@ log-summary/docs/log-summary-container.md
 ```bash
 # .env configuration
 TYPECHAIN=0
-L4D2_GAMESERVER_PORTS="27015"
-L4D2_TV_PORTS="27020"
+L4D2_GAMESERVER_UDP_PORTS="27015"
+L4D2_SOURCETV_UDP_PORTS="27020"
 # Activación TCP protect por módulo: incluir l4d2_tcp_protect en MODULES_ONLY
 ```
 
@@ -289,8 +289,8 @@ L4D2_TV_PORTS="27020"
 ```bash
 # .env configuration
 TYPECHAIN=0
-L4D2_GAMESERVER_PORTS="27015:27030"  # 16 servidores
-L4D2_TV_PORTS="27115:27130"          # 16 SourceTV
+L4D2_GAMESERVER_UDP_PORTS="27015:27030"  # 16 servidores
+L4D2_SOURCETV_UDP_PORTS="27115:27130"          # 16 SourceTV
 # Activación TCP protect por módulo: incluir l4d2_tcp_protect en MODULES_ONLY
 ```
 
@@ -298,7 +298,7 @@ L4D2_TV_PORTS="27115:27130"          # 16 SourceTV
 ```bash
 # .env configuration
 TYPECHAIN=1  # Solo Docker
-L4D2_GAMESERVER_PORTS="27015:27018"
+L4D2_GAMESERVER_UDP_PORTS="27015:27018"
 TCP_DOCKER="80,443"  # Puertos adicionales
 SSH_DOCKER="2222"
 ```
@@ -307,8 +307,8 @@ SSH_DOCKER="2222"
 ```bash
 # .env configuration
 TYPECHAIN=2  # Nativo + Docker
-L4D2_GAMESERVER_PORTS="27015:27020"
-L4D2_TV_PORTS="27115:27120"
+L4D2_GAMESERVER_UDP_PORTS="27015:27020"
+L4D2_SOURCETV_UDP_PORTS="27115:27120"
 TCP_DOCKER="80,443,8080"
 # Activación TCP protect por módulo: incluir l4d2_tcp_protect en MODULES_ONLY
 ```
@@ -363,7 +363,7 @@ modules/
   - Variables: `SSH_PORT`, `SSH_DOCKER`, `SSH_RATE`, `SSH_BURST`, `LOG_PREFIX_SSH_ABUSE`
 - **Protección TCP L4D2 (separada)**
   - `ip_l4d2_tcp_protect` / `nf_l4d2_tcp_protect`
-  - Variables: `L4D2_GAMESERVER_PORTS`, `LOG_PREFIX_TCP_RCON_BLOCK`
+  - Variables: `L4D2_GAMESERVER_UDP_PORTS`, `LOG_PREFIX_TCP_RCON_BLOCK`
 - **Cadena anti-spam TCP (ip específico)**
   - `ip_l4d2_tcpfilter_chain` / `nf_l4d2_tcpfilter_chain` (compatibilidad)
   - En `nftables`, la protección efectiva la aplica `nf_l4d2_tcp_protect`.

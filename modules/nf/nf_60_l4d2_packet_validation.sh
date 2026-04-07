@@ -8,9 +8,9 @@ nf_60_l4d2_packet_validation_metadata() {
 ID=nf_l4d2_packet_validation
 ALIASES=l4d2_packet_validation
 DESCRIPTION=Validates invalid/malformed UDP packet sizes in the nftables backend
-REQUIRED_VARS=TYPECHAIN L4D2_GAMESERVER_PORTS L4D2_TV_PORTS LOG_PREFIX_INVALID_SIZE LOG_PREFIX_MALFORMED
+REQUIRED_VARS=TYPECHAIN L4D2_GAMESERVER_UDP_PORTS L4D2_SOURCETV_UDP_PORTS LOG_PREFIX_INVALID_SIZE LOG_PREFIX_MALFORMED
 OPTIONAL_VARS=FIREWALL_HOST_ALIAS ENABLE_PACKET_NORMALIZATION_LOGS ENABLE_MALFORMED_FILTER
-DEFAULTS=TYPECHAIN=0 L4D2_GAMESERVER_PORTS=27015 L4D2_TV_PORTS=27020 LOG_PREFIX_INVALID_SIZE=INVALID_SIZE: LOG_PREFIX_MALFORMED=MALFORMED: FIREWALL_HOST_ALIAS= ENABLE_PACKET_NORMALIZATION_LOGS=false ENABLE_MALFORMED_FILTER=false
+DEFAULTS=TYPECHAIN=0 L4D2_GAMESERVER_UDP_PORTS=27015 L4D2_SOURCETV_UDP_PORTS=27020 LOG_PREFIX_INVALID_SIZE=INVALID_SIZE: LOG_PREFIX_MALFORMED=MALFORMED: FIREWALL_HOST_ALIAS= ENABLE_PACKET_NORMALIZATION_LOGS=false ENABLE_MALFORMED_FILTER=false
 EOF
 }
 
@@ -23,8 +23,8 @@ nf_60_l4d2_packet_validation_validate() {
             ;;
     esac
 
-    nf_validate_ports_spec "$L4D2_GAMESERVER_PORTS" "nf_l4d2_packet_validation: L4D2_GAMESERVER_PORTS" || return $?
-    nf_validate_ports_spec "$L4D2_TV_PORTS" "nf_l4d2_packet_validation: L4D2_TV_PORTS" || return $?
+    nf_validate_ports_spec "$L4D2_GAMESERVER_UDP_PORTS" "nf_l4d2_packet_validation: L4D2_GAMESERVER_UDP_PORTS" || return $?
+    nf_validate_ports_spec "$L4D2_SOURCETV_UDP_PORTS" "nf_l4d2_packet_validation: L4D2_SOURCETV_UDP_PORTS" || return $?
 
     case "${ENABLE_PACKET_NORMALIZATION_LOGS:-}" in
         true|false) ;;
@@ -82,8 +82,8 @@ nf_60_l4d2_packet_validation_apply_chain() {
 nf_60_l4d2_packet_validation_apply() {
     local chain game_ports_expr tv_ports_expr
 
-    game_ports_expr="$(nf_ports_set_expr "$L4D2_GAMESERVER_PORTS")"
-    tv_ports_expr="$(nf_ports_set_expr "$L4D2_TV_PORTS")"
+    game_ports_expr="$(nf_ports_set_expr "$L4D2_GAMESERVER_UDP_PORTS")"
+    tv_ports_expr="$(nf_ports_set_expr "$L4D2_SOURCETV_UDP_PORTS")"
 
     for chain in $(nf_get_target_chains_for_domain l4d2_udp); do
         nf_60_l4d2_packet_validation_apply_chain "$chain" "$game_ports_expr"

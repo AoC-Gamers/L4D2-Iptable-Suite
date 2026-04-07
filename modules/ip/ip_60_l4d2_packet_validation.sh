@@ -5,9 +5,9 @@ ip_60_l4d2_packet_validation_metadata() {
 ID=ip_l4d2_packet_validation
 ALIASES=l4d2_packet_validation
 DESCRIPTION=Validates invalid/malformed UDP packet sizes for GameServer and SourceTV
-REQUIRED_VARS=TYPECHAIN L4D2_GAMESERVER_PORTS L4D2_TV_PORTS LOG_PREFIX_INVALID_SIZE LOG_PREFIX_MALFORMED
+REQUIRED_VARS=TYPECHAIN L4D2_GAMESERVER_UDP_PORTS L4D2_SOURCETV_UDP_PORTS LOG_PREFIX_INVALID_SIZE LOG_PREFIX_MALFORMED
 OPTIONAL_VARS=ENABLE_PACKET_NORMALIZATION_LOGS ENABLE_MALFORMED_FILTER
-DEFAULTS=TYPECHAIN=0 L4D2_GAMESERVER_PORTS=27015 L4D2_TV_PORTS=27020 LOG_PREFIX_INVALID_SIZE=INVALID_SIZE: LOG_PREFIX_MALFORMED=MALFORMED: ENABLE_PACKET_NORMALIZATION_LOGS=false ENABLE_MALFORMED_FILTER=false
+DEFAULTS=TYPECHAIN=0 L4D2_GAMESERVER_UDP_PORTS=27015 L4D2_SOURCETV_UDP_PORTS=27020 LOG_PREFIX_INVALID_SIZE=INVALID_SIZE: LOG_PREFIX_MALFORMED=MALFORMED: ENABLE_PACKET_NORMALIZATION_LOGS=false ENABLE_MALFORMED_FILTER=false
 EOF
 }
 
@@ -72,13 +72,13 @@ ip_60_l4d2_packet_validation_apply_for_chain() {
 
 ip_60_l4d2_packet_validation_apply() {
     if [ "$TYPECHAIN" -eq 0 ] || [ "$TYPECHAIN" -eq 2 ]; then
-        ip_60_l4d2_packet_validation_apply_for_chain INPUT "$L4D2_GAMESERVER_PORTS"
-        ip_60_l4d2_packet_validation_apply_for_chain INPUT "$L4D2_TV_PORTS"
+        ip_60_l4d2_packet_validation_apply_for_chain INPUT "$L4D2_GAMESERVER_UDP_PORTS"
+        ip_60_l4d2_packet_validation_apply_for_chain INPUT "$L4D2_SOURCETV_UDP_PORTS"
     fi
 
     if [ "$TYPECHAIN" -eq 1 ] || [ "$TYPECHAIN" -eq 2 ]; then
         iptables -N DOCKER-USER 2>/dev/null || true
-        ip_60_l4d2_packet_validation_apply_for_chain DOCKER-USER "$L4D2_GAMESERVER_PORTS"
-        ip_60_l4d2_packet_validation_apply_for_chain DOCKER-USER "$L4D2_TV_PORTS"
+        ip_60_l4d2_packet_validation_apply_for_chain DOCKER-USER "$L4D2_GAMESERVER_UDP_PORTS"
+        ip_60_l4d2_packet_validation_apply_for_chain DOCKER-USER "$L4D2_SOURCETV_UDP_PORTS"
     fi
 }

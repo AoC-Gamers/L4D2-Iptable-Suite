@@ -8,8 +8,8 @@ Mitigar flood de consultas A2S/Steam Group y patrones de login (`connect/reserve
 - nftables: `modules/nf/nf_70_l4d2_a2s_filters.sh` (`ID=nf_l4d2_a2s_filters`)
 
 ## Variables principales
-- `L4D2_GAMESERVER_PORTS`
-- `L4D2_TV_PORTS`
+- `L4D2_GAMESERVER_UDP_PORTS`
+- `L4D2_SOURCETV_UDP_PORTS`
 - `LOG_PREFIX_A2S_INFO`, `LOG_PREFIX_A2S_PLAYERS`, `LOG_PREFIX_A2S_RULES`
 - `LOG_PREFIX_STEAM_GROUP`, `LOG_PREFIX_L4D2_CONNECT`, `LOG_PREFIX_L4D2_RESERVE`
 
@@ -65,21 +65,21 @@ En consecuencia, el firewall no debería asumir que existe una firma pública ex
 
 ## Lógica de mitigación
 - A2S (`54/55/56`): cada tipo entra a su propia cadena con rate/burst dedicado.
-- A2S se aplica sobre `L4D2_GAMESERVER_PORTS + L4D2_TV_PORTS`.
+- A2S se aplica sobre `L4D2_GAMESERVER_UDP_PORTS + L4D2_SOURCETV_UDP_PORTS`.
 - Steam Group (`00` y firmas configuradas): entra a `STEAM_GROUP_LIMITS`.
-- Steam Group se aplica sobre `L4D2_GAMESERVER_PORTS + L4D2_TV_PORTS`.
+- Steam Group se aplica sobre `L4D2_GAMESERVER_UDP_PORTS + L4D2_SOURCETV_UDP_PORTS`.
 - Si `ENABLE_STEAM_GROUP_FILTER=false`, las firmas Steam Group dejan de clasificarse aquí y quedan gobernadas por el limitador base (`l4d2_udp_base`) en vez de ser dropeadas por una regla fija.
 - Login (`71`):
   - acepta a tasa controlada paquetes que contienen `connect`
   - acepta a tasa controlada paquetes que contienen `reserve`
   - `drop` para el resto de `71` en ventana corta (1..70 bytes)
-  - se aplica solo sobre `L4D2_GAMESERVER_PORTS` para evitar falsos positivos en SourceTV
+  - se aplica solo sobre `L4D2_GAMESERVER_UDP_PORTS` para evitar falsos positivos en SourceTV
 - El módulo mantiene logging con prefijos específicos para facilitar diagnóstico.
 
 ## Validaciones de configuración
 Antes de aplicar reglas, el módulo valida:
 - `TYPECHAIN` en `0|1|2`
-- formato de `L4D2_GAMESERVER_PORTS`
+- formato de `L4D2_GAMESERVER_UDP_PORTS`
 - todos los `*_RATE` y `*_BURST` como enteros positivos
 - `ENABLE_STEAM_GROUP_FILTER` en `true|false`
 - `STEAM_GROUP_SIGNATURES` con regex hex CSV (`69` o `69,00`, etc.) cuando está habilitado
@@ -105,7 +105,7 @@ Antes de aplicar reglas, el módulo valida:
 
 ## Nota operativa
 - Excluir `l4d2_a2s_filters` de `MODULES_ONLY` en nodos sin servicios de juego.
-- Recomendación: usar puertos reales de juego en `L4D2_GAMESERVER_PORTS` y dejar `UDP_ALLOW_PORTS=""` para evitar bypass de mitigaciones.
+- Recomendación: usar puertos reales de juego en `L4D2_GAMESERVER_UDP_PORTS` y dejar `UDP_ALLOW_PORTS=""` para evitar bypass de mitigaciones.
 
 ## Ejemplos de configuración
 Perfil equilibrado (recomendado):

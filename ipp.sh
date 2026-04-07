@@ -224,8 +224,8 @@ clear_l4d2_rules_iptables() {
         return 1
     fi
 
-    game_ports="${L4D2_GAMESERVER_PORTS:-}"
-    tv_ports="${L4D2_TV_PORTS:-}"
+    game_ports="${L4D2_GAMESERVER_UDP_PORTS:-}"
+    tv_ports="${L4D2_SOURCETV_UDP_PORTS:-}"
     query_ports="${game_ports},${tv_ports}"
     query_ports="${query_ports//,,/,}"
     query_ports="${query_ports#,}"
