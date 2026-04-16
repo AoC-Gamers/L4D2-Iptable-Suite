@@ -29,6 +29,26 @@ Aplicar política geográfica IPv4 sobre los puertos UDP de juego usando allowli
 - `denylist`: se bloquean países denegados y CIDRs/IPs del deny manual; el resto continúa.
 - `off`: el módulo no hace nada, aunque esté incluido en `MODULES_ONLY`.
 
+## Verificar una IP/CIDR
+Puedes verificar cómo quedaría clasificada una IP o red antes de reaplicar reglas:
+
+```bash
+make geoip-check-ip IP=179.6.17.240
+make geoip-check-ip IP=179.6.17.240/28
+```
+
+El checker replica la precedencia del módulo:
+
+- `WHITELISTED_IPS` / `WHITELISTED_DOMAINS` como bypass previo.
+- `GEO_POLICY_MODE=off` permite porque el filtro geográfico no aplica reglas.
+- En modo activo: deny manual > allow manual > política por país.
+
+Por defecto no resuelve `WHITELISTED_DOMAINS` para evitar depender de DNS durante la verificación. Si quieres incluir dominios confiables resueltos en el resultado:
+
+```bash
+make geoip-check-ip IP=203.0.113.10 RESOLVE_DOMAINS=1
+```
+
 ## Datos MaxMind
 La recomendación es usar GeoLite2 Country CSV como fuente offline y convertirla a archivos por país:
 

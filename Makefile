@@ -6,6 +6,7 @@ ROOT_DIR := $(dir $(abspath $(lastword $(MAKEFILE_LIST))))
 GEOIP_UPDATER_COMPOSE := geoip-updater/docker-compose.yml
 LOG_SUMMARY_COMPOSE := log-summary/docker-compose.yml
 GEOIP_LOCK_FILE ?= /tmp/l4d2-geoip-refresh.lock
+FIREWALL_LOG_FILE ?= /var/log/firewall-suite.log
 
 .PHONY: help
 help:
@@ -16,6 +17,7 @@ help:
 	@printf "  %-22s %s\n" "geoip-refresh-safe" "Run geoip-refresh under flock for cron-safe execution"
 	@printf "  %-22s %s\n" "geoip-list" "List generated country prefix files"
 	@printf "  %-22s %s\n" "geoip-check" "Validate GeoIP updater compose and shell scripts"
+	@printf "  %-22s %s\n" "geoip-check-ip" "Check whether IP/CIDR is allowed or denied by the GeoIP policy"
 	@printf "  %-22s %s\n" "geoip-show" "Show live nftables geo allowlist objects"
 	@printf "  %-22s %s\n" "status" "Show GeoIP policy, generated files, and live firewall geo state"
 	@printf "  %-22s %s\n" "firewall-nft" "Apply nftables backend"
@@ -23,6 +25,8 @@ help:
 	@printf "  %-22s %s\n" "firewall-validate" "Validate main shell scripts with bash -n"
 	@printf "  %-22s %s\n" "log-summary-up" "Build and start the log-summary stack"
 	@printf "  %-22s %s\n" "log-summary-down" "Stop the log-summary stack"
+	@printf "  %-22s %s\n" "logs-clear" "Truncate the firewall log file with sudo"
+	@printf "  %-22s %s\n" "logs-backup-clear" "Backup and then truncate the firewall log file with sudo"
 
 .PHONY: geoip-update
 geoip-update:
@@ -50,7 +54,17 @@ geoip-check:
 	cd $(ROOT_DIR) && bash -n geoip-updater/run-update.sh
 	cd $(ROOT_DIR) && bash -n scripts/geoip/update_geo_country_sets.sh
 	cd $(ROOT_DIR) && bash -n modules/nf/nf_15_geo_country_filter.sh
+	cd $(ROOT_DIR) && python3 -m py_compile scripts/geoip/check_geo_policy_ip.py
 	cd $(ROOT_DIR) && $(COMPOSE) -f $(GEOIP_UPDATER_COMPOSE) config >/tmp/geoip-updater-compose.out
+
+.PHONY: geoip-check-ip
+geoip-check-ip:
+	@if [ -z "$(IP)" ]; then \
+		printf "Usage: make geoip-check-ip IP=179.6.17.240[/28]\n"; \
+		printf "Optional: RESOLVE_DOMAINS=1 includes WHITELISTED_DOMAINS DNS results.\n"; \
+		exit 2; \
+	fi
+	cd $(ROOT_DIR) && python3 scripts/geoip/check_geo_policy_ip.py --env-file .env $(if $(RESOLVE_DOMAINS),--resolve-domains,) "$(IP)"
 
 .PHONY: geoip-show
 geoip-show:
@@ -83,3 +97,22 @@ log-summary-up:
 .PHONY: log-summary-down
 log-summary-down:
 	cd $(ROOT_DIR) && $(COMPOSE) -f $(LOG_SUMMARY_COMPOSE) down
+
+.PHONY: logs-clear
+logs-clear:
+	@if [ ! -e "$(FIREWALL_LOG_FILE)" ]; then \
+		printf "Log file not found: %s\n" "$(FIREWALL_LOG_FILE)"; \
+		exit 2; \
+	fi
+	$(SUDO) truncate -s 0 "$(FIREWALL_LOG_FILE)"
+	@printf "OK: truncated %s\n" "$(FIREWALL_LOG_FILE)"
+
+.PHONY: logs-backup-clear
+logs-backup-clear:
+	@if [ ! -e "$(FIREWALL_LOG_FILE)" ]; then \
+		printf "Log file not found: %s\n" "$(FIREWALL_LOG_FILE)"; \
+		exit 2; \
+	fi
+	$(SUDO) cp -p "$(FIREWALL_LOG_FILE)" "$(FIREWALL_LOG_FILE).$$(date +%F-%H%M%S).bak"
+	$(SUDO) truncate -s 0 "$(FIREWALL_LOG_FILE)"
+	@printf "OK: backed up and truncated %s\n" "$(FIREWALL_LOG_FILE)"
