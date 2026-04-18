@@ -60,6 +60,7 @@ docker compose run --rm -e SUMMARY_RUN_MODE=once log-summary
 ## Notas
 
 - El parser está basado en líneas estructuradas `FW_EVT`.
+- Acepta tanto campos largos (`backend`, `module`, `chain`, `action`, `severity`) como aliases compactos de nftables (`be`, `mod`, `ch`, `act`, `sev`).
 - El contenedor usa nombres genéricos y no depende de nombres específicos de juegos.
 - El `healthcheck` de Docker falla cuando `consecutive_empty_cycles` supera el umbral configurado.
 - Actualmente este componente **no** expone endpoint HTTP/API.

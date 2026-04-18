@@ -74,6 +74,7 @@ En consecuencia, el firewall no debería asumir que existe una firma pública ex
   - acepta a tasa controlada paquetes que contienen `reserve`
   - `drop` para el resto de `71` en ventana corta (1..70 bytes)
   - se aplica solo sobre `L4D2_GAMESERVER_UDP_PORTS` para evitar falsos positivos en SourceTV
+  - los handshakes `71 connect` de SourceTV quedan bajo el limitador base `NEW`, no bajo este subfiltro
 - El módulo mantiene logging con prefijos específicos para facilitar diagnóstico.
 
 ## Validaciones de configuración

@@ -96,7 +96,9 @@ nf_build_log_prefix() {
     safe_host="${FIREWALL_HOST_ALIAS:-}"
     safe_host="${safe_host// /_}"
 
-    local prefix="FW_EVT attack=${attack} backend=nft module=${module} chain=${chain} action=${action} severity=${severity}"
+    # nft log prefixes are length-limited. Keep the high-value fields compact
+    # and early so parsers do not receive truncated severity/module/chain data.
+    local prefix="FW_EVT attack=${attack} sev=${severity} act=${action} be=nft mod=${module} ch=${chain}"
     if [ -n "$safe_host" ]; then
         prefix="${prefix} host=${safe_host}"
     fi

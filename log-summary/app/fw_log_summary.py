@@ -105,6 +105,19 @@ def parse_fw_evt(line: str):
     if "attack" not in fields:
         return None
 
+    # New nft rules use compact keys to avoid kernel log-prefix truncation.
+    # Keep canonical names so old and new logs produce the same summaries.
+    aliases = {
+        "be": "backend",
+        "mod": "module",
+        "ch": "chain",
+        "act": "action",
+        "sev": "severity",
+    }
+    for short_key, canonical_key in aliases.items():
+        if canonical_key not in fields and short_key in fields:
+            fields[canonical_key] = fields[short_key]
+
     src_match = SRC_RE.search(line)
     dpt_match = DPT_RE.search(line)
     len_match = LEN_RE.search(line)

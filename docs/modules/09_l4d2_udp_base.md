@@ -23,10 +23,12 @@ El módulo deja pasar antes del limitador base solo las firmas que realmente tie
 - `54` -> `A2S_INFO`
 - `55` -> `A2S_PLAYER`
 - `56` -> `A2S_RULES`
-- `71` -> heartbeat / login short-query según flujo observado
+- `71` -> heartbeat / login short-query según flujo observado, solo en `L4D2_GAMESERVER_UDP_PORTS`
 - firmas extra definidas en `STEAM_GROUP_SIGNATURES` cuando `ENABLE_STEAM_GROUP_FILTER=true`
 
 Esto evita que el módulo base bloquee tráfico que luego será clasificado por `l4d2_a2s_filters`. Si una firma no tiene clasificador posterior activo, se mantiene bajo el limitador genérico en vez de caer a `DROP` por el policy final.
+
+SourceTV también puede emitir handshakes cortos `0xFFFFFFFF71 connect...` en `L4D2_SOURCETV_UDP_PORTS`; esos paquetes no pasan por el subfiltro `connect/reserve` de GameServer y por eso se mantienen bajo el limitador `NEW` genérico para evitar falsos positivos.
 
 ## Nota operativa importante
 Si `serverbrowser` o `steamgroup` dejan de mostrar servidores, revisar primero que el backend activo realmente esté leyendo:

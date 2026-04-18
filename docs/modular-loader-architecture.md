@@ -362,7 +362,7 @@ Esperado:
 Ejecutar para ambos backends (mismo `.env`):
 - `TYPECHAIN=0`, `TYPECHAIN=1`, `TYPECHAIN=2`.
 - Inclusión/exclusión del módulo `*_openvpn`.
-- Inclusión/exclusión de `*_l4d2_tcp_protect` y prueba con `ENABLE_L4D2_TCP_PROTECT=true/false`.
+- Inclusión/exclusión de `*_l4d2_tcp_protect` y prueba con `L4D2_GAMESERVER_TCP_PORTS` con/sin puertos.
 - Con y sin `WHITELISTED_IPS`.
 
 Esperado:

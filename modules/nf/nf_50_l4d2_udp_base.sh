@@ -127,7 +127,10 @@ nf_50_l4d2_udp_base_apply() {
         nf_add_rule udp_new_limit @th,64,40 0xFFFFFFFF54 return
         nf_add_rule udp_new_limit @th,64,40 0xFFFFFFFF55 return
         nf_add_rule udp_new_limit @th,64,40 0xFFFFFFFF56 return
-        nf_add_rule udp_new_limit @th,64,40 0xFFFFFFFF71 return
+        # L4D2 login/connect classifiers only apply to GameServer ports. SourceTV
+        # also sends FFFFFFFF71 connect handshakes, but those should stay under
+        # the generic NEW limiter so short legitimate TV packets are accepted.
+        nf_add_rule udp_new_limit udp dport "$game_ports_expr" @th,64,40 0xFFFFFFFF71 return
         if [ "${ENABLE_STEAM_GROUP_FILTER}" = "true" ]; then
             steam_signatures_csv="${STEAM_GROUP_SIGNATURES//[[:space:]]/}"
             IFS=',' read -r -a steam_signatures <<< "$steam_signatures_csv"

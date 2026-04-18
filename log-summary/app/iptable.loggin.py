@@ -225,11 +225,11 @@ def _extract_event_context(line):
     if fw_evt:
         return {
             "Pattern": fw_evt.get("attack", "UNKNOWN"),
-            "Backend": fw_evt.get("backend", ""),
-            "Module": fw_evt.get("module", ""),
-            "Chain": fw_evt.get("chain", ""),
-            "Action": fw_evt.get("action", ""),
-            "Severity": fw_evt.get("severity", ""),
+            "Backend": fw_evt.get("backend", fw_evt.get("be", "")),
+            "Module": fw_evt.get("module", fw_evt.get("mod", "")),
+            "Chain": fw_evt.get("chain", fw_evt.get("ch", "")),
+            "Action": fw_evt.get("action", fw_evt.get("act", "")),
+            "Severity": fw_evt.get("severity", fw_evt.get("sev", "")),
             "Env": fw_evt.get("env", ""),
             "Host": fw_evt.get("host", ""),
         }

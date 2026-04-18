@@ -167,15 +167,23 @@ L4D2_GAMESERVER_UDP_PORTS="27015"
 L4D2_SOURCETV_UDP_PORTS="27020"
 ```
 
-Si `ENABLE_UDP_BASELINE_LOGS=false` o `ENABLE_PACKET_NORMALIZATION_LOGS=false`, las categorías `UDP_NEW_LIMIT`, `UDP_EST_LIMIT`, `INVALID_SIZE` y `MALFORMED` pueden no aparecer en los reportes. Eso no implica ausencia de filtro, solo ausencia de logging para saneamiento/base.
-- **Configuración**: Basada en `L4D2_CMD_LIMIT` y algoritmos hashlimit específicos
-Para que el script pueda acceder a los logs del sistema, el usuario debe tener permisos adecuados:
+El backend `nftables` usa prefijos `FW_EVT` compactos para evitar truncamiento del `log prefix` del kernel. Los parsers aceptan tanto campos largos antiguos como aliases compactos nuevos:
 
-L4D2_CMD_LIMIT=60  # Reducir de 100 a 60
+```text
+backend / be
+module  / mod
+chain   / ch
+action  / act
+severity / sev
+```
+
+Si `ENABLE_UDP_BASELINE_LOGS=false` o `ENABLE_PACKET_NORMALIZATION_LOGS=false`, las categorías `UDP_NEW_LIMIT`, `UDP_EST_LIMIT`, `INVALID_SIZE` y `MALFORMED` pueden no aparecer en los reportes. Eso no implica ausencia de filtro, solo ausencia de logging para saneamiento/base.
+
+La clasificación de severidad usa `L4D2_CMD_LIMIT`, los prefijos `FW_EVT` y los puertos declarados en `.env`. Para que el script pueda acceder a los logs del sistema, el usuario debe tener permisos adecuados:
+
+```bash
 # Agregar usuario al grupo 'adm' (para acceso a logs)
 sudo usermod -a -G adm $USER
-ENABLE_L4D2_TCP_PROTECT=true
-L4D2_GAMESERVER_UDP_PORTS="27015:27020"
 newgrp adm
 
 # Verificar permisos
@@ -501,9 +509,8 @@ L4D2_CMD_LIMIT=60  # Reducir de 100 a 60
 
 #### Si hay muchos TCP_RCON_BLOCK:
 ```bash
-# Habilitar protección TCP completa
-ENABLE_L4D2_TCP_PROTECT=true
-L4D2_GAMESERVER_UDP_PORTS=\"27015:27020\"
+# Declarar los puertos TCP que deben protegerse
+L4D2_GAMESERVER_TCP_PORTS=\"27015:27020\"
 ```
 
 #### Si hay ataques persistentes de una IP:

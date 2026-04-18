@@ -412,6 +412,7 @@ sudo logrotate -f /etc/logrotate.d/l4d2-iptables
 - **[📖 iptables.rules.sh](docs/iptables.rules.md)** - Documentación técnica del motor de protección
 - **[📖 nftables.rules.sh](docs/modular-loader-architecture.md)** - Arquitectura y operación del backend moderno
 - **[📖 Arquitectura Modular](docs/modular-loader-architecture.md)** - Contrato de módulos, paridad y validación
+- **[🧭 Auditoría Operativa](docs/operational-audit.md)** - Hallazgos prácticos, falsos positivos y checklist de diagnóstico
 - **[📖 ipp.sh](docs/ipp.md)** - Guía del gestor de persistencia
 - **[📖 iptable.loggin.py](log-summary/docs/iptable.loggin.md)** - Manual del sistema de análisis
 - **[📖 log-summary/venv.loggin.sh](log-summary/docs/venv.loggin.md)** - Guía del gestor de entorno virtual

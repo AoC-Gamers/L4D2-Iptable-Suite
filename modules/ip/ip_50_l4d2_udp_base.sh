@@ -117,7 +117,10 @@ ip_50_l4d2_udp_base_apply() {
         iptables -A UDP_GAME_NEW_LIMIT -m string --algo bm --hex-string '|FFFFFFFF54|' -j RETURN
         iptables -A UDP_GAME_NEW_LIMIT -m string --algo bm --hex-string '|FFFFFFFF55|' -j RETURN
         iptables -A UDP_GAME_NEW_LIMIT -m string --algo bm --hex-string '|FFFFFFFF56|' -j RETURN
-        iptables -A UDP_GAME_NEW_LIMIT -m string --algo bm --hex-string '|FFFFFFFF71|' -j RETURN
+        # L4D2 login/connect classifiers only apply to GameServer ports. SourceTV
+        # also sends FFFFFFFF71 connect handshakes, but those should stay under
+        # the generic NEW limiter so short legitimate TV packets are accepted.
+        iptables -A UDP_GAME_NEW_LIMIT -p udp -m multiport --dports "$L4D2_GAMESERVER_UDP_PORTS" -m string --algo bm --hex-string '|FFFFFFFF71|' -j RETURN
 
         if [ "${ENABLE_STEAM_GROUP_FILTER}" = "true" ]; then
             steam_signatures_csv="${STEAM_GROUP_SIGNATURES//[[:space:]]/}"

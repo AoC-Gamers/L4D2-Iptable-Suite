@@ -102,8 +102,6 @@ L4D2_SOURCETV_UDP_PORTS="27020"          # Puertos de SourceTV
 L4D2_CMD_LIMIT=100              # Tickrate base para cálculos
 
 # === PROTECCIÓN TCP ===
-ENABLE_L4D2_TCP_PROTECT=true    # Activar limitación TCP de juego
-L4D2_GAMESERVER_UDP_PORTS="27015"   # Referencia para puertos UDP / consultas de juego
 L4D2_GAMESERVER_TCP_PORTS="27015"  # Protección TCP explícita (RCON / endpoints TCP expuestos)
 
 # === ACCESO ADMINISTRATIVO ===
@@ -644,48 +642,29 @@ CMD_LIMIT_UPPER=$((L4D2_CMD_LIMIT + 30))   # Ej: 100 → 130
 
 ### 5. Ataques TCP/RCON {#ataques-tcp-rcon}
 
-Los ataques TCP/RCON se dirigen a los puertos de administración remota (RCON) del servidor, intentando realizar ataques de fuerza bruta o spam de conexiones para comprometer la administración del servidor. La protección puede ser configurada desde rate limiting hasta bloqueo completo.
+Los ataques TCP/RCON se dirigen a los puertos de administración remota (RCON) o endpoints TCP expuestos del servidor, intentando realizar ataques de fuerza bruta o spam de conexiones.
 
 #### 5.1. Protección TCP RCON
 
-#### Modo Protección Completa
+La protección TCP se controla por inclusion del modulo `l4d2_tcp_protect` y por `L4D2_GAMESERVER_TCP_PORTS`.
 
-**Cuando `ENABLE_L4D2_TCP_PROTECT=true`**:
+**Cuando `L4D2_GAMESERVER_TCP_PORTS` tiene puertos**:
 ```bash
 # 1. Permitir SSH para administración
 iptables -A INPUT -p tcp --dports $SSH_PORT -j ACCEPT
 # Nota: WHITELISTED_IPS ya tienen acceso completo a TODO el sistema
 
 # 2. Limitar TCP NEW de juego por origen/puerto y descartar exceso
-iptables -A INPUT -p tcp --dports $L4D2_GAMESERVER_UDP_PORTS -m conntrack --ctstate NEW -m hashlimit --hashlimit-upto 600/min --hashlimit-burst 200 --hashlimit-mode srcip,dstport --hashlimit-name L4D2TCPINPUT -j ACCEPT
-iptables -A INPUT -p tcp --dports $L4D2_GAMESERVER_UDP_PORTS -m conntrack --ctstate NEW -j DROP
+iptables -A INPUT -p tcp --dports $L4D2_GAMESERVER_TCP_PORTS -m conntrack --ctstate NEW -m hashlimit --hashlimit-upto 600/min --hashlimit-burst 200 --hashlimit-mode srcip,dstport --hashlimit-name L4D2TCPINPUT -j ACCEPT
+iptables -A INPUT -p tcp --dports $L4D2_GAMESERVER_TCP_PORTS -m conntrack --ctstate NEW -j DROP
 ```
 
 **Filosofía de Seguridad**:
-- **Deny by Default**: Todo TCP bloqueado excepto IPs con acceso completo
-- **Zero Tolerance**: No rate limiting, bloqueo completo
+- **Puertos explícitos**: TCP no se deriva automaticamente desde `L4D2_GAMESERVER_UDP_PORTS`
+- **Rate limit + drop**: Se acepta lo que queda bajo umbral y se descarta el exceso
 - **Admin Access**: Preserva acceso SSH y IPs con acceso completo al sistema
 
-#### Modo Rate Limiting
-
-**Cuando `ENABLE_L4D2_TCP_PROTECT=false`**:
-```bash
-iptables -A TCPfilter \
-    -m state --state NEW \
-    -m hashlimit --hashlimit-upto 1/sec \
-    --hashlimit-burst 5 \
-    --hashlimit-mode srcip,dstport \
-    --hashlimit-name TCPDOSPROTECT \
-    --hashlimit-htable-expire 60000 \
-    --hashlimit-htable-max 999999999 \
-    -j ACCEPT
-```
-
-**Parámetros Conservadores**:
-- **1/sec**: Una conexión TCP nueva por segundo
-- **burst 5**: Permite hasta 5 conexiones iniciales
-- **expire 60s**: Ventana de seguimiento larga (1 minuto)
-- **Uso**: Para entornos que requieren acceso TCP controlado
+Si `L4D2_GAMESERVER_TCP_PORTS` esta vacio, el modulo se omite sin error. En ese caso los puertos TCP no quedan abiertos por esta variable; el resultado depende de otras reglas y de la politica final.
 
 ### 6. Ataques ICMP/Ping Flood {#ataques-icmp-ping-flood}
 
@@ -905,7 +884,7 @@ L4D2_GAMESERVER_UDP_PORTS="27015:27030"  # Múltiples servidores
 ```bash
 # .env para máxima protección
 L4D2_CMD_LIMIT=60               # Tickrate estándar
-ENABLE_L4D2_TCP_PROTECT=true    # Bloqueo TCP completo
+L4D2_GAMESERVER_TCP_PORTS="27015"  # Puertos TCP que requieren protección explícita
 
 # Ajustes más restrictivos:
 --hashlimit-upto 4/sec          # A2S más restrictivo
