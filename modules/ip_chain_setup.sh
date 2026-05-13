@@ -85,7 +85,7 @@ ip_chain_setup_apply() {
         iptables -F INPUT
 
         local chain
-        for chain in UDP_GAME_NEW_LIMIT UDP_GAME_NEW_LIMIT_GLOBAL UDP_GAME_ESTABLISHED_LIMIT A2S_LIMITS A2S_PLAYERS_LIMITS A2S_RULES_LIMITS STEAM_GROUP_LIMITS l4d2loginfilter TCPfilter; do
+        for chain in UDP_GAME_NEW_LIMIT UDP_GAME_NEW_LIMIT_GLOBAL UDP_GAME_NEW_LIMIT_SOURCETV UDP_GAME_NEW_LIMIT_SOURCETV_GLOBAL UDP_GAME_ESTABLISHED_LIMIT A2S_LIMITS A2S_PLAYERS_LIMITS A2S_RULES_LIMITS STEAM_GROUP_LIMITS l4d2loginfilter TCPfilter; do
             iptables -F "$chain" 2>/dev/null || true
             iptables -X "$chain" 2>/dev/null || true
         done
@@ -112,6 +112,8 @@ ip_chain_setup_apply() {
 
     iptables -N UDP_GAME_NEW_LIMIT 2>/dev/null || true
     iptables -N UDP_GAME_NEW_LIMIT_GLOBAL 2>/dev/null || true
+    iptables -N UDP_GAME_NEW_LIMIT_SOURCETV 2>/dev/null || true
+    iptables -N UDP_GAME_NEW_LIMIT_SOURCETV_GLOBAL 2>/dev/null || true
     iptables -N UDP_GAME_ESTABLISHED_LIMIT 2>/dev/null || true
     iptables -N A2S_LIMITS 2>/dev/null || true
     iptables -N A2S_PLAYERS_LIMITS 2>/dev/null || true

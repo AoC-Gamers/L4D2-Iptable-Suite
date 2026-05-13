@@ -418,6 +418,23 @@ iptables -A <Cadena_A2S> -j DROP
 - **Token Bucket**: Cada entrada almacena tokens (inicial = `burst`):
   - Por cada paquete: intenta consumir 1 token
   - Si hay tokens: `ACCEPT` + recarga a ritmo `X/sec` (máximo = `burst`)
+
+##### Nota operativa: desactivar temporalmente un limitador
+
+En el flujo modular actual, `l4d2_a2s_filters` acepta `0` en cualquier `*_RATE` o `*_BURST` para desactivar el limitador específico de esa clase.
+
+Ejemplo de prueba para visibilidad/browser:
+
+```bash
+A2S_INFO_RATE=0
+A2S_INFO_BURST=0
+STEAM_GROUP_RATE=0
+STEAM_GROUP_BURST=0
+```
+
+Esto desactiva los limitadores específicos de `A2S_INFO` y `Steam Group`, pero no desactiva el limitador base `UDP_NEW` / `UDP_EST`.
+
+Si la visibilidad mejora, el cuello estaba en `l4d2_a2s_filters`. Si no mejora, el siguiente sospechoso es el módulo base UDP.
   - Si bucket vacío: `DROP` (flood detectado)
 - **Expire**: Entradas eliminadas tras `Z ms` sin actividad (control de memoria)
 

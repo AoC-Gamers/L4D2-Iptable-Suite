@@ -14,6 +14,7 @@ Mitigar flood de consultas A2S/Steam Group y patrones de login (`connect/reserve
 - `LOG_PREFIX_STEAM_GROUP`, `LOG_PREFIX_L4D2_CONNECT`, `LOG_PREFIX_L4D2_RESERVE`
 
 ## Variables de tuning (flexibilidad)
+- `0` en cualquier `*_RATE` o `*_BURST` desactiva el rate limit de esa clase y acepta ese tráfico sin pasar por el limitador específico.
 - `A2S_INFO_RATE` (default `16`)
 - `A2S_INFO_BURST` (default `80`)
 - `A2S_PLAYERS_RATE` (default `12`)
@@ -81,7 +82,7 @@ En consecuencia, el firewall no debería asumir que existe una firma pública ex
 Antes de aplicar reglas, el módulo valida:
 - `TYPECHAIN` en `0|1|2`
 - formato de `L4D2_GAMESERVER_UDP_PORTS`
-- todos los `*_RATE` y `*_BURST` como enteros positivos
+- todos los `*_RATE` y `*_BURST` como enteros `>= 0`
 - `ENABLE_STEAM_GROUP_FILTER` en `true|false`
 - `STEAM_GROUP_SIGNATURES` con regex hex CSV (`69` o `69,00`, etc.) cuando está habilitado
 
@@ -158,4 +159,11 @@ L4D2_LOGIN_RATE=8
 L4D2_LOGIN_BURST=32
 ENABLE_STEAM_GROUP_FILTER=true
 STEAM_GROUP_SIGNATURES="69,00"
+```
+
+Prueba sin limitador específico de `A2S_INFO`:
+
+```env
+A2S_INFO_RATE=0
+A2S_INFO_BURST=0
 ```

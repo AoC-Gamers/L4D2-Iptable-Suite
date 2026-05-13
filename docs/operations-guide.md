@@ -249,7 +249,37 @@ Si lo activas y aparecen falsos positivos:
 
 ---
 
-## 9. Protección TCP L4D2 no abre puertos
+## 9. Desactivar temporalmente limitadores A2S
+
+El módulo `l4d2_a2s_filters` permite usar `0` en `*_RATE` o `*_BURST` para desactivar el limitador específico de esa clase.
+
+Ejemplo útil para diagnosticar visibilidad/browser:
+
+```bash
+A2S_INFO_RATE=0
+A2S_INFO_BURST=0
+STEAM_GROUP_RATE=0
+STEAM_GROUP_BURST=0
+```
+
+Esto desactiva el rate limit específico de `A2S_INFO` y `Steam Group`, pero no toca el limitador base `UDP_NEW`/`UDP_EST`.
+
+Si la visibilidad mejora tras este cambio, el problema estaba en `l4d2_a2s_filters`. Si no mejora, el siguiente sospechoso es el módulo base UDP.
+
+Para una prueba aún más agresiva también puedes desactivar temporalmente:
+
+```bash
+A2S_PLAYERS_RATE=0
+A2S_PLAYERS_BURST=0
+A2S_RULES_RATE=0
+A2S_RULES_BURST=0
+```
+
+Usa esto solo como diagnóstico temporal. No lo dejes desactivado en producción sin una razón clara.
+
+---
+
+## 10. Protección TCP L4D2 no abre puertos
 
 Esta variable:
 
@@ -275,7 +305,7 @@ SSH_DOCKER="2222"
 
 ---
 
-## 10. Checklist ante problema de conectividad
+## 11. Checklist ante problema de conectividad
 
 Ejecuta en este orden:
 

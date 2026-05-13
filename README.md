@@ -162,6 +162,14 @@ OVPNS2S_ROUTER_ALIAS_SNAT=false
 UDP_ALLOW_PORTS=""
 TCP_ALLOW_PORTS=""
 
+# A2S / Steam Group
+# En l4d2_a2s_filters, poner RATE=0 o BURST=0 desactiva el limitador
+# específico de esa clase. Útil para diagnóstico temporal de visibilidad.
+A2S_INFO_RATE=75
+A2S_INFO_BURST=375
+STEAM_GROUP_RATE=30
+STEAM_GROUP_BURST=150
+
 Nota Docker: esta suite usa directamente la cadena `DOCKER-USER` en `filter` para las reglas del usuario, siguiendo el flujo recomendado por Docker.
 ```
 

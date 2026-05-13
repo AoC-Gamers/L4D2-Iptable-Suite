@@ -6,7 +6,7 @@ ID=ip_l4d2_udp_base
 ALIASES=l4d2_udp_base
 DESCRIPTION=Applies base UDP/state/ICMP rules for GameServer and SourceTV services
 REQUIRED_VARS=TYPECHAIN L4D2_GAMESERVER_UDP_PORTS L4D2_SOURCETV_UDP_PORTS L4D2_CMD_LIMIT LOG_PREFIX_UDP_NEW_LIMIT LOG_PREFIX_UDP_EST_LIMIT LOG_PREFIX_ICMP_FLOOD
-OPTIONAL_VARS=ENABLE_UDP_BASELINE_LOGS UDP_NEW_SRC_RATE UDP_NEW_SRC_BURST UDP_NEW_GLOBAL_RATE UDP_NEW_GLOBAL_BURST ENABLE_UDP_NEW_FFFFFFFF_BYPASS ENABLE_STEAM_GROUP_FILTER STEAM_GROUP_SIGNATURES ENABLE_UDP_NEW_LARGE_FILTER UDP_NEW_LARGE_DROP_MIN_LEN
+OPTIONAL_VARS=ENABLE_UDP_BASELINE_LOGS UDP_NEW_SRC_RATE UDP_NEW_SRC_BURST UDP_NEW_GLOBAL_RATE UDP_NEW_GLOBAL_BURST SOURCETV_UDP_NEW_SRC_RATE SOURCETV_UDP_NEW_SRC_BURST SOURCETV_UDP_NEW_GLOBAL_RATE SOURCETV_UDP_NEW_GLOBAL_BURST ENABLE_UDP_NEW_FFFFFFFF_BYPASS ENABLE_STEAM_GROUP_FILTER STEAM_GROUP_SIGNATURES ENABLE_UDP_NEW_LARGE_FILTER UDP_NEW_LARGE_DROP_MIN_LEN
 DEFAULTS=TYPECHAIN=0 L4D2_GAMESERVER_UDP_PORTS=27015 L4D2_SOURCETV_UDP_PORTS=27020 L4D2_CMD_LIMIT=100 LOG_PREFIX_UDP_NEW_LIMIT=UDP_NEW_LIMIT: LOG_PREFIX_UDP_EST_LIMIT=UDP_EST_LIMIT: LOG_PREFIX_ICMP_FLOOD=ICMP_FLOOD: ENABLE_UDP_BASELINE_LOGS=false UDP_NEW_SRC_RATE=8 UDP_NEW_SRC_BURST=24 UDP_NEW_GLOBAL_RATE=240 UDP_NEW_GLOBAL_BURST=960 ENABLE_UDP_NEW_FFFFFFFF_BYPASS=true ENABLE_STEAM_GROUP_FILTER=true STEAM_GROUP_SIGNATURES=69 ENABLE_UDP_NEW_LARGE_FILTER=false UDP_NEW_LARGE_DROP_MIN_LEN=1024
 EOF
 }
@@ -46,7 +46,7 @@ ip_50_l4d2_udp_base_validate() {
     fi
 
     local key
-    for key in UDP_NEW_SRC_RATE UDP_NEW_SRC_BURST UDP_NEW_GLOBAL_RATE UDP_NEW_GLOBAL_BURST UDP_NEW_LARGE_DROP_MIN_LEN; do
+    for key in UDP_NEW_SRC_RATE UDP_NEW_SRC_BURST UDP_NEW_GLOBAL_RATE UDP_NEW_GLOBAL_BURST SOURCETV_UDP_NEW_SRC_RATE SOURCETV_UDP_NEW_SRC_BURST SOURCETV_UDP_NEW_GLOBAL_RATE SOURCETV_UDP_NEW_GLOBAL_BURST UDP_NEW_LARGE_DROP_MIN_LEN; do
         ip_50_l4d2_udp_base_validate_positive_int "$key" "${!key:-}" || return $?
     done
 
@@ -107,6 +107,10 @@ ip_50_l4d2_udp_base_validate() {
 ip_50_l4d2_udp_base_apply() {
     local cmd_limit_leeway=$((L4D2_CMD_LIMIT + 10))
     local cmd_limit_upper=$((L4D2_CMD_LIMIT + 30))
+    local sourcetv_udp_new_src_rate="${SOURCETV_UDP_NEW_SRC_RATE:-$UDP_NEW_SRC_RATE}"
+    local sourcetv_udp_new_src_burst="${SOURCETV_UDP_NEW_SRC_BURST:-$UDP_NEW_SRC_BURST}"
+    local sourcetv_udp_new_global_rate="${SOURCETV_UDP_NEW_GLOBAL_RATE:-$UDP_NEW_GLOBAL_RATE}"
+    local sourcetv_udp_new_global_burst="${SOURCETV_UDP_NEW_GLOBAL_BURST:-$UDP_NEW_GLOBAL_BURST}"
     local steam_signatures_csv steam_sig
     local -a steam_signatures
 
@@ -134,6 +138,20 @@ ip_50_l4d2_udp_base_apply() {
                 iptables -A UDP_GAME_NEW_LIMIT -m string --algo bm --hex-string "|FFFFFFFF${steam_sig}|" -j RETURN
             done
         fi
+
+        iptables -A UDP_GAME_NEW_LIMIT_SOURCETV -m string --algo bm --hex-string '|FFFFFFFF54|' -j RETURN
+        iptables -A UDP_GAME_NEW_LIMIT_SOURCETV -m string --algo bm --hex-string '|FFFFFFFF55|' -j RETURN
+        iptables -A UDP_GAME_NEW_LIMIT_SOURCETV -m string --algo bm --hex-string '|FFFFFFFF56|' -j RETURN
+        if [ "${ENABLE_STEAM_GROUP_FILTER}" = "true" ]; then
+            for steam_sig in "${steam_signatures[@]}"; do
+                [ -z "$steam_sig" ] && continue
+                steam_sig="${steam_sig^^}"
+                case "$steam_sig" in
+                    54|55|56|71) continue ;;
+                esac
+                iptables -A UDP_GAME_NEW_LIMIT_SOURCETV -m string --algo bm --hex-string "|FFFFFFFF${steam_sig}|" -j RETURN
+            done
+        fi
     fi
 
     if [ "${ENABLE_UDP_NEW_LARGE_FILTER}" = "true" ]; then
@@ -155,6 +173,18 @@ ip_50_l4d2_udp_base_apply() {
     fi
     iptables -A UDP_GAME_NEW_LIMIT_GLOBAL -j DROP
 
+    iptables -A UDP_GAME_NEW_LIMIT_SOURCETV -m hashlimit --hashlimit-upto "${sourcetv_udp_new_src_rate}/s" --hashlimit-burst "$sourcetv_udp_new_src_burst" --hashlimit-mode srcip,dstport --hashlimit-name L4D2_NEW_HASHLIMIT_SOURCETV --hashlimit-htable-expire 5000 -j UDP_GAME_NEW_LIMIT_SOURCETV_GLOBAL
+    if [ "${ENABLE_UDP_BASELINE_LOGS}" = "true" ]; then
+        iptables -A UDP_GAME_NEW_LIMIT_SOURCETV -m limit --limit 60/min --limit-burst 20 -j LOG --log-prefix "$LOG_PREFIX_UDP_NEW_LIMIT" --log-level 4
+    fi
+    iptables -A UDP_GAME_NEW_LIMIT_SOURCETV -j DROP
+
+    iptables -A UDP_GAME_NEW_LIMIT_SOURCETV_GLOBAL -m hashlimit --hashlimit-upto "${sourcetv_udp_new_global_rate}/s" --hashlimit-burst "$sourcetv_udp_new_global_burst" --hashlimit-mode dstport --hashlimit-name L4D2_NEW_HASHLIMIT_GLOBAL_SOURCETV --hashlimit-htable-expire 5000 -j ACCEPT
+    if [ "${ENABLE_UDP_BASELINE_LOGS}" = "true" ]; then
+        iptables -A UDP_GAME_NEW_LIMIT_SOURCETV_GLOBAL -m limit --limit 60/min --limit-burst 20 -j LOG --log-prefix "$LOG_PREFIX_UDP_NEW_LIMIT" --log-level 4
+    fi
+    iptables -A UDP_GAME_NEW_LIMIT_SOURCETV_GLOBAL -j DROP
+
     iptables -A UDP_GAME_ESTABLISHED_LIMIT -m hashlimit --hashlimit-upto ${cmd_limit_leeway}/s --hashlimit-burst ${cmd_limit_upper} --hashlimit-mode srcip,srcport,dstport --hashlimit-name L4D2_ESTABLISHED_HASHLIMIT -j ACCEPT
     if [ "${ENABLE_UDP_BASELINE_LOGS}" = "true" ]; then
         iptables -A UDP_GAME_ESTABLISHED_LIMIT -m limit --limit 60/min --limit-burst 20 -j LOG --log-prefix "$LOG_PREFIX_UDP_EST_LIMIT" --log-level 4
@@ -171,7 +201,7 @@ ip_50_l4d2_udp_base_apply() {
         fi
 
         iptables -A "$chain" -p udp -m multiport --dports "$L4D2_GAMESERVER_UDP_PORTS" -m state --state NEW -j UDP_GAME_NEW_LIMIT
-        iptables -A "$chain" -p udp -m multiport --dports "$L4D2_SOURCETV_UDP_PORTS" -m state --state NEW -j UDP_GAME_NEW_LIMIT
+        iptables -A "$chain" -p udp -m multiport --dports "$L4D2_SOURCETV_UDP_PORTS" -m state --state NEW -j UDP_GAME_NEW_LIMIT_SOURCETV
 
         iptables -A "$chain" -p udp -m multiport --dports "$L4D2_GAMESERVER_UDP_PORTS" -m state --state ESTABLISHED -j UDP_GAME_ESTABLISHED_LIMIT
         iptables -A "$chain" -p udp -m multiport --dports "$L4D2_SOURCETV_UDP_PORTS" -m state --state ESTABLISHED -j UDP_GAME_ESTABLISHED_LIMIT

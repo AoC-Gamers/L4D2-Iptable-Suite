@@ -100,7 +100,7 @@ ip_70_l4d2_a2s_filters_apply_profile() {
     ip_70_l4d2_a2s_filters_set_default L4D2_LOGIN_BURST 16
 }
 
-ip_70_l4d2_a2s_filters_validate_positive_int() {
+ip_70_l4d2_a2s_filters_validate_non_negative_int() {
     local key="$1"
     local value="$2"
 
@@ -109,10 +109,17 @@ ip_70_l4d2_a2s_filters_validate_positive_int() {
         return 2
     fi
 
-    if [ "$value" -le 0 ]; then
-        echo "ERROR: ip_l4d2_a2s_filters: $key must be > 0"
+    if [ "$value" -lt 0 ]; then
+        echo "ERROR: ip_l4d2_a2s_filters: $key must be >= 0"
         return 2
     fi
+}
+
+ip_70_l4d2_a2s_filters_limit_disabled() {
+    local rate="$1"
+    local burst="$2"
+
+    [ "$rate" -eq 0 ] || [ "$burst" -eq 0 ]
 }
 
 ip_70_l4d2_a2s_filters_validate_bool() {
@@ -149,7 +156,7 @@ ip_70_l4d2_a2s_filters_validate() {
         A2S_RULES_RATE A2S_RULES_BURST \
         STEAM_GROUP_RATE STEAM_GROUP_BURST \
         L4D2_LOGIN_RATE L4D2_LOGIN_BURST; do
-        ip_70_l4d2_a2s_filters_validate_positive_int "$key" "${!key:-}" || return $?
+        ip_70_l4d2_a2s_filters_validate_non_negative_int "$key" "${!key:-}" || return $?
     done
 
     ip_70_l4d2_a2s_filters_validate_bool ENABLE_A2S_DISCOVERY_SAFE "${ENABLE_A2S_DISCOVERY_SAFE:-}" || return $?
@@ -202,45 +209,76 @@ ip_70_l4d2_a2s_filters_add_log_and_terminal() {
     iptables -A "$chain" -j "$terminal"
 }
 
+ip_70_l4d2_a2s_filters_add_hashlimit_or_accept() {
+    local chain="$1"
+    local rate="$2"
+    local burst="$3"
+    local prefix="$4"
+    local terminal="$5"
+    shift 5
+
+    if ip_70_l4d2_a2s_filters_limit_disabled "$rate" "$burst"; then
+        iptables -A "$chain" -j ACCEPT
+        return 0
+    fi
+
+    iptables -A "$chain" "$@" -j ACCEPT
+    ip_70_l4d2_a2s_filters_add_log_and_terminal "$chain" "$prefix" "$terminal"
+}
+
 ip_70_l4d2_a2s_filters_apply_discovery_chains() {
     local discovery_terminal
     discovery_terminal="$(ip_70_l4d2_a2s_filters_discovery_terminal_action)"
 
-    iptables -A A2S_DISCOVERY_INFO \
+    ip_70_l4d2_a2s_filters_add_hashlimit_or_accept \
+        A2S_DISCOVERY_INFO \
+        "$A2S_DISCOVERY_SRC_RATE" \
+        "$A2S_DISCOVERY_SRC_BURST" \
+        "$LOG_PREFIX_A2S_INFO" \
+        "$discovery_terminal" \
         -m hashlimit --hashlimit-upto "${A2S_DISCOVERY_SRC_RATE}/sec" \
         --hashlimit-burst "$A2S_DISCOVERY_SRC_BURST" \
         --hashlimit-mode srcip,dstport \
         --hashlimit-name A2SInfoDiscoverySrc \
         --hashlimit-htable-expire 30000 \
         -j A2S_DISCOVERY_INFO_GLOBAL
-    ip_70_l4d2_a2s_filters_add_log_and_terminal A2S_DISCOVERY_INFO "$LOG_PREFIX_A2S_INFO" "$discovery_terminal"
 
-    iptables -A A2S_DISCOVERY_INFO_GLOBAL \
+    ip_70_l4d2_a2s_filters_add_hashlimit_or_accept \
+        A2S_DISCOVERY_INFO_GLOBAL \
+        "$A2S_DISCOVERY_GLOBAL_RATE" \
+        "$A2S_DISCOVERY_GLOBAL_BURST" \
+        "$LOG_PREFIX_A2S_INFO" \
+        "$discovery_terminal" \
         -m hashlimit --hashlimit-upto "${A2S_DISCOVERY_GLOBAL_RATE}/sec" \
         --hashlimit-burst "$A2S_DISCOVERY_GLOBAL_BURST" \
         --hashlimit-mode dstport \
         --hashlimit-name A2SInfoDiscoveryGlobal \
-        --hashlimit-htable-expire 30000 \
-        -j ACCEPT
-    ip_70_l4d2_a2s_filters_add_log_and_terminal A2S_DISCOVERY_INFO_GLOBAL "$LOG_PREFIX_A2S_INFO" "$discovery_terminal"
+        --hashlimit-htable-expire 30000
 
-    iptables -A A2S_DISCOVERY_PING \
+    ip_70_l4d2_a2s_filters_add_hashlimit_or_accept \
+        A2S_DISCOVERY_PING \
+        "$A2S_PING_SRC_RATE" \
+        "$A2S_PING_SRC_BURST" \
+        "$LOG_PREFIX_STEAM_GROUP" \
+        "$discovery_terminal" \
         -m hashlimit --hashlimit-upto "${A2S_PING_SRC_RATE}/sec" \
         --hashlimit-burst "$A2S_PING_SRC_BURST" \
         --hashlimit-mode srcip,dstport \
         --hashlimit-name A2SPingDiscoverySrc \
         --hashlimit-htable-expire 30000 \
         -j A2S_DISCOVERY_PING_GLOBAL
-    ip_70_l4d2_a2s_filters_add_log_and_terminal A2S_DISCOVERY_PING "$LOG_PREFIX_STEAM_GROUP" "$discovery_terminal"
 
-    iptables -A A2S_DISCOVERY_PING_GLOBAL \
+    ip_70_l4d2_a2s_filters_add_hashlimit_or_accept \
+        A2S_DISCOVERY_PING_GLOBAL \
+        "$A2S_DISCOVERY_GLOBAL_RATE" \
+        "$A2S_DISCOVERY_GLOBAL_BURST" \
+        "$LOG_PREFIX_STEAM_GROUP" \
+        "$discovery_terminal" \
         -m hashlimit --hashlimit-upto "${A2S_DISCOVERY_GLOBAL_RATE}/sec" \
         --hashlimit-burst "$A2S_DISCOVERY_GLOBAL_BURST" \
         --hashlimit-mode dstport \
         --hashlimit-name A2SPingDiscoveryGlobal \
-        --hashlimit-htable-expire 30000 \
-        -j ACCEPT
-    ip_70_l4d2_a2s_filters_add_log_and_terminal A2S_DISCOVERY_PING_GLOBAL "$LOG_PREFIX_STEAM_GROUP" "$discovery_terminal"
+        --hashlimit-htable-expire 30000
 }
 
 ip_70_l4d2_a2s_filters_apply_chains() {
@@ -256,24 +294,24 @@ ip_70_l4d2_a2s_filters_apply_chains() {
     ip_70_l4d2_a2s_filters_apply_discovery_chains
 
     # Legacy A2S_INFO path kept for compatibility when discovery-safe mode is disabled.
-    iptables -A A2S_LIMITS -m hashlimit --hashlimit-upto "${A2S_INFO_RATE}/sec" --hashlimit-burst "$A2S_INFO_BURST" --hashlimit-mode srcip,dstport --hashlimit-name A2SFilter --hashlimit-htable-expire 5000 -j ACCEPT
-    ip_70_l4d2_a2s_filters_add_log_and_terminal A2S_LIMITS "$LOG_PREFIX_A2S_INFO" DROP
+    ip_70_l4d2_a2s_filters_add_hashlimit_or_accept A2S_LIMITS "$A2S_INFO_RATE" "$A2S_INFO_BURST" "$LOG_PREFIX_A2S_INFO" DROP -m hashlimit --hashlimit-upto "${A2S_INFO_RATE}/sec" --hashlimit-burst "$A2S_INFO_BURST" --hashlimit-mode srcip,dstport --hashlimit-name A2SFilter --hashlimit-htable-expire 5000
 
-    iptables -A A2S_PLAYERS_LIMITS -m hashlimit --hashlimit-upto "${A2S_PLAYERS_RATE}/sec" --hashlimit-burst "$A2S_PLAYERS_BURST" --hashlimit-mode srcip,dstport --hashlimit-name A2SPlayersFilter --hashlimit-htable-expire 5000 -j ACCEPT
-    ip_70_l4d2_a2s_filters_add_log_and_terminal A2S_PLAYERS_LIMITS "$LOG_PREFIX_A2S_PLAYERS" DROP
+    ip_70_l4d2_a2s_filters_add_hashlimit_or_accept A2S_PLAYERS_LIMITS "$A2S_PLAYERS_RATE" "$A2S_PLAYERS_BURST" "$LOG_PREFIX_A2S_PLAYERS" DROP -m hashlimit --hashlimit-upto "${A2S_PLAYERS_RATE}/sec" --hashlimit-burst "$A2S_PLAYERS_BURST" --hashlimit-mode srcip,dstport --hashlimit-name A2SPlayersFilter --hashlimit-htable-expire 5000
 
-    iptables -A A2S_RULES_LIMITS -m hashlimit --hashlimit-upto "${A2S_RULES_RATE}/sec" --hashlimit-burst "$A2S_RULES_BURST" --hashlimit-mode srcip,dstport --hashlimit-name A2SRulesFilter --hashlimit-htable-expire 5000 -j ACCEPT
-    ip_70_l4d2_a2s_filters_add_log_and_terminal A2S_RULES_LIMITS "$LOG_PREFIX_A2S_RULES" DROP
+    ip_70_l4d2_a2s_filters_add_hashlimit_or_accept A2S_RULES_LIMITS "$A2S_RULES_RATE" "$A2S_RULES_BURST" "$LOG_PREFIX_A2S_RULES" DROP -m hashlimit --hashlimit-upto "${A2S_RULES_RATE}/sec" --hashlimit-burst "$A2S_RULES_BURST" --hashlimit-mode srcip,dstport --hashlimit-name A2SRulesFilter --hashlimit-htable-expire 5000
 
     # Compatibility path for Steam/legacy signatures other than discovery-safe 0x69.
-    iptables -A STEAM_GROUP_LIMITS -m hashlimit --hashlimit-upto "${STEAM_GROUP_RATE}/sec" --hashlimit-burst "$STEAM_GROUP_BURST" --hashlimit-mode srcip,dstport --hashlimit-name STEAMGROUPFilter --hashlimit-htable-expire 5000 -j ACCEPT
-    ip_70_l4d2_a2s_filters_add_log_and_terminal STEAM_GROUP_LIMITS "$LOG_PREFIX_STEAM_GROUP" DROP
+    ip_70_l4d2_a2s_filters_add_hashlimit_or_accept STEAM_GROUP_LIMITS "$STEAM_GROUP_RATE" "$STEAM_GROUP_BURST" "$LOG_PREFIX_STEAM_GROUP" DROP -m hashlimit --hashlimit-upto "${STEAM_GROUP_RATE}/sec" --hashlimit-burst "$STEAM_GROUP_BURST" --hashlimit-mode srcip,dstport --hashlimit-name STEAMGROUPFilter --hashlimit-htable-expire 5000
 
-    iptables -A l4d2loginfilter -m hashlimit --hashlimit-upto "${L4D2_LOGIN_RATE}/sec" --hashlimit-burst "$L4D2_LOGIN_BURST" --hashlimit-mode srcip,dstip,dstport --hashlimit-name L4D2CONNECTPROTECT --hashlimit-htable-expire 1000 --hashlimit-htable-max 1048576 -m string --algo bm --string "connect" -j ACCEPT
-    iptables -A l4d2loginfilter -m hashlimit --hashlimit-upto "${L4D2_LOGIN_RATE}/sec" --hashlimit-burst "$L4D2_LOGIN_BURST" --hashlimit-mode srcip,dstip,dstport --hashlimit-name L4D2RESERVEPROTECT --hashlimit-htable-expire 1000 --hashlimit-htable-max 1048576 -m string --algo bm --string "reserve" -j ACCEPT
-    iptables -A l4d2loginfilter -m string --algo bm --string "connect" -m limit --limit 60/min --limit-burst 20 -j LOG --log-prefix "$LOG_PREFIX_L4D2_CONNECT" --log-level 4
-    iptables -A l4d2loginfilter -m string --algo bm --string "reserve" -m limit --limit 60/min --limit-burst 20 -j LOG --log-prefix "$LOG_PREFIX_L4D2_RESERVE" --log-level 4
-    iptables -A l4d2loginfilter -j DROP
+    if ip_70_l4d2_a2s_filters_limit_disabled "$L4D2_LOGIN_RATE" "$L4D2_LOGIN_BURST"; then
+        iptables -A l4d2loginfilter -j ACCEPT
+    else
+        iptables -A l4d2loginfilter -m hashlimit --hashlimit-upto "${L4D2_LOGIN_RATE}/sec" --hashlimit-burst "$L4D2_LOGIN_BURST" --hashlimit-mode srcip,dstip,dstport --hashlimit-name L4D2CONNECTPROTECT --hashlimit-htable-expire 1000 --hashlimit-htable-max 1048576 -m string --algo bm --string "connect" -j ACCEPT
+        iptables -A l4d2loginfilter -m hashlimit --hashlimit-upto "${L4D2_LOGIN_RATE}/sec" --hashlimit-burst "$L4D2_LOGIN_BURST" --hashlimit-mode srcip,dstip,dstport --hashlimit-name L4D2RESERVEPROTECT --hashlimit-htable-expire 1000 --hashlimit-htable-max 1048576 -m string --algo bm --string "reserve" -j ACCEPT
+        iptables -A l4d2loginfilter -m string --algo bm --string "connect" -m limit --limit 60/min --limit-burst 20 -j LOG --log-prefix "$LOG_PREFIX_L4D2_CONNECT" --log-level 4
+        iptables -A l4d2loginfilter -m string --algo bm --string "reserve" -m limit --limit 60/min --limit-burst 20 -j LOG --log-prefix "$LOG_PREFIX_L4D2_RESERVE" --log-level 4
+        iptables -A l4d2loginfilter -j DROP
+    fi
 }
 
 ip_70_l4d2_a2s_filters_apply_for_chain() {

@@ -9,7 +9,7 @@ ID=nf_l4d2_udp_base
 ALIASES=l4d2_udp_base
 DESCRIPTION=Applies base UDP/state/ICMP rules in the nftables backend
 REQUIRED_VARS=TYPECHAIN L4D2_GAMESERVER_UDP_PORTS L4D2_SOURCETV_UDP_PORTS L4D2_CMD_LIMIT LOG_PREFIX_UDP_NEW_LIMIT LOG_PREFIX_UDP_EST_LIMIT LOG_PREFIX_ICMP_FLOOD
-OPTIONAL_VARS=FIREWALL_HOST_ALIAS STEAM_GROUP_SIGNATURES ENABLE_STEAM_GROUP_FILTER ENABLE_UDP_BASELINE_LOGS UDP_NEW_SRC_RATE UDP_NEW_SRC_BURST UDP_NEW_GLOBAL_RATE UDP_NEW_GLOBAL_BURST ENABLE_UDP_NEW_FFFFFFFF_BYPASS ENABLE_UDP_NEW_LARGE_FILTER UDP_NEW_LARGE_DROP_MIN_LEN
+OPTIONAL_VARS=FIREWALL_HOST_ALIAS STEAM_GROUP_SIGNATURES ENABLE_STEAM_GROUP_FILTER ENABLE_UDP_BASELINE_LOGS UDP_NEW_SRC_RATE UDP_NEW_SRC_BURST UDP_NEW_GLOBAL_RATE UDP_NEW_GLOBAL_BURST SOURCETV_UDP_NEW_SRC_RATE SOURCETV_UDP_NEW_SRC_BURST SOURCETV_UDP_NEW_GLOBAL_RATE SOURCETV_UDP_NEW_GLOBAL_BURST ENABLE_UDP_NEW_FFFFFFFF_BYPASS ENABLE_UDP_NEW_LARGE_FILTER UDP_NEW_LARGE_DROP_MIN_LEN
 DEFAULTS=TYPECHAIN=0 L4D2_GAMESERVER_UDP_PORTS=27015 L4D2_SOURCETV_UDP_PORTS=27020 L4D2_CMD_LIMIT=100 LOG_PREFIX_UDP_NEW_LIMIT=UDP_NEW_LIMIT: LOG_PREFIX_UDP_EST_LIMIT=UDP_EST_LIMIT: LOG_PREFIX_ICMP_FLOOD=ICMP_FLOOD: FIREWALL_HOST_ALIAS= STEAM_GROUP_SIGNATURES=69 ENABLE_STEAM_GROUP_FILTER=true ENABLE_UDP_BASELINE_LOGS=false UDP_NEW_SRC_RATE=8 UDP_NEW_SRC_BURST=24 UDP_NEW_GLOBAL_RATE=240 UDP_NEW_GLOBAL_BURST=960 ENABLE_UDP_NEW_FFFFFFFF_BYPASS=true ENABLE_UDP_NEW_LARGE_FILTER=false UDP_NEW_LARGE_DROP_MIN_LEN=1024
 EOF
 }
@@ -49,7 +49,7 @@ nf_50_l4d2_udp_base_validate() {
     fi
 
     local key
-    for key in UDP_NEW_SRC_RATE UDP_NEW_SRC_BURST UDP_NEW_GLOBAL_RATE UDP_NEW_GLOBAL_BURST UDP_NEW_LARGE_DROP_MIN_LEN; do
+    for key in UDP_NEW_SRC_RATE UDP_NEW_SRC_BURST UDP_NEW_GLOBAL_RATE UDP_NEW_GLOBAL_BURST SOURCETV_UDP_NEW_SRC_RATE SOURCETV_UDP_NEW_SRC_BURST SOURCETV_UDP_NEW_GLOBAL_RATE SOURCETV_UDP_NEW_GLOBAL_BURST UDP_NEW_LARGE_DROP_MIN_LEN; do
         nf_50_l4d2_udp_base_validate_positive_int "$key" "${!key:-}" || return $?
     done
 
@@ -103,18 +103,25 @@ nf_50_l4d2_udp_base_validate() {
 nf_50_l4d2_udp_base_apply() {
     local cmd_limit_leeway cmd_limit_upper
     local game_ports_expr tv_ports_expr all_udp_ports_expr chain
+    local sourcetv_udp_new_src_rate sourcetv_udp_new_src_burst sourcetv_udp_new_global_rate sourcetv_udp_new_global_burst
     local steam_signatures_csv steam_sig
     local -a steam_signatures
     local log_udp_new log_udp_new_large log_udp_est log_icmp
 
     cmd_limit_leeway=$((L4D2_CMD_LIMIT + 10))
     cmd_limit_upper=$((L4D2_CMD_LIMIT + 30))
+    sourcetv_udp_new_src_rate="${SOURCETV_UDP_NEW_SRC_RATE:-$UDP_NEW_SRC_RATE}"
+    sourcetv_udp_new_src_burst="${SOURCETV_UDP_NEW_SRC_BURST:-$UDP_NEW_SRC_BURST}"
+    sourcetv_udp_new_global_rate="${SOURCETV_UDP_NEW_GLOBAL_RATE:-$UDP_NEW_GLOBAL_RATE}"
+    sourcetv_udp_new_global_burst="${SOURCETV_UDP_NEW_GLOBAL_BURST:-$UDP_NEW_GLOBAL_BURST}"
 
     game_ports_expr="$(nf_ports_set_expr "$L4D2_GAMESERVER_UDP_PORTS")"
     tv_ports_expr="$(nf_ports_set_expr "$L4D2_SOURCETV_UDP_PORTS")"
 
     nf_add_chain udp_new_limit
     nf_add_chain udp_new_limit_global
+    nf_add_chain udp_new_limit_sourcetv
+    nf_add_chain udp_new_limit_sourcetv_global
     nf_add_chain udp_established_limit
     log_udp_new="$(nf_build_log_prefix "$LOG_PREFIX_UDP_NEW_LIMIT" "UDP_NEW_LIMIT" "nf_50_l4d2_udp_base" "udp_new_limit" "drop" "medium")"
     log_udp_new_large="$(nf_build_log_prefix "$LOG_PREFIX_UDP_NEW_LIMIT" "UDP_NEW_LIMIT" "nf_50_l4d2_udp_base" "udp_new_large" "drop" "medium")"
@@ -143,6 +150,20 @@ nf_50_l4d2_udp_base_apply() {
                 nf_add_rule udp_new_limit @th,64,40 "0xFFFFFFFF${steam_sig}" return
             done
         fi
+
+        nf_add_rule udp_new_limit_sourcetv @th,64,40 0xFFFFFFFF54 return
+        nf_add_rule udp_new_limit_sourcetv @th,64,40 0xFFFFFFFF55 return
+        nf_add_rule udp_new_limit_sourcetv @th,64,40 0xFFFFFFFF56 return
+        if [ "${ENABLE_STEAM_GROUP_FILTER}" = "true" ]; then
+            for steam_sig in "${steam_signatures[@]}"; do
+                [ -z "$steam_sig" ] && continue
+                steam_sig="${steam_sig^^}"
+                case "$steam_sig" in
+                    54|55|56|71) continue ;;
+                esac
+                nf_add_rule udp_new_limit_sourcetv @th,64,40 "0xFFFFFFFF${steam_sig}" return
+            done
+        fi
     fi
 
     if [ "${ENABLE_UDP_NEW_LARGE_FILTER}" = "true" ]; then
@@ -164,6 +185,18 @@ nf_50_l4d2_udp_base_apply() {
     fi
     nf_add_rule udp_new_limit_global meter udp_new_global_over_drop '{ udp dport limit rate over '"${UDP_NEW_GLOBAL_RATE}"'/second burst '"${UDP_NEW_GLOBAL_BURST}"' packets }' drop
 
+    nf_add_rule udp_new_limit_sourcetv meter udp_new_sourcetv_src_under '{ ip saddr . udp dport limit rate '"${sourcetv_udp_new_src_rate}"'/second burst '"${sourcetv_udp_new_src_burst}"' packets }' jump udp_new_limit_sourcetv_global
+    if [ "${ENABLE_UDP_BASELINE_LOGS}" = "true" ]; then
+        nf_add_rule udp_new_limit_sourcetv meter udp_new_sourcetv_src_over '{ ip saddr . udp dport limit rate over '"${sourcetv_udp_new_src_rate}"'/second burst '"${sourcetv_udp_new_src_burst}"' packets }' log prefix "\"$log_udp_new\""
+    fi
+    nf_add_rule udp_new_limit_sourcetv meter udp_new_sourcetv_src_over_drop '{ ip saddr . udp dport limit rate over '"${sourcetv_udp_new_src_rate}"'/second burst '"${sourcetv_udp_new_src_burst}"' packets }' drop
+
+    nf_add_rule udp_new_limit_sourcetv_global meter udp_new_sourcetv_global_under '{ udp dport limit rate '"${sourcetv_udp_new_global_rate}"'/second burst '"${sourcetv_udp_new_global_burst}"' packets }' accept
+    if [ "${ENABLE_UDP_BASELINE_LOGS}" = "true" ]; then
+        nf_add_rule udp_new_limit_sourcetv_global meter udp_new_sourcetv_global_over '{ udp dport limit rate over '"${sourcetv_udp_new_global_rate}"'/second burst '"${sourcetv_udp_new_global_burst}"' packets }' log prefix "\"$log_udp_new\""
+    fi
+    nf_add_rule udp_new_limit_sourcetv_global meter udp_new_sourcetv_global_over_drop '{ udp dport limit rate over '"${sourcetv_udp_new_global_rate}"'/second burst '"${sourcetv_udp_new_global_burst}"' packets }' drop
+
     nf_add_rule udp_established_limit meter udp_est_under '{ ip saddr . udp sport . udp dport limit rate '"${cmd_limit_leeway}"'/second burst '"${cmd_limit_upper}"' packets }' accept
     if [ "${ENABLE_UDP_BASELINE_LOGS}" = "true" ]; then
         nf_add_rule udp_established_limit meter udp_est_over '{ ip saddr . udp sport . udp dport limit rate over '"${cmd_limit_leeway}"'/second burst '"${cmd_limit_upper}"' packets }' log prefix "\"$log_udp_est\""
@@ -174,7 +207,8 @@ nf_50_l4d2_udp_base_apply() {
 
     for chain in $(nf_get_target_chains_for_domain l4d2_udp); do
         log_icmp="$(nf_build_log_prefix "$LOG_PREFIX_ICMP_FLOOD" "ICMP_FLOOD" "nf_50_l4d2_udp_base" "$chain" "drop" "low")"
-        nf_add_rule "$chain" udp dport "$all_udp_ports_expr" ct state new jump udp_new_limit
+        nf_add_rule "$chain" udp dport "$game_ports_expr" ct state new jump udp_new_limit
+        nf_add_rule "$chain" udp dport "$tv_ports_expr" ct state new jump udp_new_limit_sourcetv
         nf_add_rule "$chain" udp dport "$all_udp_ports_expr" ct state established jump udp_established_limit
 
         nf_add_rule "$chain" udp sport 53 ct state established,related accept
