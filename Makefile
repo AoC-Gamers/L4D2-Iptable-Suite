@@ -61,7 +61,7 @@ geoip-check:
 geoip-check-ip:
 	@if [ -z "$(IP)" ]; then \
 		printf "Usage: make geoip-check-ip IP=179.6.17.240[/28]\n"; \
-		printf "Optional: RESOLVE_DOMAINS=1 includes WHITELISTED_DOMAINS DNS results.\n"; \
+		printf "Optional: RESOLVE_DOMAINS=1 includes BYPASS_SOURCE_DOMAINS DNS results.\n"; \
 		exit 2; \
 	fi
 	cd $(ROOT_DIR) && python3 scripts/geoip/check_geo_policy_ip.py --env-file .env $(if $(RESOLVE_DOMAINS),--resolve-domains,) "$(IP)"
@@ -86,7 +86,6 @@ firewall-ip:
 
 .PHONY: firewall-validate
 firewall-validate:
-	cd $(ROOT_DIR) && bash -n configure-env.sh
 	cd $(ROOT_DIR) && bash -n nftables.rules.sh
 	cd $(ROOT_DIR) && bash -n iptables.rules.sh
 

@@ -146,7 +146,7 @@ LOGFILE=/var/log/firewall-suite.log
 RSYSLOG_CONF=/etc/rsyslog.d/firewall-suite.conf
 
 # Prefijos de firewall estructurados (FW_EVT)
-FIREWALL_HOST_ALIAS=""
+FIREWALL_LOG_HOST_ALIAS=""
 
 # Prefijos de Log para Diferentes Tipos de Ataque
 LOG_PREFIX_INVALID_SIZE=\"INVALID_SIZE: \"
@@ -515,8 +515,8 @@ L4D2_GAMESERVER_TCP_PORTS=\"27015:27020\"
 
 #### Si hay ataques persistentes de una IP:
 ```bash
-# Agregar a whitelist si es legítima (acceso completo al sistema)
-WHITELISTED_IPS=\"IP_CONFIABLE1 IP_CONFIABLE2\"
+# Agregar a bypass si es legítima (acceso completo al sistema)
+BYPASS_SOURCE_IPS=\"IP_CONFIABLE1 IP_CONFIABLE2\"
 ```
 
 ### Umbrales de Alerta

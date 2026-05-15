@@ -1,4 +1,4 @@
-# ipp.sh - IPTables Persistent Manager
+# ipp.sh - Firewall Rules Manager
 
 ## Tabla de Contenidos
 
@@ -13,12 +13,15 @@
 
 ## Descripción General
 
-`ipp.sh` (IPTables Persistent Manager) es una herramienta interactiva diseñada para simplificar la gestión de la persistencia de reglas iptables. Proporciona un menú intuitivo que elimina la necesidad de recordar comandos complejos de `iptables-persistent` y automatiza las tareas más comunes de administración.
+`ipp.sh` es una herramienta interactiva para administrar reglas guardadas y persistencia operativa de la suite.
+
+- En backend `iptables`, gestiona `iptables-persistent` y `/etc/iptables/rules.v4`.
+- En backend `nftables`, usa el mecanismo nativo `nftables.service` y el archivo `/etc/nftables.conf`.
 
 ### Características Principales
 
 - **Menú interactivo** fácil de usar con opciones numeradas
-- **Gestión automática** de iptables-persistent (instalación/desinstalación)
+- **Menú contextual por backend** con etiquetas distintas para `iptables` y `nftables`
 - **Visualización clara** de reglas activas y guardadas
 - **Backup y restauración** de configuraciones
 - **Diagnóstico del sistema** con información detallada del estado
@@ -32,7 +35,7 @@
 - ✅ Compatible con `iptables.rules.sh`
 - ✅ Compatible con `nftables.rules.sh`
 
-En backend `nftables`, el script guarda y recarga las tablas administradas por la suite (`inet firewall_main`, `ip vpn_s2s_nat`) y sigue reconociendo nombres legacy como `l4d2_filter` o `l4d2_*`, usando `/etc/nftables.conf` como archivo persistente.
+En backend `nftables`, el script guarda y recarga las tablas administradas por la suite (`inet firewall_main`, `ip vpn_s2s_nat`) y sigue reconociendo nombres legacy como `l4d2_filter` o `l4d2_*`, usando `/etc/nftables.conf` como archivo nativo de arranque.
 
 ## Instalación y Requisitos
 
@@ -74,27 +77,27 @@ systemctl --version
 sudo ./ipp.sh
 ```
 
-**⚠️ Importante**: El script debe ejecutarse con permisos de root/sudo ya que modifica configuraciones del sistema y reglas de iptables.
+**⚠️ Importante**: El script debe ejecutarse con permisos de root/sudo ya que modifica configuraciones del sistema y reglas de firewall.
 
 ### Menú Principal
 
-Al ejecutar el script, se presenta el siguiente menú interactivo:
+Al ejecutar el script, las etiquetas cambian según el backend activo. Ejemplo en `nftables`:
 
 ```
 =========================================
-       IPTables Persistent Manager      
+        Firewall Rules Manager
 =========================================
-1 - Install iptables-persistent
-2 - Remove  iptables-persistent
-3 - Show current iptables rules
-4 - Clear all iptables rules
+1 - Install/enable nftables service
+2 - Disable/remove nftables service
+3 - Show current firewall rules
+4 - Clear all active firewall rules
 11 - Clear only L4D2 rules
 12 - Restore only L4D2 rules
-5 - Save current rules (persistent)
+5 - Save current rules to /etc/nftables.conf
 6 - Show saved rules file
 7 - Clear saved rules file
-8 - Reload saved rules
-9 - Status of iptables service
+8 - Reload /etc/nftables.conf
+9 - Status of nftables service
 10 - Switch backend (iptables/nftables)
 0 - Exit
 =========================================
@@ -102,9 +105,11 @@ Al ejecutar el script, se presenta el siguiente menú interactivo:
 
 ## Funcionalidades del Menú
 
-### 1. Install iptables-persistent
+### 1. Install service / enable startup
 
-**Funcionalidad**: Instala y configura automáticamente el paquete `iptables-persistent`.
+**Funcionalidad**:
+- Backend `iptables`: instala y configura `iptables-persistent`.
+- Backend `nftables`: instala el paquete `nftables` y habilita `nftables.service`.
 
 **Proceso realizado**:
 - Pre-configura debconf para evitar prompts interactivos
@@ -248,9 +253,9 @@ WARNING: This will restore only L4D2 rules in backend '...'
 
 ---
 
-### 5. Save current rules (persistent)
+### 5. Save current rules
 
-**Funcionalidad**: Guarda las reglas actuales del backend activo para que persistan después de reinicios.
+**Funcionalidad**: Guarda las reglas actuales del backend activo para que puedan recargarse después de reinicios.
 
 **Proceso realizado**:
 - Backend `iptables`:
@@ -271,7 +276,7 @@ WARNING: This will restore only L4D2 rules in backend '...'
 📊 Total rules saved: 25
 ```
 
-**Cuándo usarlo**: Después de configurar reglas con `iptables.rules.sh` o `nftables.rules.sh` para hacer los cambios permanentes.
+**Cuándo usarlo**: Después de configurar reglas con `iptables.rules.sh` o `nftables.rules.sh` para alinear el estado persistente con el estado activo.
 
 ---
 
@@ -332,16 +337,16 @@ WARNING: This will restore only L4D2 rules in backend '...'
   - Ejecuta `nft -f /etc/nftables.conf`
 
 **Nota importante para `nftables`**:
-- El servicio `nftables.service` también carga `/etc/nftables.conf` al iniciar el sistema.
+- El servicio `nftables.service` carga `/etc/nftables.conf` al iniciar el sistema.
 - Si cambias reglas activas y no ejecutas la opción 5, esos cambios no sobrevivirán a un reinicio.
 
 **Cuándo usarlo**: Para restaurar una configuración guardada o aplicar cambios después de modificar manualmente el archivo persistente.
 
 ---
 
-### 9. Status of persistent service
+### 9. Status of service / saved rules
 
-**Funcionalidad**: Proporciona un diagnóstico completo del backend persistente activo.
+**Funcionalidad**: Proporciona un diagnóstico del backend activo, su mecanismo de arranque y su archivo guardado.
 
 **Información mostrada**:
 - Backend `iptables`:

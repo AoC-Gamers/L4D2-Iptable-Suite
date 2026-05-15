@@ -53,4 +53,4 @@ Si quieres ver el estado actual del filtro geo y los archivos cargados, usa `mak
 
 - Usa la ruta CSV de MaxMind, no `.mmdb`.
 - El contenedor no toca `nftables` directamente; solo actualiza los archivos de prefijos.
-- `WHITELISTED_IPS` y `WHITELISTED_DOMAINS` siguen siendo bypass fuera de este flujo.
+- `BYPASS_SOURCE_IPS` y `BYPASS_SOURCE_DOMAINS` siguen siendo bypass fuera de este flujo.

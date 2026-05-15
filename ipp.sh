@@ -56,7 +56,7 @@ setup_colors() {
 
 print_header() {
     local backend_color="$C_BACKEND_IP"
-    local title_text="Firewall Persistent Manager (IP/NFT)"
+    local title_text="Firewall Rules Manager (IP/NFT)"
     local min_width=40
     local width=${#title_text}
     local border
@@ -145,6 +145,46 @@ detect_default_backend() {
         ACTIVE_BACKEND="nftables"
     else
         ACTIVE_BACKEND="iptables"
+    fi
+}
+
+menu_label_install_service() {
+    if [ "$ACTIVE_BACKEND" = "iptables" ]; then
+        echo "Install persistent service"
+    else
+        echo "Install/enable nftables service"
+    fi
+}
+
+menu_label_remove_service() {
+    if [ "$ACTIVE_BACKEND" = "iptables" ]; then
+        echo "Remove  persistent service"
+    else
+        echo "Disable/remove nftables service"
+    fi
+}
+
+menu_label_save_rules() {
+    if [ "$ACTIVE_BACKEND" = "iptables" ]; then
+        echo "Save current rules (persistent)"
+    else
+        echo "Save current rules to /etc/nftables.conf"
+    fi
+}
+
+menu_label_reload_rules() {
+    if [ "$ACTIVE_BACKEND" = "iptables" ]; then
+        echo "Reload saved rules"
+    else
+        echo "Reload /etc/nftables.conf"
+    fi
+}
+
+menu_label_status() {
+    if [ "$ACTIVE_BACKEND" = "iptables" ]; then
+        echo "Status of persistent service"
+    else
+        echo "Status of nftables service"
     fi
 }
 
@@ -482,21 +522,21 @@ nft_delete_managed_tables() {
 show_menu() {
     print_header
     print_section_services "[Services]"
-    print_option 1 "Install persistent service"
-    print_option 2 "Remove  persistent service"
+    print_option 1 "$(menu_label_install_service)"
+    print_option 2 "$(menu_label_remove_service)"
     echo ""
     print_section_rules "[Rules]"
     print_option 3 "Show current firewall rules"
     print_option 4 "Clear all active firewall rules"
     print_option 11 "Clear only L4D2 rules"
     print_option 12 "Restore only L4D2 rules"
-    print_option 5 "Save current rules (persistent)"
+    print_option 5 "$(menu_label_save_rules)"
     print_option 6 "Show saved rules file"
     print_option 7 "Clear saved rules file"
-    print_option 8 "Reload saved rules"
+    print_option 8 "$(menu_label_reload_rules)"
     echo ""
     print_section_system "[System]"
-    print_option 9 "Status of persistent service"
+    print_option 9 "$(menu_label_status)"
     print_option 10 "Switch backend (iptables/nftables)"
     print_option 0 "Exit"
     echo ""
@@ -520,11 +560,11 @@ install_persistent() {
         msg_ok "iptables-persistent installed successfully"
         msg_info "IPv6 support disabled (rules.v6 removed)"
     else
-        msg_info "Installing nftables service..."
+        msg_info "Installing and enabling nftables service..."
         apt-get update -qq
         apt-get install -y nftables
         systemctl enable --now nftables
-        msg_ok "nftables installed and enabled"
+        msg_ok "nftables package installed and service enabled"
     fi
 }
 
@@ -535,10 +575,10 @@ remove_persistent() {
         apt-get purge -y iptables-persistent
         msg_ok "iptables-persistent removed successfully"
     else
-        msg_info "Removing nftables service..."
+        msg_info "Disabling nftables service and removing package..."
         systemctl disable --now nftables || true
         apt-get purge -y nftables
-        msg_ok "nftables removed successfully"
+        msg_ok "nftables service disabled and package removed"
     fi
 }
 
@@ -595,7 +635,7 @@ save_rules() {
         msg_ok "Rules saved to $DIR_IPTABLES/rules.v4"
         msg_info "Total rules saved: $(grep -c '^-A' "$DIR_IPTABLES/rules.v4" 2>/dev/null || echo 0)"
     else
-        msg_info "Saving current nftables rules..."
+        msg_info "Saving current nftables managed tables to $NFT_CONF_FILE..."
 
         if ! nft_suite_primary_table_exists; then
             msg_error "Managed nftables table not found (expected inet firewall_main or legacy inet l4d2_filter). Apply nftables.rules.sh first."
@@ -603,7 +643,7 @@ save_rules() {
         fi
 
         nft_write_managed_tables "$NFT_CONF_FILE"
-        msg_ok "Rules saved to $NFT_CONF_FILE"
+        msg_ok "Managed nftables tables saved to $NFT_CONF_FILE"
         msg_info "Managed tables saved: $(nft_managed_table_entries_file "$NFT_CONF_FILE" | wc -l)"
         msg_info "Total lines saved: $(wc -l < "$NFT_CONF_FILE" 2>/dev/null || echo 0)"
     fi
@@ -659,7 +699,7 @@ reload_rules() {
         fi
     else
         if [ -f "$NFT_CONF_FILE" ]; then
-            msg_info "Reloading saved nftables rules..."
+            msg_info "Reloading nftables managed tables from $NFT_CONF_FILE..."
 
             nft_delete_managed_tables "$NFT_CONF_FILE"
             nft -f "$NFT_CONF_FILE"
@@ -692,27 +732,27 @@ show_status() {
 
         msg_info "Current active rules: $(iptables -S | wc -l)"
     else
-        msg_info "NFTables service status"
+        msg_info "NFTables native service status"
         echo "────────────────────────"
 
-        if dpkg -l | grep -q '^ii\s\+nftables\s'; then
+        if dpkg-query -W -f='${db:Status-Status}\n' nftables 2>/dev/null | grep -qx 'installed'; then
             msg_ok "nftables package: INSTALLED"
         else
             msg_error "nftables package: NOT INSTALLED"
         fi
 
         if systemctl is-enabled nftables >/dev/null 2>&1; then
-            msg_ok "nftables service: ENABLED"
+            msg_ok "nftables.service: ENABLED"
         else
-            msg_warn "nftables service: NOT ENABLED"
+            msg_warn "nftables.service: NOT ENABLED"
         fi
 
         if [ -f "$NFT_CONF_FILE" ]; then
-            msg_ok "Rules file: EXISTS ($NFT_CONF_FILE)"
+            msg_ok "Native config file: EXISTS ($NFT_CONF_FILE)"
             msg_info "Total saved lines: $(wc -l < "$NFT_CONF_FILE" 2>/dev/null || echo 0)"
             msg_info "Managed tables in file: $(nft_managed_table_entries_file "$NFT_CONF_FILE" | wc -l)"
         else
-            msg_error "Rules file: NOT FOUND ($NFT_CONF_FILE)"
+            msg_error "Native config file: NOT FOUND ($NFT_CONF_FILE)"
         fi
 
         msg_info "Current active tables: $(nft list tables 2>/dev/null | wc -l)"

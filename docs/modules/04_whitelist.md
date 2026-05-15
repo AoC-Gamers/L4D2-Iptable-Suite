@@ -1,4 +1,4 @@
-# Módulo unificado — whitelist (ip/nf)
+# Módulo unificado — bypass_source (ip/nf)
 
 ## Objetivo
 Permitir tráfico completo desde IPs/dominios de confianza.
@@ -9,8 +9,9 @@ Permitir tráfico completo desde IPs/dominios de confianza.
 
 ## Variables
 - `TYPECHAIN`
-- `WHITELISTED_IPS` (separado por espacios)
-- `WHITELISTED_DOMAINS` (resolución IPv4 al aplicar)
+- `BYPASS_SOURCE_IPS` (separado por espacios)
+- `BYPASS_SOURCE_DOMAINS` (resolución al aplicar)
+
 
 ## Diferencias por backend
 - Ambos resuelven dominios y deduplican IPs.

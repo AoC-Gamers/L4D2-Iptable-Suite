@@ -78,7 +78,7 @@ sudo ./iptables.rules.sh
 # 3b. (Opcional) Aplicar reglas con backend nftables
 sudo ./nftables.rules.sh
 
-# 4. Hacer reglas persistentes
+# 4. Guardar persistencia del backend activo
 sudo ./ipp.sh
 
 # 5. Configurar entorno Python (Opcional - Recomendado)
@@ -113,9 +113,9 @@ L4D2_SOURCETV_UDP_PORTS="27020"
 # SSH: puertos expuestos al incluir módulo tcp_ssh
 SSH_PORT="2222,22220:22229"
 
-# IPs de confianza (acceso completo al sistema - ⚠️ TODOS los puertos)
-WHITELISTED_IPS="198.51.100.10 203.0.113.5"
-WHITELISTED_DOMAINS="admin-gateway.example.net"
+# IPs de confianza (bypass completo del sistema - ⚠️ TODOS los puertos)
+BYPASS_SOURCE_IPS="198.51.100.10 203.0.113.5"
+BYPASS_SOURCE_DOMAINS="admin-gateway.example.net"
 
 # OpenVPN Server (host o Docker)
 # Se configura solo si incluyes el módulo openvpn_server
@@ -159,27 +159,27 @@ OVPNS2S_ROUTER_ALIAS_SNAT=false
 # Puertos extra permitidos (servicios adicionales)
 # Formato: "puerto,puerto" o rangos "inicio:fin" (multiport)
 # Vacío = no agrega excepciones extras.
-UDP_ALLOW_PORTS=""
-TCP_ALLOW_PORTS=""
+BYPASS_UDP_PORTS=""
+BYPASS_TCP_PORTS=""
 
 # A2S / Steam Group
 # En l4d2_a2s_filters, poner RATE=0 o BURST=0 desactiva el limitador
 # específico de esa clase. Útil para diagnóstico temporal de visibilidad.
 A2S_INFO_RATE=75
 A2S_INFO_BURST=375
+A2S_PLAYERS_RATE=24
+A2S_PLAYERS_BURST=120
+A2S_RULES_RATE=12
+A2S_RULES_BURST=60
 STEAM_GROUP_RATE=30
 STEAM_GROUP_BURST=150
+L4D2_LOGIN_RATE=4
+L4D2_LOGIN_BURST=16
 
 Nota Docker: esta suite usa directamente la cadena `DOCKER-USER` en `filter` para las reglas del usuario, siguiendo el flujo recomendado por Docker.
 ```
 
-Asistente rápido de configuración (`.env` guiado):
-
-```bash
-./configure-env.sh
-```
-
-> ⚠️ **ADVERTENCIA**: Las entradas de `WHITELISTED_IPS` y `WHITELISTED_DOMAINS` tendrán acceso **completo e irrestricto** a toda la máquina (SSH, Web, Bases de datos, APIs, etc.). Usar solo para administradores y orígenes absolutamente confiables.
+> ⚠️ **ADVERTENCIA**: Las entradas de `BYPASS_SOURCE_IPS` y `BYPASS_SOURCE_DOMAINS` tendrán acceso **completo e irrestricto** a toda la máquina (SSH, Web, Bases de datos, APIs, etc.). Usar solo para administradores y orígenes absolutamente confiables.
 
 ## 🛠️ Herramientas Incluidas
 
@@ -205,9 +205,9 @@ Ideal para entornos modernos que ya operan con reglas `nft` y desean mantener pa
 
 ### 2. `ipp.sh` - Gestor de Persistencia
 
-Herramienta interactiva con menú para gestionar la persistencia de reglas iptables. Permite instalar/desinstalar iptables-persistent, visualizar reglas activas y guardadas, realizar backup y restauración de configuraciones, y diagnosticar el estado del sistema.
+Herramienta interactiva con menú para gestionar reglas guardadas y persistencia operativa de ambos backends. En `iptables` maneja `iptables-persistent`; en `nftables` trabaja con `nftables.service` y `/etc/nftables.conf`.
 
-Simplifica significativamente la administración de reglas persistentes eliminando la necesidad de recordar comandos complejos de iptables.
+Simplifica significativamente la administración de reglas guardadas, recarga selectiva y diagnóstico del estado activo/persistente.
 
 **📖 [Documentación Completa](docs/ipp.md)**
 
@@ -381,8 +381,8 @@ modules/
 # Configurar reglas básicas
 sudo ./iptables.rules.sh
 
-# Hacer persistentes
-sudo ./ipp.sh  # Opción 1: Install, Opción 5: Save
+# Guardar persistencia del backend activo
+sudo ./ipp.sh  # iptables: Install + Save | nftables: Save to /etc/nftables.conf
 
 # Configurar logging con entorno virtual (recomendado)
 ./log-summary/venv.loggin.sh  # Opción 1: Install, Opción 6: Run script

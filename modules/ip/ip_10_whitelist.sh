@@ -4,10 +4,10 @@ ip_10_whitelist_metadata() {
     cat << 'EOF'
 ID=ip_whitelist
 ALIASES=whitelist
-DESCRIPTION=Allows full traffic from IPs listed in WHITELISTED_IPS
+DESCRIPTION=Allows full traffic from IPs listed in BYPASS_SOURCE_IPS
 REQUIRED_VARS=TYPECHAIN
-OPTIONAL_VARS=WHITELISTED_IPS WHITELISTED_DOMAINS
-DEFAULTS=TYPECHAIN=0 WHITELISTED_IPS= WHITELISTED_DOMAINS=
+OPTIONAL_VARS=BYPASS_SOURCE_IPS BYPASS_SOURCE_DOMAINS
+DEFAULTS=TYPECHAIN=0 BYPASS_SOURCE_IPS= BYPASS_SOURCE_DOMAINS=
 EOF
 }
 
@@ -24,7 +24,7 @@ ip_10_whitelist_validate() {
 ip_10_whitelist_apply() {
     local effective_whitelist domain resolved_count ip has_static_whitelist
 
-    effective_whitelist="${WHITELISTED_IPS:-}"
+    effective_whitelist="${BYPASS_SOURCE_IPS:-}"
 
     # Normalize separators from env/custom input (space/comma/semicolon/newline)
     effective_whitelist="${effective_whitelist//,/ }"
@@ -32,12 +32,12 @@ ip_10_whitelist_apply() {
     effective_whitelist="${effective_whitelist//$'\n'/ }"
 
     has_static_whitelist=false
-    if [ -n "${WHITELISTED_IPS:-}" ]; then
+    if [ -n "${BYPASS_SOURCE_IPS:-}" ]; then
         has_static_whitelist=true
     fi
 
-    if [ -n "${WHITELISTED_DOMAINS:-}" ]; then
-        for domain in $WHITELISTED_DOMAINS; do
+    if [ -n "${BYPASS_SOURCE_DOMAINS:-}" ]; then
+        for domain in $BYPASS_SOURCE_DOMAINS; do
             resolved_count=0
 
             while IFS= read -r ip; do
@@ -64,9 +64,9 @@ ip_10_whitelist_apply() {
 
             if [ "$resolved_count" -eq 0 ]; then
                 if [ "$has_static_whitelist" = "true" ]; then
-                    echo "INFO: ip_whitelist: domain '$domain' did not resolve to IPv4; using WHITELISTED_IPS fallback"
+                    echo "INFO: ip_whitelist: domain '$domain' did not resolve to IPv4; using BYPASS_SOURCE_IPS fallback"
                 else
-                    echo "WARNING: ip_whitelist: domain '$domain' did not resolve to IPv4 and no WHITELISTED_IPS fallback is configured"
+                    echo "WARNING: ip_whitelist: domain '$domain' did not resolve to IPv4 and no BYPASS_SOURCE_IPS fallback is configured"
                 fi
             fi
         done
@@ -75,7 +75,7 @@ ip_10_whitelist_apply() {
     effective_whitelist="$(for ip in $effective_whitelist; do echo "$ip"; done | awk '!seen[$0]++' | xargs)"
 
     if [ -z "$effective_whitelist" ]; then
-        echo "INFO: ip_whitelist: no WHITELISTED_IPS/WHITELISTED_DOMAINS configured"
+        echo "INFO: ip_whitelist: no BYPASS_SOURCE_IPS/BYPASS_SOURCE_DOMAINS configured"
         return 0
     fi
 

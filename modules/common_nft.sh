@@ -93,7 +93,7 @@ nf_build_log_prefix() {
     local severity="${6:-medium}"
 
     local safe_host
-    safe_host="${FIREWALL_HOST_ALIAS:-}"
+    safe_host="${FIREWALL_LOG_HOST_ALIAS:-}"
     safe_host="${safe_host// /_}"
 
     # nft log prefixes are length-limited. Keep the high-value fields compact

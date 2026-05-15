@@ -48,8 +48,8 @@ MODULES_ONLY=""
 L4D2_GAMESERVER_UDP_PORTS="27015"
 L4D2_SOURCETV_UDP_PORTS="27020"
 L4D2_GAMESERVER_TCP_PORTS=""
-WHITELISTED_IPS=""
-WHITELISTED_DOMAINS=""
+BYPASS_SOURCE_IPS=""
+BYPASS_SOURCE_DOMAINS=""
 GEO_POLICY_MODE=off
 ENABLE_MALFORMED_FILTER=false
 ENABLE_PACKET_NORMALIZATION_LOGS=false
@@ -289,11 +289,11 @@ L4D2_GAMESERVER_TCP_PORTS="27015"
 
 define puertos TCP a proteger o rate-limitar. No funciona como allowlist general.
 
-Si quieres permitir servicios adicionales, usa las variables de allowlist correspondientes:
+Si quieres permitir servicios adicionales, usa las variables de bypass correspondientes:
 
 ```bash
-TCP_ALLOW_PORTS="8080,9090"
-UDP_ALLOW_PORTS=""
+BYPASS_TCP_PORTS="8080,9090"
+BYPASS_UDP_PORTS=""
 ```
 
 Para Docker también revisa:

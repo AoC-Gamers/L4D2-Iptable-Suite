@@ -14,6 +14,7 @@ Mitigar flood de consultas A2S/Steam Group y patrones de login (`connect/reserve
 - `LOG_PREFIX_STEAM_GROUP`, `LOG_PREFIX_L4D2_CONNECT`, `LOG_PREFIX_L4D2_RESERVE`
 
 ## Variables de tuning (flexibilidad)
+- El módulo usa solo valores explícitos. No existe un perfil global `A2S_PROTECTION_MODE`.
 - `0` en cualquier `*_RATE` o `*_BURST` desactiva el rate limit de esa clase y acepta ese tráfico sin pasar por el limitador específico.
 - `A2S_INFO_RATE` (default `16`)
 - `A2S_INFO_BURST` (default `80`)
@@ -107,10 +108,10 @@ Antes de aplicar reglas, el módulo valida:
 
 ## Nota operativa
 - Excluir `l4d2_a2s_filters` de `MODULES_ONLY` en nodos sin servicios de juego.
-- Recomendación: usar puertos reales de juego en `L4D2_GAMESERVER_UDP_PORTS` y dejar `UDP_ALLOW_PORTS=""` para evitar bypass de mitigaciones.
+- Recomendación: usar puertos reales de juego en `L4D2_GAMESERVER_UDP_PORTS` y dejar `BYPASS_UDP_PORTS=""` para evitar bypass de mitigaciones.
 
 ## Ejemplos de configuración
-Perfil equilibrado (recomendado):
+Configuración equilibrada (recomendada):
 
 ```env
 A2S_INFO_RATE=16
@@ -127,7 +128,7 @@ ENABLE_STEAM_GROUP_FILTER=true
 STEAM_GROUP_SIGNATURES="69"
 ```
 
-Perfil más estricto:
+Configuración más estricta:
 
 ```env
 A2S_INFO_RATE=10
@@ -144,7 +145,7 @@ ENABLE_STEAM_GROUP_FILTER=true
 STEAM_GROUP_SIGNATURES="69"
 ```
 
-Perfil permisivo (tráfico alto legítimo):
+Configuración permisiva (tráfico alto legítimo):
 
 ```env
 A2S_INFO_RATE=30

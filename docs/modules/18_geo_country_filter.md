@@ -12,7 +12,7 @@ Aplicar política geográfica IPv4 sobre los puertos UDP de juego usando allowli
 - No reemplaza rate limits ni filtros A2S; corre antes y reduce superficie.
 
 ## Precedencia importante
-- `WHITELISTED_IPS` y `WHITELISTED_DOMAINS` mantienen bypass completo porque el módulo `whitelist` acepta antes en `core_allow`.
+- `BYPASS_SOURCE_IPS` y `BYPASS_SOURCE_DOMAINS` mantienen bypass completo porque el módulo `whitelist` acepta antes en `core_allow`.
 - Luego se evalúa este módulo geográfico.
 - Dentro de este módulo: deny manual > allow manual > política por país.
 
@@ -39,11 +39,11 @@ make geoip-check-ip IP=179.6.17.240/28
 
 El checker replica la precedencia del módulo:
 
-- `WHITELISTED_IPS` / `WHITELISTED_DOMAINS` como bypass previo.
+- `BYPASS_SOURCE_IPS` / `BYPASS_SOURCE_DOMAINS` como bypass previo.
 - `GEO_POLICY_MODE=off` permite porque el filtro geográfico no aplica reglas.
 - En modo activo: deny manual > allow manual > política por país.
 
-Por defecto no resuelve `WHITELISTED_DOMAINS` para evitar depender de DNS durante la verificación. Si quieres incluir dominios confiables resueltos en el resultado:
+Por defecto no resuelve `BYPASS_SOURCE_DOMAINS` para evitar depender de DNS durante la verificación. Si quieres incluir dominios confiables resueltos en el resultado:
 
 ```bash
 make geoip-check-ip IP=203.0.113.10 RESOLVE_DOMAINS=1

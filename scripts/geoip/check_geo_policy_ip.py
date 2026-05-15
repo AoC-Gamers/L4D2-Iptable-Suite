@@ -197,9 +197,9 @@ def decide(target: ipaddress.IPv4Network, env: dict[str, str], project_root: Pat
     manual_allow_file = resolve_config_path(env.get("GEO_POLICY_MANUAL_ALLOW_FILE", "./geoip/manual/allow_ipv4.txt"), project_root)
     manual_deny_file = resolve_config_path(env.get("GEO_POLICY_MANUAL_DENY_FILE", "./geoip/manual/deny_ipv4.txt"), project_root)
 
-    whitelist_entries = load_inline_networks(env.get("WHITELISTED_IPS", ""), "WHITELISTED_IPS")
+    whitelist_entries = load_inline_networks(env.get("BYPASS_SOURCE_IPS", ""), "BYPASS_SOURCE_IPS")
     if resolve_domains:
-        whitelist_entries.extend(resolve_domain_entries(env.get("WHITELISTED_DOMAINS", ""), "WHITELISTED_DOMAINS"))
+        whitelist_entries.extend(resolve_domain_entries(env.get("BYPASS_SOURCE_DOMAINS", ""), "BYPASS_SOURCE_DOMAINS"))
 
     manual_deny_entries = load_network_file(manual_deny_file, "manual_deny")
     manual_allow_entries = load_network_file(manual_allow_file, "manual_allow")
@@ -220,10 +220,10 @@ def decide(target: ipaddress.IPv4Network, env: dict[str, str], project_root: Pat
 
     if whitelist.status == "full":
         decision = "ALLOW"
-        reason = "target is fully covered by WHITELISTED_IPS/WHITELISTED_DOMAINS before geo policy"
+        reason = "target is fully covered by BYPASS_SOURCE_IPS/BYPASS_SOURCE_DOMAINS before geo policy"
     elif whitelist.status == "partial":
         decision = "PARTIAL"
-        reason = "part of the target is covered by WHITELISTED_IPS/WHITELISTED_DOMAINS before geo policy"
+        reason = "part of the target is covered by BYPASS_SOURCE_IPS/BYPASS_SOURCE_DOMAINS before geo policy"
     elif mode == "off":
         decision = "ALLOW"
         reason = "GEO_POLICY_MODE=off, so country filtering is disabled"
@@ -315,7 +315,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("target", help="IPv4 address or CIDR to check, e.g. 179.6.17.240 or 179.6.17.240/28")
     parser.add_argument("--env-file", default=str(PROJECT_ROOT / ".env"), help="Path to .env file")
     parser.add_argument("--project-root", default=str(PROJECT_ROOT), help="Project root for relative paths in .env")
-    parser.add_argument("--resolve-domains", action="store_true", help="Resolve WHITELISTED_DOMAINS and include them as bypass entries")
+    parser.add_argument("--resolve-domains", action="store_true", help="Resolve BYPASS_SOURCE_DOMAINS and include them as bypass entries")
     parser.add_argument("--json", action="store_true", help="Print machine-readable JSON")
     parser.add_argument("--fail-on-deny", action="store_true", help="Exit with code 1 when the decision is DENY or PARTIAL")
     return parser

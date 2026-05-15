@@ -104,7 +104,7 @@ Comando recomendado:
 make geoip-check-ip IP=179.6.17.240/28
 ```
 
-Si quieres incluir dominios confiables resueltos desde `WHITELISTED_DOMAINS`:
+Si quieres incluir dominios confiables resueltos desde `BYPASS_SOURCE_DOMAINS`:
 
 ```bash
 make geoip-check-ip IP=203.0.113.10 RESOLVE_DOMAINS=1

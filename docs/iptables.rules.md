@@ -106,8 +106,8 @@ L4D2_GAMESERVER_TCP_PORTS="27015"  # Protección TCP explícita (RCON / endpoint
 
 # === ACCESO ADMINISTRATIVO ===
 SSH_PORT="22"                   # Puertos SSH del sistema
-WHITELISTED_IPS=""              # IPs con acceso completo al sistema (⚠️ TODOS los puertos)
-WHITELISTED_DOMAINS=""          # Dominios resueltos a IPv4 y fusionados con WHITELISTED_IPS
+BYPASS_SOURCE_IPS=""            # IPs con acceso completo al sistema (⚠️ TODOS los puertos)
+BYPASS_SOURCE_DOMAINS=""        # Dominios resueltos y fusionados con BYPASS_SOURCE_IPS
 
 # DNS saliente para contenedores Docker (ACME / resolución interna)
 DOCKER_DNS_EGRESS_SUBNETS="172.16.0.0/12"
@@ -188,11 +188,11 @@ Alias S2S para router/LAN solapada:
 - La suite usa una cadena `DOCKER` propia en la tabla `filter` cuando `TYPECHAIN` incluye Docker.
 - Si prefieres engancharte al flujo estándar de Docker, puedes adaptar las reglas a `DOCKER-USER`.
 
-#### ⚠️ Importante: WHITELISTED_IPS - Acceso Completo al Sistema
+#### ⚠️ Importante: BYPASS_SOURCE_IPS - Acceso Completo al Sistema
 
 ```bash
 # Configuración: IPs con acceso irrestricto
-WHITELISTED_IPS="198.51.100.10 203.0.113.5"
+BYPASS_SOURCE_IPS="198.51.100.10 203.0.113.5"
 
 # Resultado: Reglas iptables generadas
 iptables -A INPUT -s 198.51.100.10 -j ACCEPT    # TODO el tráfico
@@ -210,18 +210,18 @@ iptables -A INPUT -s 203.0.113.5 -j ACCEPT      # TODOS los puertos
 - Servidores de monitoreo confiables
 - IPs corporativas verificadas
 
-#### Resolución de dominios en whitelist
+#### Resolución de dominios en bypass de origen
 
-También puedes usar `WHITELISTED_DOMAINS` para resolver nombres a IPv4 al aplicar reglas.
+También puedes usar `BYPASS_SOURCE_DOMAINS` para resolver nombres al aplicar reglas.
 
 ```bash
-WHITELISTED_IPS="192.0.2.0/24"
-WHITELISTED_DOMAINS="admin-gateway.example.net"
+BYPASS_SOURCE_IPS="192.0.2.0/24"
+BYPASS_SOURCE_DOMAINS="admin-gateway.example.net"
 ```
 
 Notas operativas:
 - Los dominios se resuelven en tiempo de aplicación (`iptables.rules.sh`).
-- Si DNS no resuelve y existe `WHITELISTED_IPS`, la suite continúa usando fallback por IP.
+- Si DNS no resuelve y existe `BYPASS_SOURCE_IPS`, la suite continúa usando fallback por IP.
 - Si DNS cambia, reaplica reglas para refrescar IPs resueltas.
 
 #### SSH y whitelist
@@ -669,7 +669,7 @@ La protección TCP se controla por inclusion del modulo `l4d2_tcp_protect` y por
 ```bash
 # 1. Permitir SSH para administración
 iptables -A INPUT -p tcp --dports $SSH_PORT -j ACCEPT
-# Nota: WHITELISTED_IPS ya tienen acceso completo a TODO el sistema
+# Nota: BYPASS_SOURCE_IPS ya tienen acceso completo a TODO el sistema
 
 # 2. Limitar TCP NEW de juego por origen/puerto y descartar exceso
 iptables -A INPUT -p tcp --dports $L4D2_GAMESERVER_TCP_PORTS -m conntrack --ctstate NEW -m hashlimit --hashlimit-upto 600/min --hashlimit-burst 200 --hashlimit-mode srcip,dstport --hashlimit-name L4D2TCPINPUT -j ACCEPT
@@ -1098,8 +1098,8 @@ grep "IP_PROBLEMA" /var/log/firewall-suite.log
 
 **Soluciones**:
 ```bash
-# Temporal: Agregar IP a whitelist (acceso completo al sistema)
-WHITELISTED_IPS="$WHITELISTED_IPS IP_PROBLEMA"
+# Temporal: Agregar IP a bypass (acceso completo al sistema)
+BYPASS_SOURCE_IPS="$BYPASS_SOURCE_IPS IP_PROBLEMA"
 sudo ./iptables.rules.sh
 
 # Permanente: Ajustar límites
