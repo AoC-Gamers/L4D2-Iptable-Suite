@@ -304,6 +304,37 @@ sudo ./nftables.rules.sh --set TYPECHAIN=2 --set VPN_PORT=1194
 Notas de paridad:
 - Hay equivalencia funcional por área, no equivalencia 1:1 de sintaxis entre motores.
 - En nft se usan expresiones nativas (`nft`) en lugar de módulos `iptables` como `hashlimit`/`string`.
+- Los `hashlimit` de iptables expiran su estado interno. Los meters dinamicos
+  equivalentes de nftables deben declarar un timeout de elementos; omitirlo
+  permite que tuplas UDP de un solo uso permanezcan hasta recrear la tabla.
+
+### Estado dinamico de los meters nftables
+
+Los modulos `nf_l4d2_udp_base` y `nf_l4d2_a2s_filters` construyen meters por
+IP de origen y puerto de destino. Sus timeouts forman parte del contrato
+operativo del backend:
+
+```dotenv
+NFT_UDP_NEW_METER_TIMEOUT=5s
+NFT_UDP_EST_METER_TIMEOUT=5s
+NFT_A2S_METER_TIMEOUT=5s
+NFT_LOGIN_METER_TIMEOUT=1s
+```
+
+Las duraciones aceptan un entero positivo seguido de `s`, `m`, `h`, `d` o
+`w`. Un valor ausente usa el default del modulo y un valor invalido detiene la
+validacion antes de aplicar reglas.
+
+La persistencia debe conservar la definicion y el timeout, pero no debe tratar
+los elementos dinamicos observados como configuracion permanente. Despues de
+cargar reglas se puede comprobar con:
+
+```bash
+sudo nft list table inet firewall_main
+```
+
+Cada set dinamico debe incluir el flag `timeout` y las entradas activas deben
+mostrar tiempo restante mediante `expires`.
 
 ---
 

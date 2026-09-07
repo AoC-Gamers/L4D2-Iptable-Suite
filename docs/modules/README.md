@@ -20,3 +20,12 @@ Breve índice de la documentación de cada módulo. Cada entrada enlaza al fiche
 - [16_docker_dns_egress.md](16_docker_dns_egress.md) — Egreso DNS para subredes Docker (ip/nf).
 - [17_docker_monitor_egress.md](17_docker_monitor_egress.md) — Egreso de monitoreo Docker hacia targets LAN (ip/nf).
 - [18_geo_country_filter.md](18_geo_country_filter.md) — Allowlist/denylist geográfica IPv4 para UDP de juego (nft).
+
+## Componentes operativos
+
+- [Vigilancia de IP pública](../public-ip-watch.md) — Confirmación WAN/No-IP,
+  recarga segura de nftables y runbook de visibilidad en Steam Group.
+- [Guía operativa](../operations-guide.md) — Despliegue, inspección y
+  diagnóstico del firewall en producción.
+- [Auditoría operativa](../operational-audit.md) — Problemas conocidos,
+  hallazgos corregidos y comprobaciones de bajo riesgo.

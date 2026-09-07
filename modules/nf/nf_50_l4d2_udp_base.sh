@@ -9,8 +9,8 @@ ID=nf_l4d2_udp_base
 ALIASES=l4d2_udp_base
 DESCRIPTION=Applies base UDP/state/ICMP rules in the nftables backend
 REQUIRED_VARS=TYPECHAIN L4D2_GAMESERVER_UDP_PORTS L4D2_SOURCETV_UDP_PORTS L4D2_CMD_LIMIT LOG_PREFIX_UDP_NEW_LIMIT LOG_PREFIX_UDP_EST_LIMIT LOG_PREFIX_ICMP_FLOOD
-OPTIONAL_VARS=FIREWALL_LOG_HOST_ALIAS STEAM_GROUP_SIGNATURES ENABLE_STEAM_GROUP_FILTER ENABLE_UDP_BASELINE_LOGS UDP_NEW_SRC_RATE UDP_NEW_SRC_BURST UDP_NEW_GLOBAL_RATE UDP_NEW_GLOBAL_BURST SOURCETV_UDP_NEW_SRC_RATE SOURCETV_UDP_NEW_SRC_BURST SOURCETV_UDP_NEW_GLOBAL_RATE SOURCETV_UDP_NEW_GLOBAL_BURST ENABLE_UDP_NEW_FFFFFFFF_BYPASS ENABLE_UDP_NEW_LARGE_FILTER UDP_NEW_LARGE_DROP_MIN_LEN
-DEFAULTS=TYPECHAIN=0 L4D2_GAMESERVER_UDP_PORTS=27015 L4D2_SOURCETV_UDP_PORTS=27020 L4D2_CMD_LIMIT=100 LOG_PREFIX_UDP_NEW_LIMIT=UDP_NEW_LIMIT: LOG_PREFIX_UDP_EST_LIMIT=UDP_EST_LIMIT: LOG_PREFIX_ICMP_FLOOD=ICMP_FLOOD: FIREWALL_LOG_HOST_ALIAS= STEAM_GROUP_SIGNATURES=69 ENABLE_STEAM_GROUP_FILTER=true ENABLE_UDP_BASELINE_LOGS=false UDP_NEW_SRC_RATE=8 UDP_NEW_SRC_BURST=24 UDP_NEW_GLOBAL_RATE=240 UDP_NEW_GLOBAL_BURST=960 ENABLE_UDP_NEW_FFFFFFFF_BYPASS=true ENABLE_UDP_NEW_LARGE_FILTER=false UDP_NEW_LARGE_DROP_MIN_LEN=1024
+OPTIONAL_VARS=FIREWALL_LOG_HOST_ALIAS STEAM_GROUP_SIGNATURES ENABLE_STEAM_GROUP_FILTER ENABLE_UDP_BASELINE_LOGS UDP_NEW_SRC_RATE UDP_NEW_SRC_BURST UDP_NEW_GLOBAL_RATE UDP_NEW_GLOBAL_BURST SOURCETV_UDP_NEW_SRC_RATE SOURCETV_UDP_NEW_SRC_BURST SOURCETV_UDP_NEW_GLOBAL_RATE SOURCETV_UDP_NEW_GLOBAL_BURST ENABLE_UDP_NEW_FFFFFFFF_BYPASS ENABLE_UDP_NEW_LARGE_FILTER UDP_NEW_LARGE_DROP_MIN_LEN NFT_UDP_NEW_METER_TIMEOUT NFT_UDP_EST_METER_TIMEOUT
+DEFAULTS=TYPECHAIN=0 L4D2_GAMESERVER_UDP_PORTS=27015 L4D2_SOURCETV_UDP_PORTS=27020 L4D2_CMD_LIMIT=100 LOG_PREFIX_UDP_NEW_LIMIT=UDP_NEW_LIMIT: LOG_PREFIX_UDP_EST_LIMIT=UDP_EST_LIMIT: LOG_PREFIX_ICMP_FLOOD=ICMP_FLOOD: FIREWALL_LOG_HOST_ALIAS= STEAM_GROUP_SIGNATURES=69 ENABLE_STEAM_GROUP_FILTER=true ENABLE_UDP_BASELINE_LOGS=false UDP_NEW_SRC_RATE=8 UDP_NEW_SRC_BURST=24 UDP_NEW_GLOBAL_RATE=240 UDP_NEW_GLOBAL_BURST=960 ENABLE_UDP_NEW_FFFFFFFF_BYPASS=true ENABLE_UDP_NEW_LARGE_FILTER=false UDP_NEW_LARGE_DROP_MIN_LEN=1024 NFT_UDP_NEW_METER_TIMEOUT=5s NFT_UDP_EST_METER_TIMEOUT=5s
 EOF
 }
 
@@ -25,6 +25,16 @@ nf_50_l4d2_udp_base_validate_positive_int() {
 
     if [ "$value" -le 0 ]; then
         echo "ERROR: nf_l4d2_udp_base: $key must be > 0"
+        return 2
+    fi
+}
+
+nf_50_l4d2_udp_base_validate_timeout() {
+    local key="$1"
+    local value="$2"
+
+    if ! [[ "$value" =~ ^[1-9][0-9]*(s|m|h|d|w)$ ]]; then
+        echo "ERROR: nf_l4d2_udp_base: $key must be a positive nftables duration (example: 5s or 1m)"
         return 2
     fi
 }
@@ -51,6 +61,10 @@ nf_50_l4d2_udp_base_validate() {
     local key
     for key in UDP_NEW_SRC_RATE UDP_NEW_SRC_BURST UDP_NEW_GLOBAL_RATE UDP_NEW_GLOBAL_BURST SOURCETV_UDP_NEW_SRC_RATE SOURCETV_UDP_NEW_SRC_BURST SOURCETV_UDP_NEW_GLOBAL_RATE SOURCETV_UDP_NEW_GLOBAL_BURST UDP_NEW_LARGE_DROP_MIN_LEN; do
         nf_50_l4d2_udp_base_validate_positive_int "$key" "${!key:-}" || return $?
+    done
+
+    for key in NFT_UDP_NEW_METER_TIMEOUT NFT_UDP_EST_METER_TIMEOUT; do
+        nf_50_l4d2_udp_base_validate_timeout "$key" "${!key:-}" || return $?
     done
 
     if [ "$UDP_NEW_LARGE_DROP_MIN_LEN" -lt 69 ] || [ "$UDP_NEW_LARGE_DROP_MIN_LEN" -gt 65535 ]; then
@@ -173,35 +187,35 @@ nf_50_l4d2_udp_base_apply() {
         nf_add_rule udp_new_limit meta length "${UDP_NEW_LARGE_DROP_MIN_LEN}-65535" drop
     fi
 
-    nf_add_rule udp_new_limit meter udp_new_src_under '{ ip saddr . udp dport limit rate '"${UDP_NEW_SRC_RATE}"'/second burst '"${UDP_NEW_SRC_BURST}"' packets }' jump udp_new_limit_global
+    nf_add_rule udp_new_limit meter udp_new_src_under '{ ip saddr . udp dport timeout '"${NFT_UDP_NEW_METER_TIMEOUT}"' limit rate '"${UDP_NEW_SRC_RATE}"'/second burst '"${UDP_NEW_SRC_BURST}"' packets }' jump udp_new_limit_global
     if [ "${ENABLE_UDP_BASELINE_LOGS}" = "true" ]; then
-        nf_add_rule udp_new_limit meter udp_new_src_over '{ ip saddr . udp dport limit rate over '"${UDP_NEW_SRC_RATE}"'/second burst '"${UDP_NEW_SRC_BURST}"' packets }' log prefix "\"$log_udp_new\""
+        nf_add_rule udp_new_limit meter udp_new_src_over '{ ip saddr . udp dport timeout '"${NFT_UDP_NEW_METER_TIMEOUT}"' limit rate over '"${UDP_NEW_SRC_RATE}"'/second burst '"${UDP_NEW_SRC_BURST}"' packets }' log prefix "\"$log_udp_new\""
     fi
-    nf_add_rule udp_new_limit meter udp_new_src_over_drop '{ ip saddr . udp dport limit rate over '"${UDP_NEW_SRC_RATE}"'/second burst '"${UDP_NEW_SRC_BURST}"' packets }' drop
+    nf_add_rule udp_new_limit meter udp_new_src_over_drop '{ ip saddr . udp dport timeout '"${NFT_UDP_NEW_METER_TIMEOUT}"' limit rate over '"${UDP_NEW_SRC_RATE}"'/second burst '"${UDP_NEW_SRC_BURST}"' packets }' drop
 
-    nf_add_rule udp_new_limit_global meter udp_new_global_under '{ udp dport limit rate '"${UDP_NEW_GLOBAL_RATE}"'/second burst '"${UDP_NEW_GLOBAL_BURST}"' packets }' accept
+    nf_add_rule udp_new_limit_global meter udp_new_global_under '{ udp dport timeout '"${NFT_UDP_NEW_METER_TIMEOUT}"' limit rate '"${UDP_NEW_GLOBAL_RATE}"'/second burst '"${UDP_NEW_GLOBAL_BURST}"' packets }' accept
     if [ "${ENABLE_UDP_BASELINE_LOGS}" = "true" ]; then
-        nf_add_rule udp_new_limit_global meter udp_new_global_over '{ udp dport limit rate over '"${UDP_NEW_GLOBAL_RATE}"'/second burst '"${UDP_NEW_GLOBAL_BURST}"' packets }' log prefix "\"$log_udp_new\""
+        nf_add_rule udp_new_limit_global meter udp_new_global_over '{ udp dport timeout '"${NFT_UDP_NEW_METER_TIMEOUT}"' limit rate over '"${UDP_NEW_GLOBAL_RATE}"'/second burst '"${UDP_NEW_GLOBAL_BURST}"' packets }' log prefix "\"$log_udp_new\""
     fi
-    nf_add_rule udp_new_limit_global meter udp_new_global_over_drop '{ udp dport limit rate over '"${UDP_NEW_GLOBAL_RATE}"'/second burst '"${UDP_NEW_GLOBAL_BURST}"' packets }' drop
+    nf_add_rule udp_new_limit_global meter udp_new_global_over_drop '{ udp dport timeout '"${NFT_UDP_NEW_METER_TIMEOUT}"' limit rate over '"${UDP_NEW_GLOBAL_RATE}"'/second burst '"${UDP_NEW_GLOBAL_BURST}"' packets }' drop
 
-    nf_add_rule udp_new_limit_sourcetv meter udp_new_sourcetv_src_under '{ ip saddr . udp dport limit rate '"${sourcetv_udp_new_src_rate}"'/second burst '"${sourcetv_udp_new_src_burst}"' packets }' jump udp_new_limit_sourcetv_global
+    nf_add_rule udp_new_limit_sourcetv meter udp_new_sourcetv_src_under '{ ip saddr . udp dport timeout '"${NFT_UDP_NEW_METER_TIMEOUT}"' limit rate '"${sourcetv_udp_new_src_rate}"'/second burst '"${sourcetv_udp_new_src_burst}"' packets }' jump udp_new_limit_sourcetv_global
     if [ "${ENABLE_UDP_BASELINE_LOGS}" = "true" ]; then
-        nf_add_rule udp_new_limit_sourcetv meter udp_new_sourcetv_src_over '{ ip saddr . udp dport limit rate over '"${sourcetv_udp_new_src_rate}"'/second burst '"${sourcetv_udp_new_src_burst}"' packets }' log prefix "\"$log_udp_new\""
+        nf_add_rule udp_new_limit_sourcetv meter udp_new_sourcetv_src_over '{ ip saddr . udp dport timeout '"${NFT_UDP_NEW_METER_TIMEOUT}"' limit rate over '"${sourcetv_udp_new_src_rate}"'/second burst '"${sourcetv_udp_new_src_burst}"' packets }' log prefix "\"$log_udp_new\""
     fi
-    nf_add_rule udp_new_limit_sourcetv meter udp_new_sourcetv_src_over_drop '{ ip saddr . udp dport limit rate over '"${sourcetv_udp_new_src_rate}"'/second burst '"${sourcetv_udp_new_src_burst}"' packets }' drop
+    nf_add_rule udp_new_limit_sourcetv meter udp_new_sourcetv_src_over_drop '{ ip saddr . udp dport timeout '"${NFT_UDP_NEW_METER_TIMEOUT}"' limit rate over '"${sourcetv_udp_new_src_rate}"'/second burst '"${sourcetv_udp_new_src_burst}"' packets }' drop
 
-    nf_add_rule udp_new_limit_sourcetv_global meter udp_new_sourcetv_global_under '{ udp dport limit rate '"${sourcetv_udp_new_global_rate}"'/second burst '"${sourcetv_udp_new_global_burst}"' packets }' accept
+    nf_add_rule udp_new_limit_sourcetv_global meter udp_new_sourcetv_global_under '{ udp dport timeout '"${NFT_UDP_NEW_METER_TIMEOUT}"' limit rate '"${sourcetv_udp_new_global_rate}"'/second burst '"${sourcetv_udp_new_global_burst}"' packets }' accept
     if [ "${ENABLE_UDP_BASELINE_LOGS}" = "true" ]; then
-        nf_add_rule udp_new_limit_sourcetv_global meter udp_new_sourcetv_global_over '{ udp dport limit rate over '"${sourcetv_udp_new_global_rate}"'/second burst '"${sourcetv_udp_new_global_burst}"' packets }' log prefix "\"$log_udp_new\""
+        nf_add_rule udp_new_limit_sourcetv_global meter udp_new_sourcetv_global_over '{ udp dport timeout '"${NFT_UDP_NEW_METER_TIMEOUT}"' limit rate over '"${sourcetv_udp_new_global_rate}"'/second burst '"${sourcetv_udp_new_global_burst}"' packets }' log prefix "\"$log_udp_new\""
     fi
-    nf_add_rule udp_new_limit_sourcetv_global meter udp_new_sourcetv_global_over_drop '{ udp dport limit rate over '"${sourcetv_udp_new_global_rate}"'/second burst '"${sourcetv_udp_new_global_burst}"' packets }' drop
+    nf_add_rule udp_new_limit_sourcetv_global meter udp_new_sourcetv_global_over_drop '{ udp dport timeout '"${NFT_UDP_NEW_METER_TIMEOUT}"' limit rate over '"${sourcetv_udp_new_global_rate}"'/second burst '"${sourcetv_udp_new_global_burst}"' packets }' drop
 
-    nf_add_rule udp_established_limit meter udp_est_under '{ ip saddr . udp sport . udp dport limit rate '"${cmd_limit_leeway}"'/second burst '"${cmd_limit_upper}"' packets }' accept
+    nf_add_rule udp_established_limit meter udp_est_under '{ ip saddr . udp sport . udp dport timeout '"${NFT_UDP_EST_METER_TIMEOUT}"' limit rate '"${cmd_limit_leeway}"'/second burst '"${cmd_limit_upper}"' packets }' accept
     if [ "${ENABLE_UDP_BASELINE_LOGS}" = "true" ]; then
-        nf_add_rule udp_established_limit meter udp_est_over '{ ip saddr . udp sport . udp dport limit rate over '"${cmd_limit_leeway}"'/second burst '"${cmd_limit_upper}"' packets }' log prefix "\"$log_udp_est\""
+        nf_add_rule udp_established_limit meter udp_est_over '{ ip saddr . udp sport . udp dport timeout '"${NFT_UDP_EST_METER_TIMEOUT}"' limit rate over '"${cmd_limit_leeway}"'/second burst '"${cmd_limit_upper}"' packets }' log prefix "\"$log_udp_est\""
     fi
-    nf_add_rule udp_established_limit meter udp_est_over_drop '{ ip saddr . udp sport . udp dport limit rate over '"${cmd_limit_leeway}"'/second burst '"${cmd_limit_upper}"' packets }' drop
+    nf_add_rule udp_established_limit meter udp_est_over_drop '{ ip saddr . udp sport . udp dport timeout '"${NFT_UDP_EST_METER_TIMEOUT}"' limit rate over '"${cmd_limit_leeway}"'/second burst '"${cmd_limit_upper}"' packets }' drop
 
     all_udp_ports_expr="{ $(nf_ports_normalize "$L4D2_GAMESERVER_UDP_PORTS"), $(nf_ports_normalize "$L4D2_SOURCETV_UDP_PORTS") }"
 

@@ -1,0 +1,13 @@
+[Unit]
+Description=Check Valpo2 public IPv4 every 10 minutes
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=10min
+AccuracySec=30s
+RandomizedDelaySec=30s
+Persistent=true
+Unit=l4d2-public-ip-watch.service
+
+[Install]
+WantedBy=timers.target

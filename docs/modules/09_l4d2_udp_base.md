@@ -15,6 +15,8 @@ Aplicar base de control UDP para tráfico de juego (NEW/ESTABLISHED) e ICMP.
 - `ENABLE_UDP_NEW_FFFFFFFF_BYPASS`
 - `ENABLE_UDP_NEW_LARGE_FILTER`, `UDP_NEW_LARGE_DROP_MIN_LEN`
 - `ENABLE_UDP_BASELINE_LOGS` (`false` recomendado en producción)
+- nftables: `NFT_UDP_NEW_METER_TIMEOUT`, `NFT_UDP_EST_METER_TIMEOUT`
+  (default `5s`, formato positivo `Ns|Nm|Nh|Nd|Nw`)
 - nftables: `STEAM_GROUP_SIGNATURES` para bypass temprano de firmas `0xFFFFFFFFxx` observadas o documentadas
 
 ## Bypass de firmas Source
@@ -29,6 +31,17 @@ El módulo deja pasar antes del limitador base solo las firmas que realmente tie
 Esto evita que el módulo base bloquee tráfico que luego será clasificado por `l4d2_a2s_filters`. Si una firma no tiene clasificador posterior activo, se mantiene bajo el limitador genérico en vez de caer a `DROP` por el policy final.
 
 SourceTV también puede emitir handshakes cortos `0xFFFFFFFF71 connect...` en `L4D2_SOURCETV_UDP_PORTS`; esos paquetes no pasan por el subfiltro `connect/reserve` de GameServer y por eso se mantienen bajo el limitador `NEW` genérico para evitar falsos positivos.
+
+## Expiración de medidores nftables
+Los medidores dinámicos por origen y puerto deben tener timeout. Sin expiración,
+cada tupla vista permanece en el set hasta recrear la tabla; un flujo de IP de
+origen aleatorias puede agotar su `size 65535` aunque la tasa instantánea no sea
+alta. `NFT_UDP_NEW_METER_TIMEOUT` y `NFT_UDP_EST_METER_TIMEOUT` liberan las
+entradas inactivas y renuevan el timeout cuando vuelve a haber tráfico.
+
+El default de `5s` mantiene memoria suficiente para el rate-limit configurado y
+evita acumular estado obsoleto durante horas. No se recomienda desactivar esta
+expiración.
 
 ## Nota operativa importante
 Si `serverbrowser` o `steamgroup` dejan de mostrar servidores, revisar primero que el backend activo realmente esté leyendo:

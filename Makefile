@@ -23,6 +23,9 @@ help:
 	@printf "  %-22s %s\n" "firewall-nft" "Apply nftables backend"
 	@printf "  %-22s %s\n" "firewall-ip" "Apply iptables backend"
 	@printf "  %-22s %s\n" "firewall-validate" "Validate main shell scripts with bash -n"
+	@printf "  %-22s %s\n" "public-ip-watch-test" "Run isolated public-IP watcher tests"
+	@printf "  %-22s %s\n" "public-ip-watch-install" "Install and enable the 10-minute systemd watcher"
+	@printf "  %-22s %s\n" "public-ip-watch-status" "Show timer, service, state, and current WAN/DDNS"
 	@printf "  %-22s %s\n" "log-summary-up" "Build and start the log-summary stack"
 	@printf "  %-22s %s\n" "log-summary-down" "Stop the log-summary stack"
 	@printf "  %-22s %s\n" "logs-clear" "Truncate the firewall log file with sudo"
@@ -88,6 +91,30 @@ firewall-ip:
 firewall-validate:
 	cd $(ROOT_DIR) && bash -n nftables.rules.sh
 	cd $(ROOT_DIR) && bash -n iptables.rules.sh
+	cd $(ROOT_DIR) && bash -n scripts/network/public-ip-watch.sh
+
+.PHONY: public-ip-watch-test
+public-ip-watch-test:
+	cd $(ROOT_DIR) && ./tests/public-ip-watch.sh
+
+.PHONY: public-ip-watch-install
+public-ip-watch-install:
+	$(SUDO) install -o root -g root -m 0755 $(ROOT_DIR)scripts/network/public-ip-watch.sh /usr/local/sbin/l4d2-public-ip-watch
+	$(SUDO) install -o root -g root -m 0644 $(ROOT_DIR)systemd/l4d2-public-ip-watch.service /etc/systemd/system/l4d2-public-ip-watch.service
+	$(SUDO) install -o root -g root -m 0644 $(ROOT_DIR)systemd/l4d2-public-ip-watch.timer /etc/systemd/system/l4d2-public-ip-watch.timer
+	@if $(SUDO) test -e /etc/default/l4d2-public-ip-watch; then \
+		printf "Keeping existing /etc/default/l4d2-public-ip-watch\n"; \
+	else \
+		$(SUDO) install -o root -g root -m 0600 $(ROOT_DIR)config/l4d2-public-ip-watch.env.example /etc/default/l4d2-public-ip-watch; \
+	fi
+	$(SUDO) systemctl daemon-reload
+	$(SUDO) systemctl enable --now l4d2-public-ip-watch.timer
+
+.PHONY: public-ip-watch-status
+public-ip-watch-status:
+	$(SUDO) /usr/local/sbin/l4d2-public-ip-watch --check
+	$(SUDO) systemctl --no-pager status l4d2-public-ip-watch.timer
+	@$(SUDO) sh -c 'printf "Saved IP: "; cat /var/lib/l4d2-public-ip-watch/current-ip 2>/dev/null || printf "unset\n"'
 
 .PHONY: log-summary-up
 log-summary-up:

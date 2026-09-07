@@ -9,8 +9,8 @@ ID=nf_l4d2_a2s_filters
 ALIASES=l4d2_a2s_filters
 DESCRIPTION=Applies A2S/Steam Group filters and short-flood controls in the nftables backend
 REQUIRED_VARS=TYPECHAIN L4D2_GAMESERVER_UDP_PORTS L4D2_SOURCETV_UDP_PORTS LOG_PREFIX_A2S_INFO LOG_PREFIX_A2S_PLAYERS LOG_PREFIX_A2S_RULES LOG_PREFIX_STEAM_GROUP LOG_PREFIX_L4D2_CONNECT LOG_PREFIX_L4D2_RESERVE
-OPTIONAL_VARS=A2S_INFO_RATE A2S_INFO_BURST A2S_PLAYERS_RATE A2S_PLAYERS_BURST A2S_RULES_RATE A2S_RULES_BURST STEAM_GROUP_RATE STEAM_GROUP_BURST L4D2_LOGIN_RATE L4D2_LOGIN_BURST ENABLE_STEAM_GROUP_FILTER STEAM_GROUP_SIGNATURES FIREWALL_LOG_HOST_ALIAS
-DEFAULTS=TYPECHAIN=0 L4D2_GAMESERVER_UDP_PORTS=27015 L4D2_SOURCETV_UDP_PORTS=27020 A2S_INFO_RATE=16 A2S_INFO_BURST=80 A2S_PLAYERS_RATE=12 A2S_PLAYERS_BURST=60 A2S_RULES_RATE=8 A2S_RULES_BURST=40 STEAM_GROUP_RATE=6 STEAM_GROUP_BURST=30 L4D2_LOGIN_RATE=4 L4D2_LOGIN_BURST=16 ENABLE_STEAM_GROUP_FILTER=true STEAM_GROUP_SIGNATURES=69 LOG_PREFIX_A2S_INFO=A2S_INFO_FLOOD: LOG_PREFIX_A2S_PLAYERS=A2S_PLAYERS_FLOOD: LOG_PREFIX_A2S_RULES=A2S_RULES_FLOOD: LOG_PREFIX_STEAM_GROUP=STEAM_GROUP_FLOOD: LOG_PREFIX_L4D2_CONNECT=L4D2_CONNECT_FLOOD: LOG_PREFIX_L4D2_RESERVE=L4D2_RESERVE_FLOOD: FIREWALL_LOG_HOST_ALIAS=
+OPTIONAL_VARS=A2S_INFO_RATE A2S_INFO_BURST A2S_PLAYERS_RATE A2S_PLAYERS_BURST A2S_RULES_RATE A2S_RULES_BURST STEAM_GROUP_RATE STEAM_GROUP_BURST L4D2_LOGIN_RATE L4D2_LOGIN_BURST ENABLE_STEAM_GROUP_FILTER STEAM_GROUP_SIGNATURES FIREWALL_LOG_HOST_ALIAS NFT_A2S_METER_TIMEOUT NFT_LOGIN_METER_TIMEOUT
+DEFAULTS=TYPECHAIN=0 L4D2_GAMESERVER_UDP_PORTS=27015 L4D2_SOURCETV_UDP_PORTS=27020 A2S_INFO_RATE=16 A2S_INFO_BURST=80 A2S_PLAYERS_RATE=12 A2S_PLAYERS_BURST=60 A2S_RULES_RATE=8 A2S_RULES_BURST=40 STEAM_GROUP_RATE=6 STEAM_GROUP_BURST=30 L4D2_LOGIN_RATE=4 L4D2_LOGIN_BURST=16 ENABLE_STEAM_GROUP_FILTER=true STEAM_GROUP_SIGNATURES=69 LOG_PREFIX_A2S_INFO=A2S_INFO_FLOOD: LOG_PREFIX_A2S_PLAYERS=A2S_PLAYERS_FLOOD: LOG_PREFIX_A2S_RULES=A2S_RULES_FLOOD: LOG_PREFIX_STEAM_GROUP=STEAM_GROUP_FLOOD: LOG_PREFIX_L4D2_CONNECT=L4D2_CONNECT_FLOOD: LOG_PREFIX_L4D2_RESERVE=L4D2_RESERVE_FLOOD: FIREWALL_LOG_HOST_ALIAS= NFT_A2S_METER_TIMEOUT=5s NFT_LOGIN_METER_TIMEOUT=1s
 EOF
 }
 
@@ -25,6 +25,16 @@ nf_70_l4d2_a2s_filters_validate_non_negative_int() {
 
     if [ "$value" -lt 0 ]; then
         echo "ERROR: nf_l4d2_a2s_filters: $key must be >= 0"
+        return 2
+    fi
+}
+
+nf_70_l4d2_a2s_filters_validate_timeout() {
+    local key="$1"
+    local value="$2"
+
+    if ! [[ "$value" =~ ^[1-9][0-9]*(s|m|h|d|w)$ ]]; then
+        echo "ERROR: nf_l4d2_a2s_filters: $key must be a positive nftables duration (example: 5s or 1m)"
         return 2
     fi
 }
@@ -48,9 +58,9 @@ nf_70_l4d2_a2s_filters_add_limiter() {
         return 0
     fi
 
-    nf_add_rule "$chain" meter "${meter_base}_under" "{ ip saddr . udp dport limit rate ${rate}/second burst ${burst} packets }" accept
-    nf_add_rule "$chain" meter "${meter_base}_over" "{ ip saddr . udp dport limit rate over ${rate}/second burst ${burst} packets }" log prefix "\"$log_prefix\""
-    nf_add_rule "$chain" meter "${meter_base}_over_drop" "{ ip saddr . udp dport limit rate over ${rate}/second burst ${burst} packets }" drop
+    nf_add_rule "$chain" meter "${meter_base}_under" "{ ip saddr . udp dport timeout ${NFT_A2S_METER_TIMEOUT} limit rate ${rate}/second burst ${burst} packets }" accept
+    nf_add_rule "$chain" meter "${meter_base}_over" "{ ip saddr . udp dport timeout ${NFT_A2S_METER_TIMEOUT} limit rate over ${rate}/second burst ${burst} packets }" log prefix "\"$log_prefix\""
+    nf_add_rule "$chain" meter "${meter_base}_over_drop" "{ ip saddr . udp dport timeout ${NFT_A2S_METER_TIMEOUT} limit rate over ${rate}/second burst ${burst} packets }" drop
 }
 
 nf_70_l4d2_a2s_filters_add_login_limiter() {
@@ -65,9 +75,9 @@ nf_70_l4d2_a2s_filters_add_login_limiter() {
         return 0
     fi
 
-    nf_add_rule "$chain" meter "${meter_base}_under" "{ ip saddr . ip daddr . udp dport limit rate ${rate}/second burst ${burst} packets }" accept
-    nf_add_rule "$chain" meter "${meter_base}_over" "{ ip saddr . ip daddr . udp dport limit rate over ${rate}/second burst ${burst} packets }" log prefix "\"$log_prefix\""
-    nf_add_rule "$chain" meter "${meter_base}_over_drop" "{ ip saddr . ip daddr . udp dport limit rate over ${rate}/second burst ${burst} packets }" drop
+    nf_add_rule "$chain" meter "${meter_base}_under" "{ ip saddr . ip daddr . udp dport timeout ${NFT_LOGIN_METER_TIMEOUT} limit rate ${rate}/second burst ${burst} packets }" accept
+    nf_add_rule "$chain" meter "${meter_base}_over" "{ ip saddr . ip daddr . udp dport timeout ${NFT_LOGIN_METER_TIMEOUT} limit rate over ${rate}/second burst ${burst} packets }" log prefix "\"$log_prefix\""
+    nf_add_rule "$chain" meter "${meter_base}_over_drop" "{ ip saddr . ip daddr . udp dport timeout ${NFT_LOGIN_METER_TIMEOUT} limit rate over ${rate}/second burst ${burst} packets }" drop
 }
 
 nf_70_l4d2_a2s_filters_validate() {
@@ -90,6 +100,10 @@ nf_70_l4d2_a2s_filters_validate() {
         STEAM_GROUP_RATE STEAM_GROUP_BURST \
         L4D2_LOGIN_RATE L4D2_LOGIN_BURST; do
         nf_70_l4d2_a2s_filters_validate_non_negative_int "$key" "${!key:-}" || return $?
+    done
+
+    for key in NFT_A2S_METER_TIMEOUT NFT_LOGIN_METER_TIMEOUT; do
+        nf_70_l4d2_a2s_filters_validate_timeout "$key" "${!key:-}" || return $?
     done
 
     case "${ENABLE_STEAM_GROUP_FILTER:-}" in

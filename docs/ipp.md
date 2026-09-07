@@ -733,7 +733,7 @@ sudo ./ipp.sh  # Guardar reglas
 ## Enlaces Relacionados
 
 - [README Principal](../README.md)
-- [Documentación iptables.rules.sh](../../docs/iptables.rules.md)
+- [Documentación iptables.rules.sh](iptables.rules.md)
 - [Documentación iptable.loggin.py](../log-summary/docs/iptable.loggin.md)
 - [Archivo de Configuración example.env](../example.env)
 

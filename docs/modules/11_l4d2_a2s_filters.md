@@ -26,6 +26,8 @@ Mitigar flood de consultas A2S/Steam Group y patrones de login (`connect/reserve
 - `STEAM_GROUP_BURST` (default `30`)
 - `L4D2_LOGIN_RATE` (default `4`)
 - `L4D2_LOGIN_BURST` (default `16`)
+- nftables: `NFT_A2S_METER_TIMEOUT` (default `5s`)
+- nftables: `NFT_LOGIN_METER_TIMEOUT` (default `1s`)
 - `ENABLE_STEAM_GROUP_FILTER` (`true|false`, default `true`)
 - `STEAM_GROUP_SIGNATURES` (default `"69"`, formato `hex,hex`, por ejemplo `"69,00"`)
 
@@ -91,6 +93,8 @@ Antes de aplicar reglas, el módulo valida:
 - Ambos aplican mitigaciones A2S/Steam y patrones de login equivalentes por área.
 - `iptables` usa `-m string --hex-string '|FFFFFFFF..|'` con rate-limit por `srcip,dstport`, alineado con el backend `nftables`.
 - `nftables` usa payload match (`@th,64,40 0xFFFFFFFF..`) con meter/rate.
+- Los meters nftables expiran entradas inactivas; los timeouts evitan que
+  fuentes UDP aleatorias consuman permanentemente la capacidad del set.
 
 ## Qué mejorar con esta información
 - Mantener el bypass temprano del módulo base sólo para firmas documentadas por Valve y para firmas empíricas controladas por `STEAM_GROUP_SIGNATURES`.

@@ -203,6 +203,24 @@ Ideal para entornos modernos que ya operan con reglas `nft` y desean mantener pa
 
 ---
 
+### 1c. `l4d2-public-ip-watch` - Recuperación ante IP dinámica
+
+Watcher `systemd` para hosts detrás de una conexión residencial con IP pública
+dinámica. Consulta la IPv4 WAN, espera confirmación de los nameservers
+autoritativos de No-IP y reaplica nftables solamente cuando detecta un cambio
+confirmado. Incluye validación previa, estado persistente y un hook opcional
+para solicitar un heartbeat a los gameservers sin reiniciarlos.
+
+**📖 [Instalación y operación](docs/public-ip-watch.md)**
+
+```bash
+make public-ip-watch-test
+sudo make public-ip-watch-install
+make public-ip-watch-status
+```
+
+---
+
 ### 2. `ipp.sh` - Gestor de Persistencia
 
 Herramienta interactiva con menú para gestionar reglas guardadas y persistencia operativa de ambos backends. En `iptables` maneja `iptables-persistent`; en `nftables` trabaja con `nftables.service` y `/etc/nftables.conf`.
@@ -419,6 +437,7 @@ sudo logrotate -f /etc/logrotate.d/l4d2-iptables
 
 - **[📖 iptables.rules.sh](docs/iptables.rules.md)** - Documentación técnica del motor de protección
 - **[📖 nftables.rules.sh](docs/modular-loader-architecture.md)** - Arquitectura y operación del backend moderno
+- **[📡 Public IP watcher](docs/public-ip-watch.md)** - Detección de cambios WAN, confirmación No-IP y recarga segura
 - **[📖 Arquitectura Modular](docs/modular-loader-architecture.md)** - Contrato de módulos, paridad y validación
 - **[🧭 Auditoría Operativa](docs/operational-audit.md)** - Hallazgos prácticos, falsos positivos y checklist de diagnóstico
 - **[📖 ipp.sh](docs/ipp.md)** - Guía del gestor de persistencia

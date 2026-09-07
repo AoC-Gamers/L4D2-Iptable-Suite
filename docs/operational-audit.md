@@ -23,6 +23,59 @@ Resultado esperado:
 
 ## Hallazgos corregidos
 
+### Meters nftables sin expiracion
+
+Sintoma:
+
+- Los servidores L4D2 dejan de aparecer en la lista de servidores del grupo
+  Steam, pero siguen aceptando conexion directa por DNS.
+- Reiniciar una instancia publica solamente esa instancia.
+- Reaplicar `nftables.rules.sh` recupera simultaneamente la visibilidad de las
+  instancias sin reiniciarlas.
+
+Causa encontrada:
+
+- Los meters dinamicos de `nf_l4d2_udp_base` y
+  `nf_l4d2_a2s_filters` no tenian timeout.
+- Cada tupla de origen y puerto quedaba almacenada hasta recrear la tabla.
+- En Valpo2, `udp_new_src_under` llego a 18.818 elementos y seguia creciendo
+  con trafico UDP de origenes aleatorios hacia una capacidad de 65.535.
+- La recarga vaciaba los sets y ocultaba temporalmente el problema.
+
+Estado actual:
+
+- Los meters UDP nuevo/establecido y A2S usan timeout de `5s`.
+- Los meters de login usan timeout de `1s`.
+- Las variables `NFT_*_METER_TIMEOUT` validan duraciones positivas.
+- `/etc/nftables.conf` y las reglas activas deben mostrar
+  `flags timeout,dynamic` y elementos con `expires`.
+
+Comprobacion util:
+
+```bash
+sudo nft list table inet firewall_main
+```
+
+La cantidad de elementos puede fluctuar con el trafico, pero no debe crecer de
+forma monotona durante horas.
+
+### Cambio de IP publica en Valpo2
+
+Valpo2 esta detras de un router Movistar que actualiza
+`valparaiso.dns.aoc-gamers.com` en No-IP. Los nombres finales de Cloudflare son
+CNAME DNS-only hacia ese registro.
+
+Se instalo `l4d2-public-ip-watch.timer` para:
+
+1. detectar la IPv4 WAN cada diez minutos;
+2. confirmarla contra los cuatro nameservers autoritativos de No-IP;
+3. validar y reaplicar nftables solamente ante un cambio confirmado;
+4. conservar el estado anterior si falla la validacion o la recarga.
+
+El watcher es una medida de recuperacion, no sustituye al cliente DDNS del
+router. Consulta [la guia completa](public-ip-watch.md) para instalacion,
+estado, logs y seguimiento del heartbeat Steam.
+
 ### Codigo legacy retirado
 
 Se retiro el modulo `ip_l4d2_source_dispatch` (`l4d2_source_dispatch` / `l4d2_query_dispatch`) y su documento asociado.
@@ -189,4 +242,17 @@ sudo nft list chain inet firewall_main udp_new_limit
 
 ```bash
 sudo ./nftables.rules.sh
+```
+
+7. Si el problema es visibilidad en Steam Group pero la conexion directa
+   funciona, comparar WAN, No-IP y estado local:
+
+```bash
+sudo /usr/local/sbin/l4d2-public-ip-watch --check
+```
+
+8. Confirmar que los meters nftables tienen expiracion:
+
+```bash
+sudo nft list table inet firewall_main | grep -E 'flags|expires'
 ```

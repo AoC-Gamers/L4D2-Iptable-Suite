@@ -53,6 +53,10 @@ BYPASS_SOURCE_DOMAINS=""
 GEO_POLICY_MODE=off
 ENABLE_MALFORMED_FILTER=false
 ENABLE_PACKET_NORMALIZATION_LOGS=false
+NFT_UDP_NEW_METER_TIMEOUT=5s
+NFT_UDP_EST_METER_TIMEOUT=5s
+NFT_A2S_METER_TIMEOUT=5s
+NFT_LOGIN_METER_TIMEOUT=1s
 ```
 
 ### `TYPECHAIN`
@@ -279,7 +283,40 @@ Usa esto solo como diagnóstico temporal. No lo dejes desactivado en producción
 
 ---
 
-## 10. Protección TCP L4D2 no abre puertos
+## 10. Estado dinámico de nftables
+
+Los rate limits nftables por IP y puerto usan meters dinámicos. Todos deben
+tener expiración; sin ella, el tráfico UDP desde orígenes aleatorios puede
+consumir gradualmente las 65.535 entradas del set.
+
+Comprobación rápida:
+
+```bash
+sudo nft list table inet firewall_main | grep -E 'set udp_|set a2s_|set steam_|set login_|flags|expires'
+```
+
+Resultado esperado:
+
+- Los sets dinámicos contienen el flag `timeout`.
+- Los elementos activos muestran `expires`.
+- La cantidad de entradas fluctúa y baja cuando cesa el tráfico; no crece de
+  manera monótona durante horas.
+
+Las variables recomendadas son:
+
+```bash
+NFT_UDP_NEW_METER_TIMEOUT=5s
+NFT_UDP_EST_METER_TIMEOUT=5s
+NFT_A2S_METER_TIMEOUT=5s
+NFT_LOGIN_METER_TIMEOUT=1s
+```
+
+Si las reglas activas no tienen timeout, actualiza la configuración y reaplica
+el backend. No uses la recarga periódica como sustituto de la expiración.
+
+---
+
+## 11. Protección TCP L4D2 no abre puertos
 
 Esta variable:
 
@@ -305,7 +342,39 @@ SSH_DOCKER="2222"
 
 ---
 
-## 11. Checklist ante problema de conectividad
+## 12. IP dinámica y publicación Steam
+
+En Valpo2 el router actualiza `valparaiso.dns.aoc-gamers.com` en No-IP y los
+registros finales de Cloudflare son CNAME DNS-only. El watcher local comprueba
+WAN y No-IP cada diez minutos, y reaplica nftables cuando confirma un cambio.
+
+Instalación y estado:
+
+```bash
+make public-ip-watch-test
+sudo make public-ip-watch-install
+make public-ip-watch-status
+```
+
+Logs:
+
+```bash
+journalctl -u l4d2-public-ip-watch.service -f
+```
+
+Si un servidor acepta conexión directa pero no aparece en Steam Group:
+
+1. Ejecuta `l4d2-public-ip-watch --check` para comparar WAN, No-IP y estado.
+2. Confirma que los meters activos tengan timeout.
+3. Captura tráfico del puerto UDP del juego.
+4. Si la red funciona, investiga el registro/heartbeat del master server.
+
+Consulta [Vigilancia de IP pública para Valpo2](public-ip-watch.md) para el
+flujo completo y la integración opcional mediante `POST_CHANGE_HOOK`.
+
+---
+
+## 13. Checklist ante problema de conectividad
 
 Ejecuta en este orden:
 
@@ -333,14 +402,18 @@ sudo nft list ruleset
 sudo ./iptables.rules.sh
 # o
 sudo ./nftables.rules.sh
+
+# 8. En Valpo2, comparar WAN, No-IP y estado guardado
+sudo /usr/local/sbin/l4d2-public-ip-watch --check
 ```
 
 ---
 
-## 11. Checklist antes de mergear cambios al firewall
+## 14. Checklist antes de mergear cambios al firewall
 
 ```bash
 make firewall-validate
+make public-ip-watch-test
 make geoip-check
 ./tests/smoke-modules.sh
 python3 -m py_compile \
@@ -354,19 +427,23 @@ find . -path './.git' -prune -o -type f -name '*.sh' -print0 | xargs -0 -n1 bash
 Resultado esperado:
 
 - Validación bash sin errores.
+- Pruebas del watcher sin recargas reales ni cambios fuera del entorno simulado.
 - Smoke test sin fallos de contrato modular.
 - Python compila sin errores.
 - GeoIP valida updater, módulo y checker.
 
 ---
 
-## 12. Resumen operativo corto
+## 15. Resumen operativo corto
 
 - Docker productivo: prioriza `iptables` + `DOCKER-USER`, salvo evidencia clara para `nftables`.
 - `nftables`: nunca debe hacer `flush ruleset` global.
 - SourceTV y GameServer deben ir separados.
 - GeoIP puede bloquear sin aparecer en `FW_EVT`.
 - Los logs no representan todo el tráfico.
+- Los meters nftables deben incluir timeout; una recarga no sustituye la
+  expiración del estado dinámico.
+- En Valpo2, el watcher confirma WAN y No-IP antes de reaplicar nftables.
 - `ENABLE_MALFORMED_FILTER=false` por defecto.
 - `L4D2_GAMESERVER_TCP_PORTS` protege TCP, no abre puertos.
 - Siempre usa `--dry-run` y smoke tests antes de aplicar en producción.
