@@ -51,7 +51,8 @@ nf_45_http_https_protect_validate() {
 }
 
 nf_45_http_https_protect_apply() {
-    local chain ports_expr normalized_rate log_http_abuse meter_prefix
+    local chain ports_expr normalized_rate log_http_abuse meter_prefix meter_key
+    local -a port_match
 
     ports_expr="$(nf_ports_set_expr "$HTTP_HTTPS_PORTS")"
     normalized_rate="$(nf_45_http_https_protect_normalize_rate "$HTTP_HTTPS_RATE")"
@@ -59,14 +60,25 @@ nf_45_http_https_protect_apply() {
 
     for chain in $(nf_get_target_chains_for_domain web); do
         meter_prefix="http_https_${chain}"
-        nf_add_rule "$chain" tcp dport "$ports_expr" ct state new \
+        if [ "$chain" = "forward_web" ]; then
+            # Docker DNAT has already replaced the public destination port when
+            # the forward hook runs (for example, 443 -> 8443 for Traefik).
+            # Match and meter the original public port kept by conntrack.
+            port_match=(ct original proto-dst "$ports_expr")
+            meter_key="ip saddr . ct original proto-dst"
+        else
+            port_match=(tcp dport "$ports_expr")
+            meter_key="ip saddr . tcp dport"
+        fi
+
+        nf_add_rule "$chain" "${port_match[@]}" ct state new \
             meter "${meter_prefix}_under" \
-            "{ ip saddr . tcp dport limit rate ${normalized_rate} burst ${HTTP_HTTPS_BURST} packets }" \
+            "{ ${meter_key} limit rate ${normalized_rate} burst ${HTTP_HTTPS_BURST} packets }" \
             accept
-        nf_add_rule "$chain" tcp dport "$ports_expr" ct state new \
+        nf_add_rule "$chain" "${port_match[@]}" ct state new \
             meter "${meter_prefix}_over_log" \
-            "{ ip saddr . tcp dport limit rate over 30/minute burst 10 packets }" \
+            "{ ${meter_key} limit rate over 30/minute burst 10 packets }" \
             log prefix "\"$log_http_abuse\""
-        nf_add_rule "$chain" tcp dport "$ports_expr" ct state new drop
+        nf_add_rule "$chain" "${port_match[@]}" ct state new drop
     done
 }

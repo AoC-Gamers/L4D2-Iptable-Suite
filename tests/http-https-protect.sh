@@ -47,13 +47,13 @@ assert_rule \
     'input_web tcp dport { 80,443 } ct state new drop' \
     "${captured_rules[2]}"
 assert_rule \
-    'forward_web tcp dport { 80,443 } ct state new meter http_https_forward_web_under { ip saddr . tcp dport limit rate 240/minute burst 480 packets } accept' \
+    'forward_web ct original proto-dst { 80,443 } ct state new meter http_https_forward_web_under { ip saddr . ct original proto-dst limit rate 240/minute burst 480 packets } accept' \
     "${captured_rules[3]}"
 assert_rule \
-    'forward_web tcp dport { 80,443 } ct state new meter http_https_forward_web_over_log { ip saddr . tcp dport limit rate over 30/minute burst 10 packets } log prefix "HTTP_HTTPS_ABUSE: "' \
+    'forward_web ct original proto-dst { 80,443 } ct state new meter http_https_forward_web_over_log { ip saddr . ct original proto-dst limit rate over 30/minute burst 10 packets } log prefix "HTTP_HTTPS_ABUSE: "' \
     "${captured_rules[4]}"
 assert_rule \
-    'forward_web tcp dport { 80,443 } ct state new drop' \
+    'forward_web ct original proto-dst { 80,443 } ct state new drop' \
     "${captured_rules[5]}"
 
 for rule in "${captured_rules[@]}"; do
@@ -62,5 +62,10 @@ for rule in "${captured_rules[@]}"; do
         exit 1
     fi
 done
+
+if [[ "${captured_rules[3]}" == 'forward_web tcp dport '* ]]; then
+    printf 'ERROR: forwarded traffic must match the pre-DNAT destination port\n' >&2
+    exit 1
+fi
 
 printf 'OK: HTTP/HTTPS limits are scoped by source IP and destination port\n'

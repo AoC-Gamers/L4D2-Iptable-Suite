@@ -23,3 +23,8 @@ tráfico entre clientes independientes.
   `ip saddr . tcp dport`; no debe reemplazarse por un `limit` global, porque el
   tráfico agregado de Internet podría agotar el presupuesto y bloquear clientes
   legítimos.
+- En la cadena nftables `forward_web`, el selector y el meter usan
+  `ct original proto-dst`. El hook forward se ejecuta después de DNAT y el puerto
+  efectivo puede haber cambiado (por ejemplo, `443` público a `8443` en el
+  contenedor); filtrar allí por `tcp dport` dejaría fuera los puertos públicos
+  declarados en `HTTP_HTTPS_PORTS`.
