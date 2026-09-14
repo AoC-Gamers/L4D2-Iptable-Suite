@@ -97,7 +97,7 @@ firewall-validate:
 
 .PHONY: http-https-test
 http-https-test:
-	cd $(ROOT_DIR) && ./tests/http-https-protect.sh
+	cd $(ROOT_DIR) && bash ./tests/http-https-protect.sh
 
 .PHONY: public-ip-watch-test
 public-ip-watch-test:
