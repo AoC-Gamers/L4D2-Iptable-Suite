@@ -9,8 +9,8 @@ ID=nf_http_https_protect
 ALIASES=http_https_protect
 DESCRIPTION=Applies basic anti-abuse controls for HTTP/HTTPS ports
 REQUIRED_VARS=TYPECHAIN HTTP_HTTPS_PORTS HTTP_HTTPS_RATE HTTP_HTTPS_BURST LOG_PREFIX_HTTP_HTTPS_ABUSE
-OPTIONAL_VARS=
-DEFAULTS=TYPECHAIN=0 HTTP_HTTPS_PORTS=80,443 HTTP_HTTPS_RATE=180/minute HTTP_HTTPS_BURST=360 LOG_PREFIX_HTTP_HTTPS_ABUSE=HTTP_HTTPS_ABUSE:
+OPTIONAL_VARS=NFT_HTTP_HTTPS_METER_TIMEOUT
+DEFAULTS=TYPECHAIN=0 HTTP_HTTPS_PORTS=80,443 HTTP_HTTPS_RATE=180/minute HTTP_HTTPS_BURST=360 LOG_PREFIX_HTTP_HTTPS_ABUSE=HTTP_HTTPS_ABUSE: NFT_HTTP_HTTPS_METER_TIMEOUT=5m
 EOF
 }
 
@@ -48,6 +48,11 @@ nf_45_http_https_protect_validate() {
         echo "ERROR: nf_http_https_protect: HTTP_HTTPS_BURST must be numeric"
         return 2
     fi
+
+    if ! [[ "${NFT_HTTP_HTTPS_METER_TIMEOUT:-}" =~ ^[1-9][0-9]*(s|m|h|d|w)$ ]]; then
+        echo "ERROR: nf_http_https_protect: NFT_HTTP_HTTPS_METER_TIMEOUT must be a positive nftables duration (example: 5m)"
+        return 2
+    fi
 }
 
 nf_45_http_https_protect_apply() {
@@ -73,11 +78,11 @@ nf_45_http_https_protect_apply() {
 
         nf_add_rule "$chain" "${port_match[@]}" ct state new \
             meter "${meter_prefix}_under" \
-            "{ ${meter_key} limit rate ${normalized_rate} burst ${HTTP_HTTPS_BURST} packets }" \
+            "{ ${meter_key} timeout ${NFT_HTTP_HTTPS_METER_TIMEOUT} limit rate ${normalized_rate} burst ${HTTP_HTTPS_BURST} packets }" \
             accept
         nf_add_rule "$chain" "${port_match[@]}" ct state new \
             meter "${meter_prefix}_over_log" \
-            "{ ${meter_key} limit rate over 30/minute burst 10 packets }" \
+            "{ ${meter_key} timeout ${NFT_HTTP_HTTPS_METER_TIMEOUT} limit rate over 30/minute burst 10 packets }" \
             log prefix "\"$log_http_abuse\""
         nf_add_rule "$chain" "${port_match[@]}" ct state new drop
     done

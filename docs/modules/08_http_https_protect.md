@@ -11,6 +11,7 @@ tráfico entre clientes independientes.
 ## Variables
 - `HTTP_HTTPS_PORTS`
 - `HTTP_HTTPS_RATE`, `HTTP_HTTPS_BURST`
+- `NFT_HTTP_HTTPS_METER_TIMEOUT` (sólo nftables; por defecto `5m`)
 - `LOG_PREFIX_HTTP_HTTPS_ABUSE`
 
 ## Nota operativa
@@ -23,6 +24,9 @@ tráfico entre clientes independientes.
   `ip saddr . tcp dport`; no debe reemplazarse por un `limit` global, porque el
   tráfico agregado de Internet podría agotar el presupuesto y bloquear clientes
   legítimos.
+- Las entradas dinámicas de esos meters expiran tras
+  `NFT_HTTP_HTTPS_METER_TIMEOUT` de inactividad. El valor es configurable en
+  `.env` y evita que IP de escaneos antiguos ocupen el conjunto indefinidamente.
 - En la cadena nftables `forward_web`, el selector y el meter usan
   `ct original proto-dst`. El hook forward se ejecuta después de DNAT y el puerto
   efectivo puede haber cambiado (por ejemplo, `443` público a `8443` en el
