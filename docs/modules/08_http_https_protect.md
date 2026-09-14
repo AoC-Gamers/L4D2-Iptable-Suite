@@ -1,7 +1,8 @@
 # Módulo unificado — http_https_protect (ip/nf)
 
 ## Objetivo
-Limitar abuso de conexiones nuevas HTTP/HTTPS.
+Limitar abuso de conexiones nuevas HTTP/HTTPS sin compartir el presupuesto de
+tráfico entre clientes independientes.
 
 ## Backends
 - iptables: `modules/ip/ip_45_http_https_protect.sh` (`ID=ip_http_https_protect`)
@@ -17,3 +18,8 @@ Limitar abuso de conexiones nuevas HTTP/HTTPS.
 
 ## Diferencias por backend
 - `nf` normaliza `sec/min` a formato nativo (`second/minute`) cuando corresponde.
+- Ambos backends aplican `HTTP_HTTPS_RATE` y `HTTP_HTTPS_BURST` por IP de origen
+  y puerto de destino. En nftables esto se implementa con meters sobre
+  `ip saddr . tcp dport`; no debe reemplazarse por un `limit` global, porque el
+  tráfico agregado de Internet podría agotar el presupuesto y bloquear clientes
+  legítimos.

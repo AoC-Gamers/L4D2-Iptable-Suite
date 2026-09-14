@@ -37,6 +37,9 @@ fi
 
 echo "OK: module contract signatures look good"
 
+echo "INFO: validating HTTP/HTTPS limiter scope"
+./tests/http-https-protect.sh
+
 if [ "$(id -u)" -eq 0 ]; then
     echo "INFO: running backend dry-runs as root"
 

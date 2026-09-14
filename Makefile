@@ -23,6 +23,7 @@ help:
 	@printf "  %-22s %s\n" "firewall-nft" "Apply nftables backend"
 	@printf "  %-22s %s\n" "firewall-ip" "Apply iptables backend"
 	@printf "  %-22s %s\n" "firewall-validate" "Validate main shell scripts with bash -n"
+	@printf "  %-22s %s\n" "http-https-test" "Verify per-source HTTP/HTTPS nftables rules"
 	@printf "  %-22s %s\n" "public-ip-watch-test" "Run isolated public-IP watcher tests"
 	@printf "  %-22s %s\n" "public-ip-watch-install" "Install and enable the 10-minute systemd watcher"
 	@printf "  %-22s %s\n" "public-ip-watch-status" "Show timer, service, state, and current WAN/DDNS"
@@ -92,6 +93,11 @@ firewall-validate:
 	cd $(ROOT_DIR) && bash -n nftables.rules.sh
 	cd $(ROOT_DIR) && bash -n iptables.rules.sh
 	cd $(ROOT_DIR) && bash -n scripts/network/public-ip-watch.sh
+	cd $(ROOT_DIR) && bash -n tests/http-https-protect.sh
+
+.PHONY: http-https-test
+http-https-test:
+	cd $(ROOT_DIR) && ./tests/http-https-protect.sh
 
 .PHONY: public-ip-watch-test
 public-ip-watch-test:
