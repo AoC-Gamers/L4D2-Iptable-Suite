@@ -1,3 +1,5 @@
+> **Referencia histórica anterior al núcleo transaccional.** Las instrucciones de aplicación, configuración y persistencia de esta página fueron reemplazadas por [operación actual](security/operations.md), [capacidades](security/capabilities.md) y [migración](security/migration.md). No ejecutar las recetas antiguas.
+
 # Guía operativa rápida
 
 Esta guía resume el flujo recomendado para operar `L4D2-Iptable-Suite` en servidores reales, especialmente cuando conviven Docker, game servers L4D2, SourceTV, OpenVPN, GeoIP y logging.

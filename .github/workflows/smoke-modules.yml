@@ -1,29 +1,52 @@
-name: Smoke Modules
-
-on:
-  push:
-    branches:
-      - main
-      - master
-      - develop
-      - feature/**
-  pull_request:
-    branches:
-      - main
-      - master
-      - develop
-  workflow_dispatch:
-
+name: Firewall validation
+on: [push, pull_request, workflow_dispatch]
+permissions:
+  contents: read
 jobs:
-  smoke:
-    runs-on: ubuntu-latest
-
+  syntax:
+    runs-on: ubuntu-24.04
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Ensure script is executable
-        run: chmod +x tests/smoke-modules.sh
-
-      - name: Run modular smoke tests
-        run: ./tests/smoke-modules.sh
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update && sudo apt-get install -y shellcheck
+      - name: ShellCheck and Bash syntax
+        run: |
+          git ls-files -z -- '*.sh' ':(exclude)log-summary/venv.loggin.sh' | xargs -0 shellcheck -x
+          git ls-files -z '*.sh' | xargs -0 -n1 bash -n
+          python3 -m compileall -q core scripts tests
+  unit:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 -I tests/test_core.py
+      - run: python3 -I tests/test_geoip.py
+      - run: bash tests/http-https-protect.sh && bash tests/public-ip-watch.sh
+  generation:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - run: bash tests/generate.sh
+  kernel-check:
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        frontend: [nft, legacy]
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update && sudo apt-get install -y iptables nftables iproute2 util-linux
+      - name: Load required modules in the disposable GitHub runner VM
+        run: sudo modprobe ip6_tables && sudo modprobe ip6table_nat && sudo modprobe xt_u32
+      - name: Check all candidates in an isolated network namespace
+        run: sudo env SUITE_TEST_FRONTEND=${{ matrix.frontend }} bash tests/isolated-run.sh --root-net tests/check-engine.py
+  traffic:
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        frontend: [nft, legacy]
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update && sudo apt-get install -y iptables nftables iproute2 util-linux
+      - run: sudo modprobe ip6_tables && sudo modprobe ip6table_nat && sudo modprobe xt_u32
+      - name: Real traffic, rollback, concurrency and foreign-state preservation
+        run: sudo env SUITE_TEST_FRONTEND=${{ matrix.frontend }} bash tests/isolated-run.sh --root-net tests/integration.py
