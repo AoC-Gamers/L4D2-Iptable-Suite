@@ -13,7 +13,16 @@ jobs:
       - name: Install host QEMU and seed-image tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y genisoimage openssh-client openssl qemu-system-x86 qemu-utils
+          sudo apt-get install -y acl genisoimage openssh-client openssl qemu-system-x86 qemu-utils
+      - name: Allow runner user to use KVM when available
+        run: |
+          if [ -c /dev/kvm ]; then
+            sudo setfacl -m "u:$(id -un):rw" /dev/kvm
+            test -r /dev/kvm && test -w /dev/kvm
+            echo 'KVM device available to the unprivileged QEMU runner'
+          else
+            echo 'KVM device unavailable; full validation will use TCG'
+          fi
       - name: Run full validation in a disposable QEMU guest
         run: python3 -I tests/vm/run.py --artifacts-dir tmp/vm-runner-artifacts
       - name: Upload sanitized VM logs

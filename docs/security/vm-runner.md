@@ -114,7 +114,13 @@ de duración arbitrariamente pequeña.
 
 `.github/workflows/vm.yml` ejecuta primero pruebas offline del propio runner,
 instala QEMU, `genisoimage` y OpenSSH client en Ubuntu 24.04, ejecuta el runner
-y publica los logs incluso si falla. El job tiene un límite global de cuatro
+y publica los logs incluso si falla. En esa VM desechable de GitHub, si existe
+`/dev/kvm`, el workflow concede acceso mediante ACL exclusivamente al usuario
+del job; QEMU continúa sin root. Si el dispositivo no existe, ejecuta la misma
+matriz completa bajo TCG. La disponibilidad de virtualización anidada no está
+garantizada por [GitHub](https://docs.github.com/en/actions/concepts/runners/github-hosted-runners).
+Este permiso no se aplica al host de desarrollo mediante `run.py`.
+El job tiene un límite global de cuatro
 horas para permitir TCG cuando KVM no está disponible. El reporte demuestra sólo los hashes de
 imagen/Docker, kernel, systemd y backends ejercitados; no sustituye una prueba
 de firewall en el host del desarrollador ni afirma que la sonda UDP sintética
