@@ -2,8 +2,13 @@
 import argparse
 import csv
 import pathlib
+import os
+import tempfile
 import sys
 import zipfile
+import ipaddress
+import re
+import stat
 
 
 def parse_args():
@@ -79,6 +84,8 @@ def main():
     if not countries:
         print("ERROR: --countries cannot be empty", file=sys.stderr)
         return 2
+    if len(countries) > 256 or any(not re.fullmatch('[A-Z]{2}', country) for country in countries):
+        raise ValueError('Countries must be two-letter ISO codes; path components are forbidden')
 
     locations, blocks_v4 = load_maxmind_rows(args.csv_zip, args.csv_dir)
     geoname_to_country = build_country_map(locations)
@@ -89,23 +96,46 @@ def main():
         network = (row.get("network") or "").strip()
         if not network:
             continue
+        network = str(ipaddress.IPv4Network(network, strict=True))
         country = pick_country_code(row, geoname_to_country)
         if country in selected:
             cidrs_by_country[country].append(network)
 
     output_dir = pathlib.Path(args.output_dir)
+    if os.geteuid() == 0:
+        # Validate existing ancestors before mkdir/write; do not follow symlinks
+        # into another administrator's directory or shared writable parents.
+        for path in [output_dir.absolute(), *output_dir.absolute().parents]:
+            if not path.exists() and not path.is_symlink():
+                continue
+            info = path.lstat()
+            if info.st_uid != 0 or info.st_mode & 0o022 or stat.S_ISLNK(info.st_mode):
+                raise ValueError(f'Untrusted GeoIP output ancestor: {path}')
     output_dir.mkdir(parents=True, exist_ok=True)
 
     for country in countries:
         output_path = output_dir / f"{country}.ipv4.txt"
-        with output_path.open("w", encoding="utf-8") as handle:
+        fd, temp_path = tempfile.mkstemp(prefix="." + country + ".", dir=output_dir)
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
             handle.write(f"# Generated from MaxMind GeoLite2 Country CSV for {country}\n")
             for network in cidrs_by_country[country]:
                 handle.write(f"{network}\n")
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temp_path, output_path)
+        parent_fd = os.open(output_dir, os.O_RDONLY | os.O_DIRECTORY)
+        try:
+            os.fsync(parent_fd)
+        finally:
+            os.close(parent_fd)
         print(f"OK: wrote {output_path} ({len(cidrs_by_country[country])} prefixes)")
 
     return 0
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    try:
+        raise SystemExit(main())
+    except (ValueError, OSError, zipfile.BadZipFile) as error:
+        print(f'ERROR: {error}', file=sys.stderr)
+        raise SystemExit(2) from error

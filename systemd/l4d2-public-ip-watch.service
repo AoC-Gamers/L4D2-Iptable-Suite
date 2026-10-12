@@ -1,8 +1,8 @@
 [Unit]
-Description=Detect Valpo2 public IPv4 changes and refresh L4D2 nftables
-Documentation=file:/home/lechuga/L4D2-Iptable-Suite/docs/public-ip-watch.md
+Description=Detect public IPv4 changes and refresh L4D2 nftables
+Documentation=file:/opt/l4d2-firewall/docs/public-ip-watch.md
 Wants=network-online.target
-After=network-online.target nftables.service
+After=network-online.target l4d2-firewall.service
 
 [Service]
 Type=oneshot
@@ -10,7 +10,7 @@ ExecStart=/usr/local/sbin/l4d2-public-ip-watch
 User=root
 Group=root
 UMask=0077
-StateDirectory=l4d2-public-ip-watch
+StateDirectory=l4d2-public-ip-watch l4d2-firewall
 StateDirectoryMode=0700
 RuntimeDirectory=l4d2-public-ip-watch
 RuntimeDirectoryMode=0700
@@ -25,5 +25,5 @@ RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
 RestrictRealtime=true
 RestrictSUIDSGID=true
 LockPersonality=true
-ReadWritePaths=/var/lib/l4d2-public-ip-watch /run/l4d2-public-ip-watch
+ReadWritePaths=/var/lib/l4d2-public-ip-watch /run/l4d2-public-ip-watch /var/lib/l4d2-firewall
 TimeoutStartSec=3min

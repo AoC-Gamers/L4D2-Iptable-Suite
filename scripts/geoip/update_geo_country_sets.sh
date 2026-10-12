@@ -47,9 +47,18 @@ if [ -z "$CSV_ZIP" ] && [ -z "$CSV_DIR" ]; then
     exit 2
 fi
 
-set -a
-. "$ENV_FILE"
-set +a
+config_values="$(mktemp)"
+trap 'rm -f "$config_values"' EXIT
+/usr/bin/python3 -I "$PROJECT_ROOT/core/read_config.py" "$ENV_FILE" > "$config_values"
+while IFS= read -r -d '' key && IFS= read -r -d '' value; do
+    case "$key" in
+        GEO_POLICY_ALLOWED_COUNTRIES|GEO_POLICY_DENIED_COUNTRIES|GEO_POLICY_DATA_DIR)
+            printf -v "$key" '%s' "$value"
+            ;;
+    esac
+done < "$config_values"
+rm -f "$config_values"
+trap - EXIT
 
 normalize_csv() {
     local raw="$1"
@@ -92,10 +101,13 @@ if [ -z "$COUNTRIES" ]; then
     exit 0
 fi
 
-OUTPUT_DIR="$PROJECT_ROOT/${GEO_POLICY_DATA_DIR#./}"
-mkdir -p "$OUTPUT_DIR"
+OUTPUT_DIR="${GEO_POLICY_DATA_DIR:-./geoip/generated/countries}"
+if [[ "$OUTPUT_DIR" != /* ]]; then
+    OUTPUT_DIR="$PROJECT_ROOT/${OUTPUT_DIR#./}"
+fi
+/usr/bin/python3 -I "$PROJECT_ROOT/core/read_config.py" "$PROJECT_ROOT/scripts/geoip/build_geo_country_sets.py" --trusted-path
 
-cmd=(python3 "$PROJECT_ROOT/scripts/geoip/build_geo_country_sets.py" --output-dir "$OUTPUT_DIR" --countries "$COUNTRIES")
+cmd=(/usr/bin/python3 -I "$PROJECT_ROOT/scripts/geoip/build_geo_country_sets.py" --output-dir "$OUTPUT_DIR" --countries "$COUNTRIES")
 if [ -n "$CSV_ZIP" ]; then
     cmd+=(--csv-zip "$CSV_ZIP")
 fi

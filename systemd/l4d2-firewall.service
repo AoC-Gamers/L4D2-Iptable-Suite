@@ -1,0 +1,18 @@
+[Unit]
+Description=Restore the confirmed suite firewall policy
+Documentation=file:/opt/l4d2-firewall/docs/security/operations.md
+DefaultDependencies=no
+After=local-fs.target
+Before=network-pre.target
+Wants=network-pre.target
+ConditionPathExists=/var/lib/l4d2-firewall/persisted.json
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+UMask=0077
+ExecStart=/usr/bin/python3 -I /opt/l4d2-firewall/core/fw.py load --local
+# There is deliberately no ExecStop cleanup or shared firewall-service restart.
+
+[Install]
+WantedBy=multi-user.target

@@ -4,13 +4,22 @@ set -Eeuo pipefail
 PROGRAM_NAME="l4d2-public-ip-watch"
 CONFIG_FILE="${PUBLIC_IP_WATCH_CONFIG:-/etc/default/l4d2-public-ip-watch}"
 
-if [ -r "$CONFIG_FILE" ]; then
-    # The production configuration is root-owned. It intentionally uses
-    # shell-compatible KEY=VALUE assignments so the script also works outside
-    # systemd.
-    # shellcheck disable=SC1090
-    . "$CONFIG_FILE"
+SCRIPT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+CONFIG_READER="$SCRIPT_ROOT/core/read_config.py"
+if [[ ! -f "$CONFIG_READER" ]]; then
+    CONFIG_READER=/opt/l4d2-firewall/core/read_config.py
 fi
+if [ -r "$CONFIG_FILE" ]; then
+    config_values="$(mktemp)"
+    trap 'rm -f "$config_values"' EXIT
+    /usr/bin/python3 -I "$CONFIG_READER" "$CONFIG_FILE" --allowed NOIP_CHECK_URL,NOIP_USER_AGENT,HTTP_TIMEOUT_SECONDS,DDNS_HOSTNAME,DDNS_NAMESERVERS,DDNS_MIN_MATCHES,REQUIRE_DDNS_MATCH,FIREWALL_SCRIPT,FIREWALL_ENV_FILE,POST_CHANGE_HOOK,STATE_FILE,LOCK_FILE,EXTERNAL_ADMIN_VERIFIER > "$config_values"
+    while IFS= read -r -d '' key && IFS= read -r -d '' value; do
+        printf -v "$key" '%s' "$value"
+    done < "$config_values"
+    rm -f "$config_values"
+    trap - EXIT
+fi
+EXTERNAL_ADMIN_VERIFIER="${EXTERNAL_ADMIN_VERIFIER:-}"
 
 NOIP_CHECK_URL="${NOIP_CHECK_URL:-http://ip1.dynupdate.no-ip.com/}"
 NOIP_USER_AGENT="${NOIP_USER_AGENT:-AoC-Gamers L4D2-Public-IP-Watch/1.0 admin@aoc-gamers.com}"
@@ -184,11 +193,17 @@ run_firewall_reload() {
         env_args=(--env-file "$FIREWALL_ENV_FILE")
     fi
 
-    log_message INFO "Validating nftables configuration before reload"
+    if [[ -z "$EXTERNAL_ADMIN_VERIFIER" || ! -x "$EXTERNAL_ADMIN_VERIFIER" ]]; then
+        log_message ERROR "Configure EXTERNAL_ADMIN_VERIFIER to test a NEW administrative connection from outside before unattended reload"
+        return 1
+    fi
+    /usr/bin/python3 -I "$CONFIG_READER" "$FIREWALL_SCRIPT" --trusted-path
+    /usr/bin/python3 -I "$CONFIG_READER" "$EXTERNAL_ADMIN_VERIFIER" --trusted-path
+    log_message INFO "Generating and logically validating nftables candidate before reload"
     "$FIREWALL_SCRIPT" "${env_args[@]}" --dry-run
 
     log_message INFO "Reapplying nftables after confirmed public IP change"
-    "$FIREWALL_SCRIPT" "${env_args[@]}"
+    "$FIREWALL_SCRIPT" "${env_args[@]}" --verify-with "$EXTERNAL_ADMIN_VERIFIER"
 }
 
 run_post_change_hook() {
@@ -201,6 +216,7 @@ run_post_change_hook() {
         return 1
     }
 
+    /usr/bin/python3 -I "$CONFIG_READER" "$POST_CHANGE_HOOK" --trusted-path
     log_message INFO "Running post-change hook: $POST_CHANGE_HOOK"
     "$POST_CHANGE_HOOK" "$previous_ip" "$current_ip"
 }
@@ -234,6 +250,18 @@ for required_bin in "$CURL_BIN" "$DIG_BIN" "$FLOCK_BIN"; do
         exit 1
     }
 done
+
+# Private root-owned parents make the following shell file operations safe from
+# unprivileged symlink replacement. A shared sticky /tmp parent is insufficient.
+if [[ "$EUID" == 0 && "$MODE" == run ]]; then
+    for state_path in "$STATE_FILE" "$LOCK_FILE"; do
+        mkdir -p "$(dirname "$state_path")"
+        /usr/bin/python3 -I "$CONFIG_READER" "$(dirname "$state_path")" --trusted-path --private-directory
+        if [[ -e "$state_path" || -L "$state_path" ]]; then
+            /usr/bin/python3 -I "$CONFIG_READER" "$state_path" --trusted-path
+        fi
+    done
+fi
 
 current_ip="$(discover_public_ip)" || {
     log_message WARNING "Could not obtain a valid public IPv4 address from $NOIP_CHECK_URL; retrying on the next timer run"

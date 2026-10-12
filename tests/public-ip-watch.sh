@@ -40,6 +40,7 @@ export DDNS_NAMESERVERS="ns1.test ns2.test"
 export DDNS_MIN_MATCHES=2
 export REQUIRE_DDNS_MATCH=true
 export FIREWALL_SCRIPT="$TEST_ROOT/bin/firewall"
+export EXTERNAL_ADMIN_VERIFIER="$TEST_ROOT/bin/firewall"
 export FIREWALL_ENV_FILE=""
 export STATE_FILE="$TEST_ROOT/state/current-ip"
 export LOCK_FILE="$TEST_ROOT/run/watch.lock"

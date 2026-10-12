@@ -38,7 +38,7 @@ geoip-update:
 
 .PHONY: geoip-apply
 geoip-apply:
-	cd $(ROOT_DIR) && $(SUDO) ./nftables.rules.sh
+	cd $(ROOT_DIR) && $(SUDO) ./nftables.rules.sh apply $(if $(ADMIN_VERIFIER),--verify-with "$(ADMIN_VERIFIER)",)
 
 .PHONY: geoip-refresh
 geoip-refresh:
@@ -82,7 +82,7 @@ status:
 
 .PHONY: firewall-nft
 firewall-nft:
-	cd $(ROOT_DIR) && $(SUDO) ./nftables.rules.sh
+	cd $(ROOT_DIR) && $(SUDO) ./nftables.rules.sh apply $(if $(ADMIN_VERIFIER),--verify-with "$(ADMIN_VERIFIER)",)
 
 .PHONY: firewall-ip
 firewall-ip:
