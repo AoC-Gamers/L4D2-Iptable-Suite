@@ -79,6 +79,16 @@ suite nftables con daemon iptables en ambos frontends, y suite/daemon nftables.
 La combinación suite iptables con backend Docker nftables se excluye porque el
 contrato de política actual la rechaza.
 
+Las pruebas de integración reservan 120 segundos para confirmación y concurrencia,
+y 30 segundos para provocar una expiración real. El presupuesto empieza antes de
+las escrituras del kernel; los antiguos plazos de 2 y 5 segundos podían vencer
+durante una aplicación bajo TCG. La recuperación se observa mediante el journal
+del watchdog, con una espera máxima de 90 segundos, en lugar de suponer que un
+`sleep` breve implica restauración completa. La prueba de concurrencia exige un
+único cambio pendiente todavía vigente y que el segundo escritor sea rechazado
+por ese motivo. Cada bloque de integración tiene un límite de 20 minutos; los
+otros bloques de kernel mantienen 10 minutos. Ningún timeout se convierte en éxito.
+
 Finalmente conduce las fases de transacción de producción mediante conexiones
 SSH nuevas sin multiplexación: apply/confirmación en otra conexión, worker
 committed terminado con SIGKILL, expiración del timer tras pérdida de sesión,

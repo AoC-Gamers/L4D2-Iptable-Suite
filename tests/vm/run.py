@@ -620,7 +620,10 @@ def run_tests(guest: Guest, logger: Log) -> None:
             ('early barrier packets', 'tests/boot-flows.py'),
         ):
             command = f'cd {INSTALL_ROOT} && env SUITE_TEST_FRONTEND={frontend} bash tests/isolated-run.sh --root-net {script}'
-            guest.run_guest(f'{name} frontend={frontend}', command, timeout=600)
+            # Integration includes real watchdog expiry, kernel writes and
+            # traffic for both engines; TCG is slower than hardware KVM.
+            guest.run_guest(f'{name} frontend={frontend}', command,
+                            timeout=1200 if name == 'integration' else 600)
 
     guest.run_guest('OpenVPN client flows', f'cd {INSTALL_ROOT} && tests/vm/clients.sh', timeout=360)
     guest.run_guest('offline GeoIP updater and traffic', f'cd {INSTALL_ROOT} && tests/vm/geoip.sh', timeout=240)

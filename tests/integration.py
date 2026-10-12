@@ -22,6 +22,11 @@ from core import engine
 assert os.readlink('/proc/self/ns/net') != os.environ['SUITE_HOST_NETNS'], 'Host network forbidden'
 STATE = Path(os.environ['SUITE_TEST_STATE'])
 FRONTEND = os.environ.get('SUITE_TEST_FRONTEND','auto')
+# The confirmation budget includes kernel writes, not just operator response.
+# TCG guests can spend several seconds applying dual-stack legacy transactions.
+CONFIRM_TIMEOUT = 120
+EXPIRY_TIMEOUT = 30
+ROLLBACK_WAIT = 90
 
 
 def run(*argv, text=None):
@@ -285,17 +290,28 @@ time.sleep(.1)
             old=self.store.get('current')
             candidate=generate(self.config(backend,HTTP_HTTPS_PORTS='18081'))
             with self.store.lock():
-                token=self.store.apply_locked(candidate,timeout=2,watchdog='process')
+                token=self.store.apply_locked(candidate,timeout=EXPIRY_TIMEOUT,watchdog='process')
             self.assertTrue(self.peer.tcp(18081))
-            time.sleep(2.4)
+            self.assertEqual(self.store.get('pending')['token'],token)
+            self.wait_for_rollback(token)
             self.assertFalse(self.peer.tcp(18081))
             self.assertEqual(self.store.get('current'),old)
             with self.store.lock():
-                token=self.store.apply_locked(candidate,timeout=5,watchdog='process')
+                token=self.store.apply_locked(candidate,timeout=CONFIRM_TIMEOUT,watchdog='process')
                 self.store.confirm_locked(token)
             self.assertIsNone(self.store.get('pending'))
             self.assertTrue(self.peer.tcp(18081))
             self.disable()
+
+    def wait_for_rollback(self, token):
+        # Observe the detached watchdog; never perform recovery from the test.
+        deadline=time.monotonic()+ROLLBACK_WAIT
+        while time.monotonic()<deadline:
+            rolled_back=self.store.get('last-rollback')
+            if rolled_back and rolled_back['token']==token and not self.store.get('pending'):
+                return
+            time.sleep(.2)
+        self.fail('Detached watchdog did not finish rollback within the bounded wait')
 
     def test_06_interrupted_applicator_watchdog_survives(self):
         for backend in ('nftables','iptables'):
@@ -314,11 +330,13 @@ def interrupted(tx):
  os.kill(os.getpid(),signal.SIGKILL)
 engine.execute=interrupted
 p=generate(Configuration({backend!r},profiles=['web'],overrides={{'IPTABLES_FRONTEND':{FRONTEND!r},'SSH_PORT':'22222','HTTP_HTTPS_PORTS':'18081'}},privileged=True))
-with s.lock():s.apply_locked(p,timeout=2,watchdog='process')
+with s.lock():s.apply_locked(p,timeout={EXPIRY_TIMEOUT},watchdog='process')
 '''
             r=subprocess.run(['python3','-I','-c',code],check=False)
             self.assertEqual(r.returncode,-signal.SIGKILL)
-            time.sleep(2.5)
+            pending=self.store.get('pending')
+            self.assertIsNotNone(pending)
+            self.wait_for_rollback(pending['token'])
             self.assertEqual(self.store.get('current'),old)
             self.assertTrue(self.peer.tcp(18080))
             self.assertFalse(self.peer.tcp(18081))
@@ -363,13 +381,24 @@ with s.lock():s.apply_locked(p,timeout=2,watchdog='process')
     def test_09_concurrent_writers_preserve_one_pending_change(self):
         for backend in ('nftables','iptables'):
             self.apply(backend)
-            args=['python3','-I','core/fw.py','--state-dir',str(STATE),'--backend',backend,'apply','--env-file','tests/empty.conf','--profile','web','--set','SSH_PORT=22222','--set','IPTABLES_FRONTEND='+FRONTEND,'--timeout','5','--watchdog','process']
+            args=['python3','-I','core/fw.py','--state-dir',str(STATE),'--backend',backend,'apply','--env-file','tests/empty.conf','--profile','web','--set','SSH_PORT=22222','--set','IPTABLES_FRONTEND='+FRONTEND,'--timeout',str(CONFIRM_TIMEOUT),'--watchdog','process']
             procs=[subprocess.Popen([*args,'--set',f'HTTP_HTTPS_PORTS={port}'],stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True) for port in (18080,18081)]
-            codes=[]
-            for p in procs:
-                output,error=p.communicate();codes.append(p.returncode)
-            self.assertEqual(sorted(codes),[0,2])
-            self.assertIsNotNone(self.store.get('pending'))
+            results=[]
+            try:
+                for p in procs:
+                    output,error=p.communicate(timeout=CONFIRM_TIMEOUT)
+                    results.append((p.returncode,output,error))
+            finally:
+                for p in procs:
+                    if p.poll() is None:
+                        p.kill()
+                        p.communicate()
+            self.assertEqual(sorted(code for code,_,_ in results),[0,2],results)
+            rejected=[error for code,_,error in results if code==2]
+            self.assertIn('Unconfirmed change pending',rejected[0])
+            pending=self.store.get('pending')
+            self.assertIsNotNone(pending)
+            self.assertGreater(pending['deadline_monotonic'],time.monotonic())
             with self.store.lock():self.store.rollback_locked()
             self.disable()
 
@@ -512,7 +541,7 @@ with s.lock():s.apply_locked(p,timeout=2,watchdog='process')
             verifier=STATE/'verify-admin'
             verifier.write_text('#!/bin/sh\nexit 9\n');verifier.chmod(0o700)
             with self.store.lock(), self.assertRaises(PolicyError):
-                self.store.apply_locked(candidate,timeout=5,watchdog='process',verifier=str(verifier))
+                self.store.apply_locked(candidate,timeout=CONFIRM_TIMEOUT,watchdog='process',verifier=str(verifier))
             self.assertTrue(self.peer.tcp(18080))
             self.assertFalse(self.peer.tcp(18081))
             # An independent namespace makes a fresh TCP connection; the test
@@ -521,7 +550,7 @@ with s.lock():s.apply_locked(p,timeout=2,watchdog='process')
 exec nsenter -t {self.peer.p.pid} -n python3 -I -c "import socket; s=socket.create_connection(('10.20.0.1',18081),1); s.close()"
 ''')
             with self.store.lock():
-                self.assertIsNone(self.store.apply_locked(candidate,timeout=5,watchdog='process',verifier=str(verifier)))
+                self.assertIsNone(self.store.apply_locked(candidate,timeout=CONFIRM_TIMEOUT,watchdog='process',verifier=str(verifier)))
             self.assertIsNone(self.store.get('pending'))
             self.assertTrue(self.peer.tcp(18081))
             self.disable()
