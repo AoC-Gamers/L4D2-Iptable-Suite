@@ -1099,6 +1099,7 @@ def restrict_probe():
     require(state.get('phase') == 'docker-probe-calibrated', 'Run Docker positive-channel calibration first')
     create_probe_network()
     apply_docker_policy(f'{PROBE_CLIENT}/32', f'{PROBE_HOST}/32', PROBE_IFACE)
+    state = manifest()
     require_no_guard()
     require('H3-CONTAINER' in published_probe(DOCKER_PUBLIC_PORT),
             'Positive container probe failed after restricting the grant to the nested veth client')

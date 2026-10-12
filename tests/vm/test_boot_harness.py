@@ -7,6 +7,7 @@ from pathlib import Path
 import subprocess
 import tempfile
 import unittest
+import copy
 from unittest.mock import patch
 
 
@@ -191,6 +192,25 @@ class BootHarnessOwnershipTests(unittest.TestCase):
             boot.remove_owned_manifest_file(state, access)
         self.assertTrue(access.is_symlink())
         self.assertEqual(target.read_text(), 'operator data')
+
+    def test_restrict_probe_saves_digest_written_by_policy_update(self):
+        calibrated = {'phase': 'docker-probe-calibrated',
+                      'owned_files': {str(boot.ACCESS): 'digest-before'}}
+        updated = {'phase': 'docker-probe-calibrated',
+                   'owned_files': {str(boot.ACCESS): 'digest-after'}}
+        saved = []
+        with patch.object(boot, 'manifest', side_effect=[calibrated, updated]), \
+                patch.object(boot, 'create_probe_network'), \
+                patch.object(boot, 'apply_docker_policy'), \
+                patch.object(boot, 'require_no_guard'), \
+                patch.object(boot, 'published_probe', return_value='H3-CONTAINER'), \
+                patch.object(boot, 'published_udp_probe', return_value='H3-UDP'), \
+                patch.object(boot, 'save_manifest', side_effect=lambda state: saved.append(copy.deepcopy(state))), \
+                patch.object(boot, 'verify_preservation'):
+            boot.restrict_probe()
+        self.assertEqual(len(saved), 1)
+        self.assertEqual(saved[0]['owned_files'][str(boot.ACCESS)], 'digest-after')
+        self.assertEqual(saved[0]['phase'], 'docker-probe-restricted')
 
     def test_bootstrap_preflight_rejects_fixture_paths_and_network_names(self):
         with patch.object(boot, 'MANIFEST', self.root / 'preexisting-manifest'):
