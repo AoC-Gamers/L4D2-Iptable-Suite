@@ -55,6 +55,20 @@ class LegacyFlows(unittest.TestCase):
 
     def test_default_reject_and_review_drift_preserve_rules(self):
         before = i.run('nft', '-s', 'list', 'table', 'inet', 'reviewed')
+        path = i.STATE / 'reviewed-manifest.json'
+        path.write_text(json.dumps(self.manifest)); path.chmod(0o600)
+        try:
+            # Exercise the operator's CLI check path, without nesting locks.
+            result = subprocess.run([sys.executable, '-I', '-B', str(ROOT / 'core/fw.py'),
+                '--state-dir', str(i.STATE), 'check', '--backend', 'nftables',
+                '--profile', 'web', '--set', 'NF_TABLE_NAME=reviewed',
+                '--set', 'ROUTED_POLICY=unmanaged', '--legacy-manifest', str(path),
+                '--acknowledge-legacy-ownership'], capture_output=True, text=True, check=False)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn('Kernel candidate check passed', result.stdout)
+            self.assertEqual(before, i.run('nft', '-s', 'list', 'table', 'inet', 'reviewed'))
+        finally:
+            path.unlink()
         with self.store.lock():
             with self.assertRaisesRegex(PolicyError, 'Object not owned'):
                 self.store.apply_locked(self.candidate, local=True)
