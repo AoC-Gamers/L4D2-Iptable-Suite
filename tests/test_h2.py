@@ -63,6 +63,31 @@ class H2Tests(unittest.TestCase):
                 'TYPECHAIN': '0', 'HOST_SERVICES': 'false',
             })
 
+    def test_vpn_server_and_sitetosite_defaults_stay_canonical_for_both_engines(self):
+        for backend in ('nftables', 'iptables'):
+            for module, overrides in (
+                ('openvpn_server', {}),
+                ('openvpn_sitetosite', {
+                    'OVPNS2S_INTERFACE': 'tun0',
+                    'OVPNS2S_LOCAL_SUBNETS': '192.0.2.0/24',
+                    'OVPNS2S_REMOTE_SUBNETS': '198.51.100.0/24',
+                }),
+            ):
+                with self.subTest(backend=backend, module=module):
+                    config = Configuration(backend, only=[module], overrides=overrides)
+                    policy = generate(config)
+                    self.assertEqual(policy['schema'], 2)
+                    self.assertNotIn('TYPECHAIN', config.values)
+                    self.assertNotIn('TYPECHAIN', policy['config'])
+
+    def test_compiler_rejects_noncanonical_bundle_before_apply_journal(self):
+        config = Configuration('nftables', only=['openvpn_server'])
+        # Simulate a future config/default regression. Generation is the
+        # pre-apply boundary, before Store can write a pending recovery record.
+        config.values['TYPECHAIN'] = '0'
+        with self.assertRaisesRegex(PolicyError, 'Schema 2 policy must not contain TYPECHAIN'):
+            generate(config)
+
     def test_schema1_preserves_effective_modern_dimensions_over_injected_typechain(self):
         old = {
             'schema': 1, 'backend': 'nftables', 'selected': ['nf_tcp_ssh'],

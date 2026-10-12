@@ -8,6 +8,7 @@ import re
 import subprocess
 import tempfile
 from .config import ROOT, GAME, PolicyError, require, network, ports, splitlist, duration
+from .schema import migrate_policy
 
 
 def short(name):
@@ -444,4 +445,7 @@ def nfports(value):
 
 
 def generate(config):
-    return Compiler(config).build()
+    # Validate the complete bundle before it can reach Store.apply_locked and
+    # become part of a recovery journal. In particular, reject legacy keys
+    # reintroduced by module defaults instead of persisting an unreadable state.
+    return migrate_policy(Compiler(config).build())

@@ -258,7 +258,12 @@ class Configuration:
                 peer = metadata('iptables' if backend == 'nftables' else 'nftables')
                 alternate = ('ip_' if backend == 'nftables' else 'nf_') + ident.split('_', 1)[1]
                 for k, value in peer[alternate]['defaults'].items():
-                    v.setdefault(k, value)
+                    # TYPECHAIN is a schema-1/input compatibility field. The
+                    # renderer injects it into its private module environment;
+                    # never import a peer module's legacy default into the
+                    # canonical schema-2 bundle.
+                    if k != 'TYPECHAIN':
+                        v.setdefault(k, value)
             for k, value in self.catalog[ident]['defaults'].items():
                 if k != 'TYPECHAIN' and k not in v:
                     v[k] = value
