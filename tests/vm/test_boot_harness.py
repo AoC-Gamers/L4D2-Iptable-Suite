@@ -161,6 +161,25 @@ class BootHarnessOwnershipTests(unittest.TestCase):
         self.assertEqual(current['network_boot_id'], 'boot-A')
         self.assertEqual(current['phase'], 'reboot-prepared')
 
+    def test_boot_wait_refreshes_network_ownership_before_phase_save(self):
+        boot.save_manifest({'phase': 'reboot-prepared', 'network_boot_id': 'old',
+                            'owned_files': {}})
+
+        def network_unit_booted():
+            state = boot.manifest()
+            state['network_boot_id'] = 'current'
+            state['network_identity'] = {'ifindex': 7}
+            state['owned_files'][str(boot.NETWORK_REGISTRY)] = 'new-digest'
+            boot.save_manifest(state)
+            return 'running'
+
+        with patch.object(boot, 'wait_for_boot_jobs', side_effect=network_unit_booted):
+            phase_state, state = boot.wait_for_boot_manifest('reboot-prepared')
+        self.assertEqual(phase_state, 'running')
+        self.assertEqual(state['network_boot_id'], 'current')
+        self.assertEqual(state['network_identity'], {'ifindex': 7})
+        self.assertEqual(state['owned_files'][str(boot.NETWORK_REGISTRY)], 'new-digest')
+
     def test_cleanup_removes_only_matching_network_and_host_first(self):
         boot.create_probe_network()
         state = boot.manifest()
@@ -249,6 +268,78 @@ class BootHarnessOwnershipTests(unittest.TestCase):
                 [], 1, '', 'permission denied')):
             with self.assertRaises(boot.H3Error):
                 boot.guard_identity()
+
+    def test_sentinel_recreation_accepts_new_handle_but_keeps_semantics(self):
+        def dump(handle):
+            table = {'family': boot.FOREIGN_TABLE[0], 'name': boot.FOREIGN_TABLE[1],
+                     'comment': boot.FOREIGN_COMMENT, 'handle': handle}
+            return json.dumps({'nftables': [{'table': table}]})
+
+        def list_tables(handle):
+            return subprocess.CompletedProcess([], 0, dump(handle), '')
+
+        first, second = [], []
+        for handle, target in ((101, first), (902, second)):
+            with patch.object(boot, 'run', side_effect=[list_tables(handle), list_tables(handle)]):
+                target.append(boot.sentinel_state())
+        self.assertEqual(first[0]['semantic_digest'], second[0]['semantic_digest'])
+        self.assertNotEqual(first[0]['handle'], second[0]['handle'])
+
+    def test_sentinel_extra_nft_objects_are_rejected(self):
+        table = {'family': boot.FOREIGN_TABLE[0], 'name': boot.FOREIGN_TABLE[1],
+                 'comment': boot.FOREIGN_COMMENT, 'handle': 101}
+        listed = subprocess.CompletedProcess([], 0,
+            json.dumps({'nftables': [{'table': table}]}), '')
+        content = subprocess.CompletedProcess([], 0, json.dumps({'nftables': [
+            {'table': table},
+            {'chain': {'family': table['family'], 'table': table['name'], 'name': 'foreign'}},
+        ]}), '')
+        with patch.object(boot, 'run', side_effect=[listed, content]):
+            with self.assertRaises(boot.H3Error):
+                boot.sentinel_state()
+
+    def test_reboot_sentinel_handle_refresh_is_scoped_to_new_boot(self):
+        state = {'sentinel_digest': 'semantic', 'sentinel_handle': 101,
+                 'sentinel_boot_id': 'boot-old', 'external_files': {}}
+        with patch.object(boot, 'EXTERNAL_FIREWALL_FILES', ()), \
+                patch.object(boot, 'sentinel_state', return_value={
+                    'semantic_digest': 'semantic', 'handle': 902}), \
+                patch.object(boot, 'boot_id', return_value='boot-new'):
+            boot.verify_preservation(state, after_reboot=True)
+        self.assertEqual(state['sentinel_handle'], 902)
+        self.assertEqual(state['sentinel_boot_id'], 'boot-new')
+        with patch.object(boot, 'EXTERNAL_FIREWALL_FILES', ()), \
+                patch.object(boot, 'sentinel_state', return_value={
+                    'semantic_digest': 'semantic', 'handle': 903}), \
+                patch.object(boot, 'boot_id', return_value='boot-new'):
+            with self.assertRaises(boot.H3Error):
+                boot.verify_preservation(state)
+
+    def test_reboot_does_not_adopt_preexisting_matching_sentinel(self):
+        table = {'family': boot.FOREIGN_TABLE[0], 'name': boot.FOREIGN_TABLE[1],
+                 'comment': boot.FOREIGN_COMMENT, 'handle': 902}
+        listing = subprocess.CompletedProcess([], 0, json.dumps({'nftables': [{'table': table}]}), '')
+        state = {'sentinel_digest': boot.hash_bytes(json.dumps(
+                    {'family': table['family'], 'name': table['name'], 'comment': table['comment']},
+                    sort_keys=True, separators=(',', ':')).encode()),
+                 'sentinel_handle': 101, 'sentinel_boot_id': 'boot-old', 'external_files': {}}
+        with patch.object(boot, 'EXTERNAL_FIREWALL_FILES', ()), \
+                patch.object(boot, 'run', return_value=listing), \
+                patch.object(boot, 'boot_id', return_value='boot-new'):
+            with self.assertRaisesRegex(boot.H3Error, 'Unexpected pre-existing H3 sentinel'):
+                boot.verify_preservation(state, after_reboot=True)
+
+    def test_failed_reboot_assertion_keeps_failure_manifest_and_backup(self):
+        state = {'phase': 'failed-reboot-prepared', 'persisted_backup': 'exact-bytes',
+                 'persisted_backup_sha256': 'digest', 'invalid_persisted_sha256': 'bad-digest'}
+        original = copy.deepcopy(state)
+        with patch.object(boot, 'save_manifest') as save, \
+                patch.object(boot, 'verify_preservation') as verify:
+            with self.assertRaisesRegex(boot.H3Error, 'Unsupported-persistence boot assertion failed'):
+                boot.finalize_failed_reboot(state, boot.H3Error('sentinel missing'), 'boot-new', {})
+        self.assertEqual(state, original)
+        save.assert_not_called()
+        verify.assert_not_called()
 
     def test_bootstrap_preflight_rejects_fixture_paths_and_network_names(self):
         with patch.object(boot, 'MANIFEST', self.root / 'preexisting-manifest'):

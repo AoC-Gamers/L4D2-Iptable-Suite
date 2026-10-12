@@ -179,6 +179,7 @@ class RunnerTests(unittest.TestCase):
             'python3 -I tests/test_boot.py',
             'python3 -I tests/vm/test_transactions_harness.py',
             'python3 -I tests/vm/test_boot_harness.py',
+            'python3 -I tests/vm/test_boot_cleanup.py',
             'bash tests/watcher-audit.sh',
             'bash tests/http-https-protect.sh',
             'bash tests/public-ip-watch.sh',

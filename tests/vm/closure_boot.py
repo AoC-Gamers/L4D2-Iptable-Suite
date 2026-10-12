@@ -49,6 +49,8 @@ PROBE_PORT = 18481
 SOCKET_UNIT = 'l4d2-h3-probe.socket'
 SERVICE_UNIT = 'l4d2-h3-probe.service'
 NETWORK_UNIT = 'l4d2-h3-probe-network.service'
+SYSTEMD_UNIT_ROOT = Path('/etc/systemd/system')
+SYSTEMD_ENABLEMENT_ROOTS = (SYSTEMD_UNIT_ROOT, Path('/run/systemd/system'))
 DOCKER_UNIT = Path('/etc/systemd/system/docker.service')
 DOCKER_SOCKET = '/var/run/docker.sock'
 DOCKER_NETWORK = 'l4d2-h3-closure'
@@ -273,54 +275,106 @@ def file_state(path):
     return payload
 
 
-def sentinel_state(create=False):
+def sentinel_state(create=False, require_absent=False):
     listed = run(['nft', '-j', '-s', 'list', 'tables']).stdout
     entries = json.loads(listed).get('nftables', [])
     present = any(item.get('table', {}).get('family') == FOREIGN_TABLE[0]
                   and item.get('table', {}).get('name') == FOREIGN_TABLE[1] for item in entries)
+    if require_absent:
+        require(not present, 'Unexpected pre-existing H3 sentinel after reboot; refusing to adopt it')
     if not present:
         if not create:
             return None
         run(['nft', '-f', '-'], input_text=(
             f'add table {FOREIGN_TABLE[0]} {FOREIGN_TABLE[1]} {{ comment "{FOREIGN_COMMENT}"; }}\n'))
     raw = json.loads(run(['nft', '-j', '-s', 'list', 'table', *FOREIGN_TABLE]).stdout)
-    tables = [entry['table'] for entry in raw.get('nftables', []) if 'table' in entry]
-    require(len(tables) == 1 and tables[0].get('comment') == FOREIGN_COMMENT,
-            'Sentinel table is not owned by this H3 test; refusing to adopt it')
-    return hash_bytes(json.dumps(tables[0], sort_keys=True, separators=(',', ':')).encode())
+    entries = [entry for entry in raw.get('nftables', []) if 'metainfo' not in entry]
+    tables = [entry['table'] for entry in entries if set(entry) == {'table'}]
+    require(len(entries) == 1 and len(tables) == 1,
+            'H3 sentinel must be exactly one empty table; refusing to adopt added objects')
+    table = tables[0]
+    required = {'family': FOREIGN_TABLE[0], 'name': FOREIGN_TABLE[1], 'comment': FOREIGN_COMMENT}
+    allowed = set(required) | {'handle'}
+    require(set(table) in (set(required), allowed)
+            and all(table.get(key) == value for key, value in required.items()),
+            'Sentinel table metadata is not owned by this H3 test; refusing to adopt it')
+    handle = table.get('handle')
+    require(handle is None or isinstance(handle, int), 'Sentinel table has an invalid runtime handle')
+    semantic = json.dumps(required, sort_keys=True, separators=(',', ':'))
+    return {'semantic_digest': hash_bytes(semantic.encode()), 'handle': handle}
 
 
 def verify_preservation(state, *, after_reboot=False):
     for path in EXTERNAL_FIREWALL_FILES:
         require(file_state(path) == state.get('external_files', {}).get(str(path)),
                 f'External firewall configuration changed during H3 test: {path}')
-    current = sentinel_state(create=after_reboot)
-    if after_reboot and current is not None:
-        require(current == state.get('sentinel_digest'), 'Sentinel table changed over reboot')
-    elif current is not None:
-        require(current == state.get('sentinel_digest'), 'Unowned nftables sentinel table changed')
-    elif not after_reboot:
-        raise H3Error('Foreign sentinel table disappeared before reboot')
+    if after_reboot:
+        current_boot = boot_id()
+        require(state.get('sentinel_boot_id') != current_boot,
+                'Sentinel recreation is only authorized after a kernel boot change')
+        current = sentinel_state(create=True, require_absent=True)
+        require(current['semantic_digest'] == state.get('sentinel_digest'),
+                'Sentinel table semantic contents changed over reboot')
+        state['sentinel_handle'] = current['handle']
+        state['sentinel_boot_id'] = current_boot
+    else:
+        current = sentinel_state()
+        if current is not None:
+            require(current['semantic_digest'] == state.get('sentinel_digest')
+                    and current['handle'] == state.get('sentinel_handle')
+                    and state.get('sentinel_boot_id') == boot_id(),
+                    'Unowned nftables sentinel table changed within this boot')
+        else:
+            raise H3Error('Foreign sentinel table disappeared before reboot')
 
 
 def install_unit(name, text):
-    target = Path('/etc/systemd/system') / name
+    target = SYSTEMD_UNIT_ROOT / name
     require(not target.exists() and not target.is_symlink(), f'Refusing to replace pre-existing unit {target}')
     write_new_owned_file(target, text.encode(), mode=0o644)
     return hashlib.sha256(text.encode()).hexdigest()
 
 
+def disable_managed_unit(unit, *, enablement_roots=SYSTEMD_ENABLEMENT_ROOTS):
+    disabled = run(['systemctl', 'disable', unit], check=False)
+    require(disabled.returncode == 0,
+            f'Cannot disable managed unit {unit}: {disabled.stderr.strip()}')
+    status = run(['systemctl', 'is-enabled', '--', unit], check=False)
+    require(status.stdout.strip() == 'disabled',
+            f'Managed unit {unit} is not exactly disabled: '
+            f'state={status.stdout.strip()!r}, stderr={status.stderr.strip()!r}')
+
+    scan_errors = []
+
+    def on_walk_error(exc):
+        scan_errors.append(exc)
+
+    for raw_root in enablement_roots:
+        root = Path(raw_root)
+        if not root.exists():
+            continue
+        for directory, subdirs, files in os.walk(root, followlinks=False, onerror=on_walk_error):
+            parent = Path(directory)
+            for name in subdirs + files:
+                candidate = parent / name
+                if name == unit and candidate.is_symlink():
+                    raise H3Error(f'Residual systemd enablement symlink for {unit}: {candidate}')
+    require(not scan_errors,
+            f'Cannot verify systemd enablement links for {unit}: '
+            + '; '.join(str(error) for error in scan_errors))
+
+
 def install_production_units():
     for name in ('l4d2-firewall-guard.service', 'l4d2-firewall.service', 'l4d2-firewall-ready.service'):
-        target = Path('/etc/systemd/system') / name
+        target = SYSTEMD_UNIT_ROOT / name
         require(target.is_file() and not target.is_symlink(), f'Runner must install production unit {target}')
         require(target.read_bytes() == (INSTALL / 'systemd' / name).read_bytes(),
                 f'Installed production unit differs from trusted template: {target}')
     protected_socket = (INSTALL / 'systemd/examples/protected-socket.conf').read_text()
     protected_service = (INSTALL / 'systemd/examples/protected-service.conf').read_text()
     owned = {}
-    require(not (Path('/etc/systemd/system') / NETWORK_UNIT).exists()
-            and not (Path('/etc/systemd/system') / NETWORK_UNIT).is_symlink(),
+    require(not (SYSTEMD_UNIT_ROOT / NETWORK_UNIT).exists()
+            and not (SYSTEMD_UNIT_ROOT / NETWORK_UNIT).is_symlink(),
             f'Refusing pre-existing H3 network unit {NETWORK_UNIT}')
     owned[NETWORK_UNIT] = install_unit(NETWORK_UNIT, f'''[Unit]
 Description=Disposable H3 veth probe network
@@ -654,6 +708,14 @@ def wait_for_boot_jobs(timeout=180):
     return state
 
 
+def wait_for_boot_manifest(expected_phase):
+    systemd_state = wait_for_boot_jobs()
+    current = manifest()
+    require(current.get('phase') == expected_phase,
+            f'Boot phase changed while systemd jobs settled (expected {expected_phase})')
+    return systemd_state, current
+
+
 def sigkill_after_barrier_before_empty_rollback():
     """Kill a test-only wrapper after nft commits the barrier, before restore continues."""
     from core.store import Store
@@ -735,9 +797,9 @@ def bootstrap_preflight():
         (ACCESS, 'H3 access policy fixture'),
         (RECOVERY, 'H3 recovery fixture'),
         (PROBE_HELPER, 'H3 protected probe helper'),
-        (Path('/etc/systemd/system') / NETWORK_UNIT, 'H3 network unit'),
-        (Path('/etc/systemd/system') / SOCKET_UNIT, 'H3 socket unit'),
-        (Path('/etc/systemd/system') / SERVICE_UNIT, 'H3 probe service unit'),
+        (SYSTEMD_UNIT_ROOT / NETWORK_UNIT, 'H3 network unit'),
+        (SYSTEMD_UNIT_ROOT / SOCKET_UNIT, 'H3 socket unit'),
+        (SYSTEMD_UNIT_ROOT / SERVICE_UNIT, 'H3 probe service unit'),
     ):
         require_absent(path, label)
         require_absent(path.with_name(path.name + '.h3-tmp'), label + ' temporary')
@@ -799,7 +861,8 @@ def bootstrap():
     state.update({'phase': 'boot-prepared', 'boot_id': boot_id(),
                   'policy_digest': result['policy_digest'], 'probe_host': PROBE_HOST,
                   'probe_port': PROBE_PORT, 'units': owned_units,
-                  'sentinel_digest': sentinel_digest})
+                  'sentinel_digest': sentinel_digest['semantic_digest'],
+                  'sentinel_handle': sentinel_digest['handle'], 'sentinel_boot_id': boot_id()})
     save_manifest(state)
     verify_preservation(manifest())
     print(json.dumps({'phase': 'bootstrap', 'policy_digest': result['policy_digest'],
@@ -1320,6 +1383,24 @@ def _restore_persisted_backup(state):
     require(path.read_bytes() == raw, 'Could not restore exact persisted policy bytes')
 
 
+def finalize_failed_reboot(state, recovery_error, current_boot, observations):
+    if recovery_error is not None:
+        # Keep failed-boot phase and exact backup in the manifest for diagnosis;
+        # do not record a successful phase after a failed barrier assertion.
+        raise H3Error(f'Unsupported-persistence boot assertion failed after guest recovery: {recovery_error}') from recovery_error
+    state['phase'] = 'docker-restart-verified'
+    state['failed_reboot_boot_id_after'] = current_boot
+    state['failed_reboot_observations'] = observations
+    state.pop('persisted_backup', None)
+    state.pop('persisted_backup_sha256', None)
+    state.pop('invalid_persisted_sha256', None)
+    save_manifest(state)
+    try:
+        verify_preservation(state)
+    except Exception as exc:
+        raise H3Error(f'Post-recovery ownership verification failed: {exc}') from exc
+
+
 def post_failed_reboot():
     state = manifest()
     require(state.get('phase') == 'failed-reboot-prepared',
@@ -1329,7 +1410,9 @@ def post_failed_reboot():
     observations = {}
     recovery_error = None
     try:
-        observations['systemd_boot_state'] = wait_for_boot_jobs()
+        # The network unit may have recreated its namespace during boot and
+        # persisted fresh ownership metadata while systemd jobs settled.
+        observations['systemd_boot_state'], state = wait_for_boot_manifest('failed-reboot-prepared')
         guard_active = run(['systemctl', 'is-active', '--quiet', 'l4d2-firewall-guard.service'], check=False)
         observations['guard_active'] = guard_active.returncode == 0
         require(observations['guard_active'], 'Boot guard unit did not remain active after unsupported persistence')
@@ -1357,34 +1440,38 @@ def post_failed_reboot():
         verify_preservation(state, after_reboot=True)
     except Exception as exc:
         recovery_error = H3Error(f'{exc}\nBoot failure diagnostics:\n{boot_systemd_snapshot()}')
-    finally:
+    try:
         _restore_persisted_backup(state)
+    except Exception as exc:
+        restore_error = H3Error(f'Could not restore exact persisted policy bytes: {exc}')
+    else:
+        restore_error = None
 
     # Recover the guest even when an assertion failed so the later valid-boot
     # check and exact cleanup do not inherit deliberately corrupted state.
-    run(['systemctl', 'reset-failed', 'docker.service', 'l4d2-firewall.service',
-         'l4d2-firewall-ready.service', SOCKET_UNIT], check=False)
-    run(['systemctl', 'start', 'l4d2-firewall.service'], timeout=120)
-    run(['systemctl', 'start', 'l4d2-firewall-ready.service'], timeout=60)
-    run(['systemctl', 'start', SOCKET_UNIT], timeout=30)
-    ensure_full_ready()
-    require(probe() == 'H3-READY', 'Host service did not recover after restoring exact persistence bytes')
-    require(docker_container_state().split() == [state['docker_container_id'], 'true'],
-            'Docker container did not recover after restoring exact persistence bytes')
-    require('H3-CONTAINER' in published_probe(DOCKER_PUBLIC_PORT),
-            'TCP container positive control did not recover after valid restore')
-    require(published_udp_probe() == 'H3-UDP',
-            'UDP container positive control did not recover after valid restore')
-    state['phase'] = 'docker-restart-verified'
-    state['failed_reboot_boot_id_after'] = current_boot
-    state['failed_reboot_observations'] = observations
-    state.pop('persisted_backup', None)
-    state.pop('persisted_backup_sha256', None)
-    state.pop('invalid_persisted_sha256', None)
-    save_manifest(state)
-    verify_preservation(state)
-    if recovery_error is not None:
-        raise H3Error(f'Unsupported-persistence boot assertion failed after guest recovery: {recovery_error}') from recovery_error
+    guest_recovery_error = None
+    if restore_error is None:
+        try:
+            run(['systemctl', 'reset-failed', 'docker.service', 'l4d2-firewall.service',
+                 'l4d2-firewall-ready.service', SOCKET_UNIT], check=False)
+            run(['systemctl', 'start', 'l4d2-firewall.service'], timeout=120)
+            run(['systemctl', 'start', 'l4d2-firewall-ready.service'], timeout=60)
+            run(['systemctl', 'start', SOCKET_UNIT], timeout=30)
+            ensure_full_ready()
+            require(probe() == 'H3-READY', 'Host service did not recover after restoring exact persistence bytes')
+            require(docker_container_state().split() == [state['docker_container_id'], 'true'],
+                    'Docker container did not recover after restoring exact persistence bytes')
+            require('H3-CONTAINER' in published_probe(DOCKER_PUBLIC_PORT),
+                    'TCP container positive control did not recover after valid restore')
+            require(published_udp_probe() == 'H3-UDP',
+                    'UDP container positive control did not recover after valid restore')
+        except Exception as exc:
+            guest_recovery_error = H3Error(f'Guest service recovery failed: {exc}')
+    if restore_error is not None:
+        raise H3Error(f'{recovery_error or "Boot verification succeeded"}; {restore_error}') from restore_error
+    if guest_recovery_error is not None:
+        raise H3Error(f'{recovery_error or "Boot verification succeeded"}; {guest_recovery_error}') from guest_recovery_error
+    finalize_failed_reboot(state, recovery_error, current_boot, observations)
     print(json.dumps({'phase': 'post-failed-reboot', 'boot_id_changed': True,
                       'guard_retained': True, 'restore_failed_closed': True,
                       'protected_socket_blocked': True, 'fresh_ssh_session': True,
@@ -1396,7 +1483,9 @@ def post_reboot():
     state = manifest()
     require(state.get('phase') == 'reboot-prepared', 'Post-reboot check requires a prepared H3 reboot')
     try:
-        systemd_boot_state = wait_for_boot_jobs()
+        # The network unit writes current-boot resource ownership during
+        # startup; retain those fields when recording the completed phase.
+        systemd_boot_state, state = wait_for_boot_manifest('reboot-prepared')
         current_boot = Path('/proc/sys/kernel/random/boot_id').read_text().strip()
         require(current_boot != state.get('pre_reboot_boot_id'), 'Kernel boot ID did not change')
         for unit in ('l4d2-firewall-guard.service', 'l4d2-firewall.service'):
@@ -1453,22 +1542,10 @@ def cleanup():
         require(guarded.returncode == 0,
                 'Cannot safely shut down test Docker without arming boot guard: ' + guarded.stderr.strip())
         require_guard()
-    for raw_path, expected_hash in state.get('docker_dropins', {}).items():
-        path = Path(raw_path)
-        if path_exists(path):
-            if path.is_symlink():
-                errors.append(f'refusing to remove replaced Docker test drop-in symlink {path}')
-                continue
-            if hashlib.sha256(path.read_bytes()).hexdigest() == expected_hash:
-                path.unlink()
-            else:
-                errors.append(f'refusing to remove modified Docker test drop-in {path}')
-    run(['systemctl', 'daemon-reload'], check=False)
     if 'docker.service' in state.get('units', {}):
         stopped = run(['systemctl', 'stop', 'docker.service'], check=False, timeout=45)
         if stopped.returncode and run(['systemctl', 'is-active', '--quiet', 'docker.service'], check=False).returncode == 0:
             errors.append('test Docker service did not stop; retaining its data directory')
-        run(['systemctl', 'disable', 'docker.service'], check=False)
     for unit in (SOCKET_UNIT, SERVICE_UNIT, NETWORK_UNIT, 'l4d2-firewall-ready.service', 'l4d2-firewall.service',
                  'l4d2-firewall-guard.service'):
         result = run(['systemctl', 'stop', unit], check=False, timeout=20)
@@ -1486,10 +1563,26 @@ def cleanup():
     # to cleanly disarm; leave the manifest for explicit guest-side recovery.
     if any(error.startswith(('boot-disarm:', 'disable:')) for error in errors):
         raise H3Error('; '.join(errors))
-    run(['systemctl', 'disable', SOCKET_UNIT,
-         'l4d2-firewall.service', 'l4d2-firewall-guard.service'], check=False)
+    managed_units = [SOCKET_UNIT, 'l4d2-firewall.service', 'l4d2-firewall-guard.service']
+    if 'docker.service' in state.get('units', {}):
+        managed_units.append('docker.service')
+    for unit in dict.fromkeys(managed_units):
+        disable_managed_unit(unit)
+    if errors:
+        raise H3Error('; '.join(errors))
+    for raw_path, expected_hash in state.get('docker_dropins', {}).items():
+        path = Path(raw_path)
+        if path_exists(path):
+            if path.is_symlink():
+                errors.append(f'refusing to remove replaced Docker test drop-in symlink {path}')
+                continue
+            if hashlib.sha256(path.read_bytes()).hexdigest() == expected_hash:
+                path.unlink()
+            else:
+                errors.append(f'refusing to remove modified Docker test drop-in {path}')
+    run(['systemctl', 'daemon-reload'], check=False)
     for unit, expected_hash in state.get('units', {}).items():
-        path = Path('/etc/systemd/system') / unit
+        path = SYSTEMD_UNIT_ROOT / unit
         if path_exists(path):
             if path.is_symlink():
                 errors.append(f'refusing to remove replaced test unit symlink {path}')
@@ -1516,7 +1609,9 @@ def cleanup():
             errors.append(str(exc))
     current_sentinel = sentinel_state()
     if current_sentinel is not None:
-        if current_sentinel != state.get('sentinel_digest'):
+        if (current_sentinel['semantic_digest'] != state.get('sentinel_digest')
+                or current_sentinel['handle'] != state.get('sentinel_handle')
+                or state.get('sentinel_boot_id') != boot_id()):
             raise H3Error('Refusing to delete a modified nftables sentinel table')
         run(['nft', '-f', '-'], input_text=f'delete table {FOREIGN_TABLE[0]} {FOREIGN_TABLE[1]}\n')
     for path in EXTERNAL_FIREWALL_FILES:
