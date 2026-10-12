@@ -531,6 +531,64 @@ def require_guard(nft_binary='nft'):
     require(present, 'The owned H3 boot barrier table is missing')
 
 
+def guard_identity():
+    result = run(['nft', '-j', '-a', 'list', 'tables'], check=False)
+    require(result.returncode == 0,
+            f'Cannot inspect H3 boot barrier identity: {result.stderr.strip()}')
+    try:
+        entries = json.loads(result.stdout).get('nftables', [])
+    except (json.JSONDecodeError, AttributeError) as exc:
+        raise H3Error(f'Invalid nft output while inspecting H3 barrier: {exc}') from exc
+    tables = [item['table'] for item in entries if 'table' in item
+              and item['table'].get('family') == GUARD_TABLE[0]
+              and item['table'].get('name') == GUARD_TABLE[1]]
+    if not tables:
+        return None
+    require(len(tables) == 1, 'Duplicate H3 boot barrier tables appeared in nft output')
+    # `-a` adds the kernel table handle where supported. Systemd hooks may
+    # legitimately delete/recreate the table at successive restart stages,
+    # so this identity is compared only across one probe, never the full restart.
+    # Hashing the table object gives a stable fallback if handles are omitted.
+    canonical = json.dumps(tables[0], sort_keys=True, separators=(',', ':'))
+    return hashlib.sha256(canonical.encode()).hexdigest()
+
+
+def observe_guarded_probe(protocol, probe_fn):
+    started = time.monotonic()
+    before = guard_identity()
+    response = probe_fn()
+    completed = time.monotonic()
+    after = guard_identity()
+    same_guard = before is not None and before == after
+    guard_present_at_both_edges = before is not None and after is not None
+    if guard_present_at_both_edges and response:
+        classification = 'response-with-guard-at-both-edges'
+    elif same_guard:
+        classification = 'blocked-with-stable-guard'
+    elif before is None and after is None:
+        classification = 'unguarded'
+    elif guard_present_at_both_edges:
+        classification = 'blocked-during-guard-rearm'
+    else:
+        classification = 'guard-transition'
+    return {
+        'protocol': protocol,
+        'started_monotonic': started,
+        'completed_monotonic': completed,
+        'duration_seconds': completed - started,
+        'guard_before': before,
+        'guard_after': after,
+        'response': bool(response),
+        'classification': classification,
+    }
+
+
+def require_no_guarded_exposure(observation):
+    require(observation['classification'] != 'response-with-guard-at-both-edges',
+            f'Published {observation["protocol"].upper()} container port responded while a '
+            f'boot barrier remained installed at both probe edges: {json.dumps(observation, sort_keys=True)}')
+
+
 def require_no_guard():
     result = run(['nft', '-j', 'list', 'tables'])
     tables = json.loads(result.stdout).get('nftables', [])
@@ -1135,19 +1193,23 @@ def docker_restart():
                             stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                             text=True, start_new_session=True)
     blocked_during_guard = 0
+    guard_observations = []
     deadline = time.monotonic() + 45
     while proc.poll() is None and time.monotonic() < deadline:
-        raw_result = run(['nft', '-j', 'list', 'tables'], check=False)
-        if raw_result.returncode == 0:
-            tables = json.loads(raw_result.stdout).get('nftables', [])
-            active = any(item.get('table', {}).get('family') == GUARD_TABLE[0]
-                         and item.get('table', {}).get('name') == GUARD_TABLE[1] for item in tables)
-            if active:
-                require(published_probe(DOCKER_PUBLIC_PORT, timeout=0.35) == '',
-                        'Published container port responded while boot barrier was active')
-                require(published_udp_probe(timeout=0.25) == '',
-                        'Published UDP container port responded while boot barrier was active')
-                blocked_during_guard += 1
+        tcp = observe_guarded_probe(
+            'tcp', lambda: published_probe(DOCKER_PUBLIC_PORT, timeout=0.35))
+        guard_observations.append(tcp)
+        print(json.dumps({'phase': 'docker-restart-guard-probe', **tcp}, sort_keys=True))
+        require_no_guarded_exposure(tcp)
+        udp = observe_guarded_probe(
+            'udp', lambda: published_udp_probe(timeout=0.25))
+        guard_observations.append(udp)
+        print(json.dumps({'phase': 'docker-restart-guard-probe', **udp}, sort_keys=True))
+        require_no_guarded_exposure(udp)
+        if (tcp['classification'] == 'blocked-with-stable-guard'
+                and udp['classification'] == 'blocked-with-stable-guard'
+                and tcp['guard_before'] == udp['guard_before']):
+            blocked_during_guard += 1
         time.sleep(0.12)
     if proc.poll() is None:
         proc.kill()
@@ -1156,7 +1218,9 @@ def docker_restart():
     stdout, stderr = proc.communicate(timeout=5)
     require(proc.returncode == 0, f'Docker systemd restart failed: {stdout}{stderr}')
     require(blocked_during_guard >= 2,
-            f'No sustained guard window observed during Docker restart (blocked probes={blocked_during_guard})')
+            f'No sustained stable guard window observed during Docker restart '
+            f'(blocked probe pairs={blocked_during_guard}, '
+            f'observations={json.dumps(guard_observations, sort_keys=True)})')
     cli('ready')
     require_no_guard()
     after_state = docker_container_state().split()
@@ -1166,13 +1230,14 @@ def docker_restart():
     require(published_udp_probe() == 'H3-UDP',
             'Published UDP container service did not recover after Docker restart')
     state['phase'] = 'docker-restart-verified'
-    state['guarded_denied_probes'] = blocked_during_guard
+    state['guarded_denied_probe_pairs'] = blocked_during_guard
+    state['guard_probe_observations'] = guard_observations
     save_manifest(state)
     verify_preservation(state)
     print(json.dumps({'phase': 'docker-restart', 'live_restore': True,
                       'restart_always_container_same_id': True,
                       'execstop_barrier_asserted_before_next_start': True,
-                      'guarded_denied_probes': blocked_during_guard,
+                      'guarded_denied_probe_pairs': blocked_during_guard,
                       'published_port_restored': True,
                       'published_udp_port_restored': True}))
 

@@ -212,6 +212,44 @@ class BootHarnessOwnershipTests(unittest.TestCase):
         self.assertEqual(saved[0]['owned_files'][str(boot.ACCESS)], 'digest-after')
         self.assertEqual(saved[0]['phase'], 'docker-probe-restricted')
 
+    def test_response_after_guard_release_is_inconclusive_not_exposure(self):
+        with patch.object(boot, 'guard_identity', side_effect=['guard-handle-7', None]):
+            observation = boot.observe_guarded_probe('tcp', lambda: 'H3-CONTAINER')
+        self.assertEqual(observation['classification'], 'guard-transition')
+        self.assertTrue(observation['response'])
+        boot.require_no_guarded_exposure(observation)
+
+    def test_response_with_same_guard_at_both_probe_edges_fails(self):
+        with patch.object(boot, 'guard_identity', side_effect=['guard-handle-7', 'guard-handle-7']):
+            observation = boot.observe_guarded_probe('udp', lambda: 'H3-UDP')
+        self.assertEqual(observation['classification'], 'response-with-guard-at-both-edges')
+        with self.assertRaises(boot.H3Error):
+            boot.require_no_guarded_exposure(observation)
+
+    def test_response_during_atomic_guard_rearm_still_fails(self):
+        with patch.object(boot, 'guard_identity', side_effect=['guard-handle-7', 'guard-handle-8']):
+            observation = boot.observe_guarded_probe('tcp', lambda: 'H3-CONTAINER')
+        self.assertEqual(observation['classification'], 'response-with-guard-at-both-edges')
+        with self.assertRaises(boot.H3Error):
+            boot.require_no_guarded_exposure(observation)
+
+    def test_blocked_probe_requires_same_guard_identity_at_both_edges(self):
+        with patch.object(boot, 'guard_identity', side_effect=['guard-handle-7', 'guard-handle-7']):
+            observation = boot.observe_guarded_probe('tcp', lambda: '')
+        self.assertEqual(observation['classification'], 'blocked-with-stable-guard')
+
+    def test_guard_query_uses_table_handle_and_does_not_hide_command_errors(self):
+        payload = json.dumps({'nftables': [
+            {'table': {'family': 'inet', 'name': boot.GUARD_TABLE[1], 'handle': 77}},
+        ]})
+        with patch.object(boot, 'run', return_value=subprocess.CompletedProcess(
+                [], 0, payload, '')):
+            self.assertTrue(boot.guard_identity())
+        with patch.object(boot, 'run', return_value=subprocess.CompletedProcess(
+                [], 1, '', 'permission denied')):
+            with self.assertRaises(boot.H3Error):
+                boot.guard_identity()
+
     def test_bootstrap_preflight_rejects_fixture_paths_and_network_names(self):
         with patch.object(boot, 'MANIFEST', self.root / 'preexisting-manifest'):
             boot.MANIFEST.write_text('do not replace')
