@@ -4,7 +4,8 @@ La pila opcional consume eventos del log; no configura el firewall ni expone API
 HTTP. `fw_log_summary.py` genera resumen JSON/TXT y estado; `iptable.loggin.py`
 genera informes detallados por IP/puerto/día/semana/mes/tipo. El segundo conserva
 menú de administración rsyslog/permisos: esas acciones son mutaciones privilegiadas,
-no parte de un análisis pasivo. Los manuales anteriores están [archivados](../archive/audits/README.md).
+no parte de un análisis pasivo. Esta guía integra el contenido vigente de los
+manuales anteriores de análisis y venv.
 
 ## Configuración y privacidad
 
@@ -13,7 +14,8 @@ Es independiente del KEY=VALUE del firewall. El Compose vigente también declara
 `../.env` como `env_file` de ambos servicios: necesita ese archivo raíz y pasa sus
 variables al contenedor, aunque el parser del firewall no acepte claves de logging.
 Revisa ese alcance de exposición antes de usarlo; no almacenes credenciales ajenas
-al análisis allí. No se cambió este comportamiento en la reorganización documental.
+al análisis allí. No se cambió este comportamiento en la reorganización documental; queda registrado
+como [F-DOC-02](../security/limitations.md#incidencias-funcionales-pendientes).
 El mount de logs es de solo lectura y `./output` se escribe desde el contenedor.
 
 | Variable | Ejemplo declarado | Alcance |
@@ -93,6 +95,53 @@ Sin `--analysis-type` abre menú interactivo. Las acciones de instalar rsyslog o
 agregar usuario a adm necesitan autorización root y pueden reiniciar rsyslog;
 no se deben usar para validar este cambio ni ejecutar en el host de acceso.
 La pertenencia a adm no garantiza lectura: comprobar modo/ACL y rotación.
+
+El gestor tiene opciones para crear `log-summary/venv`, abrir un shell con ese
+entorno, comprobar dependencias, reinstalarlas y lanzar el analizador. Crear o
+reinstalar el entorno escribe archivos y puede descargar paquetes: no es consulta
+pasiva. La opción de lanzamiento pasa automáticamente el `.env` de la raíz del
+proyecto al analizador; para separar esa configuración usa la CLI Python con
+`--env-file` explícito. No es necesario activar el entorno si se invoca directamente
+su intérprete. Los ejemplos antiguos de sudo automático o soporte multiplataforma
+no acreditan el comportamiento actual.
+
+### Entradas e informes detallados
+
+La CLI detallada lee `LOGFILE` (default interno `/var/log/firewall-suite.log`) y
+los puertos `L4D2_GAMESERVER_UDP_PORTS`/`L4D2_SOURCETV_UDP_PORTS` del archivo
+explícito y entorno del proceso. Los puertos clasifican las salidas; no abren
+servicios. `RSYSLOG_CONF` (default `/etc/rsyslog.d/firewall-suite.conf`) solo
+selecciona el archivo que puede **sobrescribir** la acción de instalación del menú.
+El ejemplo Compose usa `SUMMARY_LOG_PATH` para el resumen; esas claves no son
+intercambiables con `LOGFILE` de la CLI detallada. Revisa la configuración y las
+rutas efectivas de cada servicio por separado.
+
+| `--analysis-type` | Archivo JSON bajo `--output-dir` | Agrupación |
+|---|---|---|
+| `by_ip` | `summary_by_ip.json` | Origen, fechas y tipos de eventos |
+| `by_port` | `summary_by_port.json` | Puerto destino y clase GameServer/SourceTV/Other |
+| `by_day` | `summary_by_day.json` | Día y distribución temporal |
+| `by_week` | `summary_by_week.json` | Semana y distribución de eventos |
+| `by_month` | `summary_by_month.json` | Mes y distribución de eventos |
+| `by_attack_type` | `summary_by_attack_type.json` | Patrón registrado |
+| `all` | Los seis anteriores | Generación de todos los informes |
+
+El parser necesita timestamp, `SRC`, `DPT` y `LEN` legibles; las líneas que no puede
+interpretar se omiten. Admite timestamps ISO y syslog sin año; `--year` permite
+fijar este último, y sin override intenta reconocer el paso diciembre→enero.
+No asumas que archivos mezclados/desordenados o zonas horarias distintas forman
+una cronología normalizada: el parser descarta la zona del timestamp ISO.
+Comprueba fechas, cantidad de eventos y archivos producidos; no solo el exit code.
+Los nombres `attack` y las severidades son categorías del analizador, no una
+confirmación de intención maliciosa ni motivo suficiente para conceder bypass.
+
+Si faltan eventos, revisa primero lectura/rotación, timestamp y campos del mensaje,
+ventana del resumen y flags de logging del servicio. Desactivar logs base o de
+normalización no desactiva el descarte. El menú rsyslog vigente captura `FW_EVT`
+con una regla estructurada; no copies las antiguas listas de prefijos. Antes de
+usar esa mutación en el destino, identifica y respalda el archivo propio elegido
+y prepara su restauración; puede reemplazar contenido y reiniciar rsyslog. No
+debe apuntar a configuración ajena ni usarse para arreglar permisos de lectura.
 
 `make logs-clear` trunca irreversiblemente el archivo elegido; `logs-backup-clear`
 copia antes y también trunca. Ambos son mantenimiento explícito, no consulta.

@@ -105,7 +105,7 @@ def main():
                     errors.append(f"{source}: missing anchor: {raw}")
             elif url.fragment:
                 errors.append(f"{source}: cannot check non-Markdown anchor: {raw}")
-    # The canonical index must reach every document, including compatibility/history.
+    # Every document must be reachable from the canonical index.
     queue, reached = deque(["docs/README.md"]), set()
     while queue:
         node = queue.popleft()
@@ -113,12 +113,8 @@ def main():
             continue
         reached.add(node)
         queue.extend(graph.get(node, ()))
-    # Only explicit compatibility notices can be outside the primary navigation.
-    mapping = pages.get("docs/migration/documentation-map.md", "")
-    for name, body in pages.items():
-        notice = body.startswith(("# Documento trasladado", "# Ficha trasladada", "# Catálogo trasladado"))
-        classified_notice = notice and f"`{name}`" in mapping
-        if name not in reached and not classified_notice:
+    for name in pages:
+        if name not in reached:
             errors.append(f"Not reachable from docs/README.md: {name}")
     for unit in (ROOT / "systemd").glob("*.service"):
         for link in re.findall(r"(?m)^Documentation=file:/opt/l4d2-firewall/(.+)$", unit.read_text()):

@@ -49,8 +49,13 @@ Las variables de `geoip-updater/.env` entran al contenedor mediante Compose
 `env_file`. El shell no carga ese archivo por sí mismo. El Makefile calcula
 `HOST_UID` y `HOST_GID` con el propietario numérico del checkout y los pasa a
 Compose para que el proceso escriba como ese usuario. En una ejecución Compose
-directa, proporciona también esos dos valores correctos; la imagen no debe
-escribir archivos del checkout como root.
+directa, proporciona también esos dos valores correctos. En un checkout de
+desarrollo propiedad de una cuenta no root, evita que la imagen escriba como root.
+
+El `env_file` del servicio configura el entorno dentro del contenedor; no aporta
+por sí solo variables para interpolar `user` en Compose. Para invocación directa,
+exporta UID/GID o suminístralos con `docker compose --env-file`, como en el ejemplo
+de esta guía. Una identidad incorrecta falla antes de descargar.
 
 Variables de ejecución menos comunes:
 

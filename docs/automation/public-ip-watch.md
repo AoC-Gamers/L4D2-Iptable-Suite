@@ -92,7 +92,8 @@ como efecto implícito.
 
 ## Locks y recuperación
 
-El watcher mantiene `/run/l4d2-public-ip-watch/watch.lock` durante consulta,
+El watcher adquiere `/run/l4d2-public-ip-watch/watch.lock` antes de consultar WAN/DDNS
+y leer el estado, y lo mantiene durante consulta,
 comparación, recarga, hook y guardado. Esto evita ejecuciones duplicadas del
 watcher y serializa su estado. La recarga llama `nftables.rules.sh --dry-run`
 y luego `nftables.rules.sh --verify-with VERIFICADOR`; el entrypoint usa el

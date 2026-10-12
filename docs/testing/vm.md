@@ -54,6 +54,12 @@ Se requieren `qemu-system-x86_64`, `qemu-img`, `genisoimage`, `ssh`, `scp` y
 `ssh-keygen` en `PATH`; no se requiere root. Una caché también se valida contra
 los mismos hashes:
 
+La fuente de URLs y SHA-256 fijados son las constantes `IMAGE_URL`,
+`IMAGE_SHA256`, `DOCKER_URL` y `DOCKER_SHA256` de
+[run.py](../../tests/vm/run.py); no se sustituyen por hashes descargados sin validar
+durante una ejecución. Cambiar esos materiales requiere revisar la evidencia
+de versiones y repetir los ensayos correspondientes.
+
 ```bash
 python3 -I tests/vm/run.py
 python3 -I tests/vm/run.py \

@@ -61,8 +61,8 @@ La decisión corresponde al commit `93096dea2d7854a4d580a0b4922d5d1426c8149e`,
 12 de octubre de 2026. El [registro de aprobación](docs/security/approval.md)
 separa pruebas unitarias, motor, tráfico, VM y pendientes. No aprueba automáticamente
 otros commits o despliegues. El [índice documental](docs/README.md) organiza todas
-las funcionalidades; la [evidencia histórica](docs/archive/audits/README.md) conserva
-fechas, intentos fallidos y límites de cada ensayo.
+las funcionalidades. La evidencia fechada y sus límites se mantienen en ese
+registro; los documentos sustituidos permanecen en el historial Git.
 
 ## Créditos
 

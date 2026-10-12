@@ -15,7 +15,9 @@ instrucción. No cambies valores efectivos de ejemplos durante una reorganizaci�
 
 Actualiza la guía canónica cuando cambien opciones/defaults/permisos/operación y
 registra incompatibilidades en [migración](docs/migration/README.md). Una nueva
-aprobación necesita evidencia de ese código; los informes históricos se conservan.
+aprobación necesita evidencia de ese código. El registro de aceptación conserva
+commit, resultados, límites y enlaces a ejecuciones; los informes sustituidos
+siguen disponibles en el historial Git, sin duplicarlos en el árbol documental.
 Reglas de estilo/enlaces: [docs/AGENTS](docs/AGENTS.md).
 
 ## Elegir pruebas

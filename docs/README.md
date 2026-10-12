@@ -1,8 +1,8 @@
 # Documentación de la suite
 
 Empieza por tu objetivo. Las guías vigentes explican el comportamiento del núcleo
-actual; los informes fechados tienen su propio archivo y no sustituyen los pasos
-operativos. Los ejemplos de configuración están en [`config/`](../config/) y
+actual; el registro de aprobación identifica la evidencia fechada, separada de
+los pasos operativos. Los ejemplos de configuración están en [`config/`](../config/) y
 [`example.env`](../example.env), sin datos reales ni secretos.
 
 | Objetivo | Recorrido |
@@ -16,10 +16,10 @@ operativos. Los ejemplos de configuración están en [`config/`](../config/) y
 | Automatizar o analizar | [Automatización](automation/README.md), [IP pública](automation/public-ip-watch.md), [GeoIP](automation/geoip.md), [observabilidad](observability/README.md) |
 | Desarrollar y verificar | [Arquitectura](architecture/README.md), [catálogo de módulos](architecture/modules.md), [pruebas](testing/README.md), [VM](testing/vm.md) |
 | Diagnosticar compatibilidad | [Consulta pasiva y comprobaciones](testing/diagnostics.md), [matriz de motores](firewall/backends.md) |
-| Revisar aceptación | [Seguridad](security/README.md), [aprobación](security/approval.md), [límites](security/limitations.md), [archivo histórico](archive/audits/README.md) |
+| Revisar aceptación | [Seguridad](security/README.md), [aprobación](security/approval.md), [límites y pendientes](security/limitations.md) |
 | Migrar | [Configuración/estado/firewall](migration/README.md), [mapa de rutas documentales](migration/documentation-map.md) |
 
 Para contribuir: [CONTRIBUTING](../CONTRIBUTING.md). Para agentes:
 [instrucciones raíz](../AGENTS.md) y [convenciones documentales](AGENTS.md).
 
-[README del proyecto](../README.md) · [Informe de reorganización documental](migration/documentation-review.md).
+[README del proyecto](../README.md) · [Integración y eliminación de rutas antiguas](migration/documentation-map.md).

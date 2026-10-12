@@ -53,7 +53,7 @@ en una transacción; iptables confirma cada tabla/familia por separado y no gara
 atomicidad conjunta. No se vacía el ruleset global, no se cambia política de cadenas
 compartidas ni se adopta un objeto solo por su nombre. Los límites detallados de
 Docker, VPN, familias y pruebas están en [capacidades](../firewall/backends.md)
-y [resultados](../archive/audits/2026-10-11-results.md).
+y [aprobación](../security/approval.md).
 
 
 ## Extender o cambiar un módulo

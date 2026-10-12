@@ -2,7 +2,7 @@
 
 Los resultados citados son evidencia anterior, no una ejecución nueva de esta rama
 documental. [Aprobación por commit](../security/approval.md) identifica la revisión
-aceptada y [archivo](../archive/audits/README.md) conserva los ensayos anteriores.
+aceptada, las versiones y los límites de sus ensayos.
 
 Estas pruebas amplían los flujos de red reales sin tocar el firewall del host
 que lanza QEMU. Cada lanzador exige root y el marcador `/run/l4d2-suite-vm.json`,

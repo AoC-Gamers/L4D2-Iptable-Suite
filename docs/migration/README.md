@@ -111,11 +111,27 @@ archivos de estado compatibles; para volver atrás, detén los consumidores,
 mantén la protección si está armada y restaura el conjunto anterior desde consola.
 No edites ni conviertas el journal pendiente a mano.
 
+La lectura de bundles sin esquema o `schema=1` migra `current`, `persisted` y
+las políticas `previous`/`candidate` de `pending` **en memoria**, sin reescribir
+archivos ni cambiar su snapshot. Si están presentes las dos dimensiones modernas
+de host/contenedor, tienen precedencia sobre `TYPECHAIN`; si solo hay `TYPECHAIN`
+válido, se traduce una vez. Estados incompletos/ambiguos, dominios pendientes de
+resolver o esquemas desconocidos fallan sin escritura. Confirmar, guardar o
+restaurar una política previa confirmada escribe el formato nuevo según la
+operación; leer no cancela un journal pendiente ni su watchdog.
+
+La política normalizada conserva la ACL parseada y las IP de DNS resueltas,
+sin reabrir el antiguo archivo `ACCESS_POLICY`. `partial`/`remove` usan esos datos;
+solo una nueva entrada de dominio explícita solicita resolución. `TYPECHAIN` no
+puede cambiarse mediante esas operaciones: cambiar dimensiones requiere una
+configuración nueva. Código: [schema.py](../../core/schema.py),
+[store.py](../../core/store.py); [regresiones H2](../../tests/test_h2.py).
+
 La compatibilidad automática de iptables solo se evaluó para 1.8.10. Otras
 versiones requieren mantenimiento explícito con `--accept-version-change` en
 `check`, `apply` o `load`; la opción nunca autoriza un cambio de frontend ni una
 mezcla IPv4/IPv6. Una versión no revisada en `boot-restore` deja la barrera activa.
-Las [pruebas VM H3](../archive/audits/h1-h3-plan-results.md) pasaron para las versiones y la
+Las [pruebas VM H3](../security/approval.md) pasaron para las versiones y la
 combinación allí registradas. No certifican otras versiones reales de iptables
 ni el arranque de las otras combinaciones Docker; ensaya primero el destino.
 

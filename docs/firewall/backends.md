@@ -2,14 +2,14 @@
 
 Los resultados citados son evidencia anterior, no una ejecución nueva de esta rama
 documental. [Aprobación por commit](../security/approval.md) identifica la revisión
-aceptada y [archivo](../archive/audits/README.md) conserva los ensayos anteriores.
+aceptada, las versiones y los límites de sus ensayos.
 
 La capacidad implementada y la evidencia observada son cosas distintas. La
 matriz siguiente se probó en VM QEMU/KVM con kernel propio `6.8.0-142-generic`,
 nftables `1.0.9`, iptables `1.8.10` (frontends nft y legacy), OpenVPN `2.6.19`
 y Docker Engine `29.8.2`. El daemon de prueba y su red son privados; el Docker y
 firewall del anfitrión permanecieron intactos. Docker nftables es experimental
-según su documentación oficial. Versiones y límites en [results.md](../archive/audits/2026-10-11-results.md).
+según su documentación oficial. Versiones y límites en [aprobación y evidencia](../security/approval.md).
 
 | Capacidad | nftables nativo | iptables-nft | iptables-legacy |
 |---|---|---|---|
@@ -85,9 +85,9 @@ módulos de juego; cada publicación usa sus puertos internos para controles.
 La aplicación ordinaria no reinicia ni repara redes Docker. La integración de
 arranque opt-in utiliza la [barrera y readiness H3](../boot/README.md); requiere
 instalación explícita de unidades/drop-ins y pruebas en la topología destino.
-Las pruebas Docker de esta tabla cubren permisos en régimen normal; el informe
-[cierre H3](../archive/audits/h3-boot-closure.md) delimita por separado reinicios y arranque. La
-[matriz aceptada H1–H3](../archive/audits/h1-h3-plan-results.md) prueba guard/restore/reinicio
+Las pruebas Docker de esta tabla cubren permisos en régimen normal; la
+[guía de arranque](../boot/README.md) delimita por separado reinicios y arranque. La
+[matriz aceptada H1–H3](../security/approval.md) prueba guard/restore/reinicio
 con suite nftables + Docker iptables/frontend nft; los otros escenarios de
 esta tabla solo tienen la evidencia Docker general indicada.
 
@@ -106,4 +106,4 @@ Las pruebas con daemon real y tráfico publicado IPv4/IPv6 se detallan en
 la mera existencia de una tabla no se usa como prueba de conservación.
 
 Estas referencias explican la semántica; las versiones efectivamente comprobadas
-se registran en [resultados históricos](../archive/audits/2026-10-11-results.md). No sustituyen pruebas sobre el kernel/Docker de destino.
+se registran en [evidencia por commit](../security/approval.md). No sustituyen pruebas sobre el kernel/Docker de destino.

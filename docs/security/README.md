@@ -10,6 +10,8 @@ prueba motor/tráfico/arranque en una VM representativa y conserva recuperación
 Las [pruebas](../testing/README.md) separan lógica, kernel, tráfico y reboots;
 una dependencia ausente o un SKIP no son PASS.
 
-Los [informes históricos](../archive/audits/README.md) conservan evidencia fechada,
-fallos y límites. No se actualizan sus resultados para hacerlos pasar por ensayos
-del HEAD actual. Reporte de problemas: [SECURITY](../../SECURITY.md).
+El [registro de aprobación](approval.md) conserva evidencia fechada, fallos y
+límites. Los informes sustituidos pueden recuperarse del historial Git; su
+[integración](../migration/documentation-map.md) indica qué información sigue
+vigente. No se presentan resultados históricos como ensayos del HEAD actual.
+Reporte de problemas: [SECURITY](../../SECURITY.md).

@@ -58,4 +58,4 @@ Código: [config.py](../../core/config.py), [compiler.py](../../core/compiler.py
 Pruebas: [clients.py](../../tests/vm/clients.py), [check-engine.py](../../tests/check-engine.py).
 
 Usa únicamente `real;alias,real;alias`, no `|`: aunque el validador interno lo
-admite, la generación lo rechaza. Discrepancia de separadores: [incidencia documentalmente detectada](../migration/documentation-review.md#incidencias-funcionales-fuera-del-cambio).
+admite, la generación lo rechaza. Discrepancia de separadores: [incidencia documentalmente detectada](../security/limitations.md#incidencias-funcionales-pendientes).

@@ -51,6 +51,13 @@ la recarga completa del burst: uno explícito insuficiente falla; el default se
 amplía si hace falta. Los logs se limitan por regla; el descarte continúa al
 agotarse ese presupuesto.
 
+En iptables el compilador fija tanto `--hashlimit-htable-size` como
+`--hashlimit-htable-max` a `STATE_CAPACITY`: el máximo por sí solo no delimita
+capacidades pequeñas si el kernel elige una tabla hash mayor. Esta capacidad
+corresponde a cada regla, no a un presupuesto agregado de memoria del host.
+La [regresión de política](../testing/README.md#regresiones-conservadas) comprueba
+el corte efectivo; no sustituye un ensayo de carga sostenida del destino.
+
 ## Privilegios y compatibilidad
 
 Bypass completo al host: módulo `whitelist` y `PRIVILEGED_BYPASS=true`.

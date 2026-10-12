@@ -39,4 +39,4 @@ La configuración es declarativa `KEY=VALUE`, sin evaluación de shell. Usa `HOS
 - El payload de juego con iptables está limitado a IPv4; debe usarse `FAMILY_POLICY=ipv4-block-ipv6`. Para juego dual-stack se requiere nftables. Con la política IPv4, el núcleo bloquea input/forward IPv6 salvo excepciones de ICMPv6/ND que requiere el host.
 - Whitelist necesita `PRIVILEGED_BYPASS=true`; DNS además requiere CIDRs permitidos y falla cerrada. Es un bypass de input al host, no un permiso general para rutas/containers.
 
-La ejecución en VM y las combinaciones probadas están separadas de la capacidad teórica en [capabilities](backends.md) y [results](../archive/audits/2026-10-11-results.md). En particular, paquetes de juego fueron sintéticos, no un cliente real de L4D2; la validación no certifica otros kernels, frontends o versiones de Docker.
+La ejecución en VM y las combinaciones probadas están separadas de la capacidad teórica en [capabilities](backends.md) y [aprobación](../security/approval.md). En particular, paquetes de juego fueron sintéticos, no un cliente real de L4D2; la validación no certifica otros kernels, frontends o versiones de Docker.

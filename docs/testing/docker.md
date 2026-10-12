@@ -2,7 +2,7 @@
 
 Los resultados citados son evidencia anterior, no una ejecución nueva de esta rama
 documental. [Aprobación por commit](../security/approval.md) identifica la revisión
-aceptada y [archivo](../archive/audits/README.md) conserva los ensayos anteriores.
+aceptada, las versiones y los límites de sus ensayos.
 
 ## Estado
 

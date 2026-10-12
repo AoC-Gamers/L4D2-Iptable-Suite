@@ -20,7 +20,7 @@ Use `ipp.sh` como CLI (`--env-file`, `--set`, `--only`, `--skip`, `--profile`) y
 
 `modules/postload.sh` es un helper de salida histórica, no el cierre del flujo actual. El núcleo genera y valida la candidata antes de entregarla al motor transaccional; los módulos no controlan servicios.
 
-No use este script para inferir que una política quedó aplicada o confirmada. Consulte `ipp.sh status` y [operaciones](../firewall/transactions.md). La evidencia de integración y sus límites está en [resultados](../archive/audits/2026-10-11-results.md).
+No use este script para inferir que una política quedó aplicada o confirmada. Consulte `ipp.sh status` y [operaciones](../firewall/transactions.md). La evidencia de integración y sus límites está en [aprobación](../security/approval.md).
 
 <a id="chain-setup"></a>
 
@@ -104,7 +104,7 @@ Uso, configuración, verificación y límites: [guía canónica](../l4d2/source-
 
 `finalize` es parte de la composición obligatoria del núcleo, no un cierre shell posterior. El motor genera una candidata, comprueba límites/propiedad y aplica por las transacciones descritas en [operaciones](../firewall/transactions.md). No expone una opción para omitir el cierre del pipeline.
 
-La salida de `validate` solo prueba validación lógica/generación; no hace kernel check ni instala reglas. Para saber el estado activo use `status` y consulte el historial de aceptación en [resultados](../archive/audits/2026-10-11-results.md).
+La salida de `validate` solo prueba validación lógica/generación; no hace kernel check ni instala reglas. Para saber el estado activo use `status` y consulte el historial de aceptación en [aprobación](../security/approval.md).
 
 <a id="loopback"></a>
 

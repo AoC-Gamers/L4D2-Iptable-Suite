@@ -68,7 +68,7 @@ privilegiado como sustituto. La prueba aislada valida el kernel local disponible
 pero no demuestra compatibilidad del Docker daemon de producción ni conectividad
 desde clientes reales. Para esos casos consulta las [capacidades y combinaciones
 probadas](../firewall/backends.md) y su evidencia en
-[resultados históricos](../archive/audits/2026-10-11-results.md).
+[evidencia por commit](../security/approval.md).
 
 ## Criterios y formato de informe
 

@@ -85,13 +85,19 @@ no permite cambiar frontend ni mezclar IPv4/IPv6. Solo iptables/ip6tables 1.8.10
 está evaluado automáticamente; una versión no evaluada necesita aceptación en
 mantenimiento antes del siguiente `boot-restore`, o la barrera permanece activa.
 
-La integración H3 pasó en la VM desechable descrita en el [informe de cierre](../archive/audits/h1-h3-plan-results.md):
+La integración H3 pasó en la VM desechable descrita en el [registro de aprobación](../security/approval.md):
 fallos de restore, reboot inválido/válido y reinicio Docker con live-restore. Esa
 evidencia cubre una combinación Docker concreta; ensaya las unidades del destino.
-Los detalles están en [cierre H3](../archive/audits/h3-boot-closure.md); las unidades son
+El [diseño del ensayo H3](../testing/boot.md) detalla las comprobaciones; las unidades son
 [`l4d2-firewall-guard.service`](../../systemd/l4d2-firewall-guard.service),
 [`l4d2-firewall.service`](../../systemd/l4d2-firewall.service) y
 [`l4d2-firewall-ready.service`](../../systemd/l4d2-firewall-ready.service).
+
+Referencias para adaptar la integración: [systemd v255](https://github.com/systemd/systemd/blob/v255/man/systemd.unit.xml),
+[network-pre.target](https://systemd.io/NETWORK_ONLINE/),
+[políticas de reinicio Docker](https://docs.docker.com/engine/containers/start-containers-automatically/)
+y [live-restore](https://docs.docker.com/engine/daemon/live-restore/).
+Son fuentes de los contratos del proveedor, no evidencia de una prueba del destino.
 
 `check --accept-version-change` solo comprueba la candidata. Para conservar la
 aceptación de una versión no evaluada, aplicar o cargar con esa opción en

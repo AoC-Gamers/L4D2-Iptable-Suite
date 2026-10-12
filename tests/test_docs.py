@@ -56,11 +56,19 @@ class DocumentationChecks(unittest.TestCase):
         self.assertEqual(status, 1)
         self.assertIn("Not reachable", output)
 
-    def test_classified_notice_and_systemd_documentation(self):
+    def test_map_does_not_exempt_unreachable_notice(self):
         files = {
             "docs/README.md": "# Inicio\n[Mapa](migration/documentation-map.md)\n",
             "docs/migration/documentation-map.md": "# Mapa\n`docs/old.md`\n",
             "docs/old.md": "# Documento trasladado\n[Inicio](README.md)\n",
+        }
+        status, output = self.check(files)
+        self.assertEqual(status, 1)
+        self.assertIn("Not reachable", output)
+
+    def test_systemd_documentation(self):
+        files = {
+            "docs/README.md": "# Inicio\n",
             "systemd/test.service": "[Unit]\nDocumentation=file:/opt/l4d2-firewall/docs/README.md\n",
         }
         self.assertEqual(self.check(files)[0], 0)

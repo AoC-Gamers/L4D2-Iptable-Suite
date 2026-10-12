@@ -41,4 +41,27 @@ ante dependencias ausentes o códigos no cero, incluido 77: nunca SKIP=PASS.
 Una combinación no soportada se rechaza/excluye expresamente del contrato, no
 acredita compatibilidad. Informa versión/commit/comando/aislamiento/resultados y
 pruebas no ejecutadas. Evidencia fechada: [aprobación](../security/approval.md) y
-[archivo](../archive/audits/README.md). Diagnóstico pasivo: [guía](diagnostics.md).
+[límites](../security/limitations.md). Diagnóstico pasivo: [guía](diagnostics.md).
+
+## Regresiones conservadas
+
+Los informes retirados describían estos defectos corregidos. Se mantienen sus
+pruebas y los contratos actuales, sin duplicar diarios de auditoría ni atribuir
+una ejecución nueva a las pruebas por el mero hecho de enlazarlas:
+
+| IDs históricos | Contrato y regresión |
+|---|---|
+| CFG-01 | Selección CLI vacía explícita elige solo núcleo: [configuración](../configuration/profiles.md), [test_configuration_audit.py](../../tests/test_configuration_audit.py). |
+| CFG-02 | GeoIP Compose usa UID/GID propietario del checkout: [guía](../automation/geoip.md), [test_configuration_audit.py](../../tests/test_configuration_audit.py); ejecución completa offline en [clientes](clients.md). |
+| CFG-03 | Watcher bloquea antes de observar WAN/DDNS/estado: [guía](../automation/public-ip-watch.md), [watcher-audit.sh](../../tests/watcher-audit.sh), dos procesos con respuestas simuladas. |
+| TX-01, TX-04 | Disable sin Docker y carga con ausencia total de objetos propios: [persistencia](../firewall/persistence.md), [transaction-flows.py](../../tests/transaction-flows.py). Objetos parcialmente presentes/hooks desplazados no se reparan silenciosamente. |
+| TX-02 | Remove consume ACL nueva explícita y conserva la confirmada en su ausencia: [persistencia](../firewall/persistence.md), [test_transactions.py](../../tests/test_transactions.py). |
+| TX-03, TX-05 | Presupuesto monotónico por comando y fallo del watchdog antes de escribir: [transacciones](../firewall/transactions.md), [test_transactions.py](../../tests/test_transactions.py). No se reproduce un bloqueo permanente del kernel. |
+| POL-01 | Capacidad efectiva de hashlimit, tamaño/máximo y expiración: [configuración](../configuration/README.md), [test_policy_audit.py](../../tests/test_policy_audit.py), [policy-flows.py](../../tests/policy-flows.py). El escenario de capacidad usa 24 orígenes y un límite de 16; no es carga prolongada. |
+| HAR-01 | Red y `/run/xtables.lock` privados antes de invocar motores: [isolated-run.sh](../../tests/isolated-run.sh); un netns por sí solo no aísla ese archivo. |
+| H1–H3 | Recorrido Docker, estado canónico y barrera/readiness: [aprobación](../security/approval.md), [Docker](docker.md), [transacciones VM](transactions.md), [arranque VM](boot.md), [test_docker_topology.py](../../tests/test_docker_topology.py), [test_h2.py](../../tests/test_h2.py), [test_boot.py](../../tests/test_boot.py). |
+
+Estos enlaces no ejecutan pruebas. Los scripts de kernel/tráfico de la tabla
+requieren el aislamiento descrito arriba; nunca se invocan directamente con root
+en el anfitrión. Las cantidades históricas pertenecen al commit y run registrados
+en la aprobación, no al HEAD de un cambio documental.

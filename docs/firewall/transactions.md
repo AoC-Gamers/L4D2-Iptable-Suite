@@ -78,6 +78,12 @@ namespaces aislados de prueba. No se acepta como sustituto de systemd en el host
 para cambios remotos. Si ese proceso muere, recuperar desde consola con `rollback`;
 no existe garantía de reversión temporizada en este modo elegido por el operador.
 
+Si falla el armado del watchdog antes de comenzar la aplicación, se elimina solo
+el journal recién preparado: no se reescriben reglas activas mediante un restore
+innecesario. Después de comenzar a escribir, el fallo sigue la recuperación de la
+transacción. Las [regresiones TX](../testing/README.md#regresiones-conservadas)
+distinguen ambos momentos; SIGKILL no acredita recuperación ante pérdida eléctrica.
+
 ## Garantías por motor
 
 nftables reemplaza exclusivamente las tablas registradas mediante **un** archivo:
