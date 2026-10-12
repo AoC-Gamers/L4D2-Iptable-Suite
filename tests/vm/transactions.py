@@ -9,6 +9,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import re
 import signal
 import stat
 import subprocess
@@ -133,7 +134,7 @@ def policy_live(policy):
 
 
 def foreign_iptables_signature(policy):
-    """Hash save-state outside registered chains and exact suite integration hooks."""
+    """Hash foreign state, ignoring only volatile builtin chain packet counters."""
     sys.path.insert(0, str(INSTALL))
     from core import engine
     live = engine.inspect('iptables', policy['config'].get('IPTABLES_FRONTEND', 'auto'))
@@ -147,7 +148,10 @@ def foreign_iptables_signature(policy):
         parsed = engine.parse_save(text)
         for table, state in sorted(parsed.items()):
             owned = set(policy.get('families', {}).get(family, {}).get(table, {}))
-            chains = sorted(line for name, line in state['chains'].items() if name not in owned)
+            chains = sorted(
+                re.sub(r'^(?P<declaration>:[^ ]+\s+\S+)\s+\[\d+:\d+\]$', r'\g<declaration>', line)
+                for name, line in state['chains'].items() if name not in owned
+            )
             rules = [rule for rule in state['rules']
                      if rule[1] not in owned and tuple(rule) not in hooks.get(table, set())]
             if chains or rules:

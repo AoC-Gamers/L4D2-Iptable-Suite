@@ -146,6 +146,11 @@ after cleanup: no owned nftables tables or legacy L4D2 markers remained, and
 the service was disabled. It remained active until guest shutdown because
 cleanup disables the unit without stopping it.
 
+For the legacy cleanup signature, builtin chain declarations are compared by
+chain name and policy while their volatile packet/byte counters are normalized
+away. Rule contents, foreign-chain declarations, builtin policies, and exact
+suite-hook matching remain significant; rule counters are not normalized.
+
 Detailed sanitized phase output and boot IDs are in
 `tmp/vm/transactions.log` in the validation workspace; that log is run evidence,
 not part of this repository document.

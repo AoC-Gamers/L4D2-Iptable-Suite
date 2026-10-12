@@ -104,7 +104,7 @@ class TransactionHarnessLockTests(unittest.TestCase):
         self.assertEqual(self.store.values[transactions.MANIFEST]['phase'], 'worker-killed')
         self.assertEqual(killed, [(FakeChild.pid, 0), (FakeChild.pid, signal.SIGKILL)])
 
-    def test_legacy_foreign_signature_ignores_only_owned_chains_and_exact_hook(self):
+    def test_legacy_foreign_signature_normalizes_counters_only(self):
         from core import engine
         policy = {
             'backend': 'iptables',
@@ -124,15 +124,34 @@ class TransactionHarnessLockTests(unittest.TestCase):
 -A L4S_OWN -j DROP
 COMMIT
 '''
-        live = {'frontend': 'legacy', 'iprules': {'4': save, '6': '*filter\nCOMMIT\n'}}
-        with patch.object(engine, 'inspect', return_value=live):
-            before = transactions.foreign_iptables_signature(policy)
-            modified_foreign = save.replace('-A FOREIGN -j ACCEPT', '-A FOREIGN -j DROP')
-            with patch.object(engine, 'inspect', return_value={**live, 'iprules': {'4': modified_foreign, '6': '*filter\nCOMMIT\n'}}):
-                after = transactions.foreign_iptables_signature(policy)
+
+        def signature(ipv4_save):
+            live = {'frontend': 'legacy', 'iprules': {'4': ipv4_save, '6': '*filter\nCOMMIT\n'}}
+            with patch.object(engine, 'inspect', return_value=live):
+                return transactions.foreign_iptables_signature(policy)
+
+        before = signature(save)
+        counters_changed = save.replace(':INPUT ACCEPT [0:0]', ':INPUT ACCEPT [14:920]')
+        counters_changed = counters_changed.replace(':FORWARD DROP [0:0]', ':FORWARD DROP [3:61]')
+        counters_changed = counters_changed.replace(':OUTPUT ACCEPT [0:0]', ':OUTPUT ACCEPT [8:700]')
+        counters_changed = counters_changed.replace(':FOREIGN - [0:0]', ':FOREIGN - [5:500]')
+        self.assertEqual(before['digest'], signature(counters_changed)['digest'])
+
+        changed_builtin_policy = save.replace(':FORWARD DROP [0:0]', ':FORWARD ACCEPT [0:0]')
+        self.assertNotEqual(before['digest'], signature(changed_builtin_policy)['digest'])
+
+        modified_foreign_rule = save.replace('-A FOREIGN -j ACCEPT', '-A FOREIGN -j DROP')
+        self.assertNotEqual(before['digest'], signature(modified_foreign_rule)['digest'])
+
+        # The exact suite hook is excluded; a different target remains visible
+        # as an unowned rule and changes the signature.
         self.assertEqual(before['chains'], 4)
         self.assertEqual(before['rules'], 2)
-        self.assertNotEqual(before['digest'], after['digest'])
+        changed_suite_hook = save.replace(
+            '-A INPUT -m comment --comment l4d2-suite:integration -j L4S_OWN',
+            '-A INPUT -m comment --comment l4d2-suite:integration -j L4S_OTHER',
+        )
+        self.assertNotEqual(before['digest'], signature(changed_suite_hook)['digest'])
 
 
 if __name__ == '__main__':
