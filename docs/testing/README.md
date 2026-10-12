@@ -36,6 +36,42 @@ privado para xtables.lock. El modo usuario requiere soporte de user namespaces;
 sustituyas un fallo de permisos por ejecutar tests directamente como root en host.
 El [runner VM](vm.md) evita esa dependencia del host y también descarga dependencias.
 
+El wrapper fuerza `umask 077`, ejecuta Python con `-I -B` y copia únicamente
+archivos de `git ls-files`, incluidas adiciones staged. Cachés ignoradas y fixtures
+no versionadas no se incorporan al código privilegiado. No depende de
+`PYTHONDONTWRITEBYTECODE`, que `-I` ignora; tampoco relaja la verificación de
+propietario/permisos del núcleo.
+
+Para **evaluar** una versión de iptables que todavía no está aprobada, el operador
+puede aceptar expresamente esa versión en el ensayo. Desde raíz del checkout,
+sin root, con user namespaces y dependencias instaladas:
+
+```sh
+SUITE_TEST_FRONTEND=nft bash tests/isolated-run.sh --accept-version-change tests/integration.py
+```
+
+El flag se propaga a las aplicaciones de prueba y aparece como `TEST ONLY` en la
+salida. Sin él se mantiene el rechazo de versiones no evaluadas; una variable de
+entorno heredada no activa la aceptación del wrapper. No cambia la lista de
+versiones aprobadas del producto ni permite mezclar/migrar frontends. Conserva
+versión, frontend y resultado por caso; repetir con `legacy` requiere sus propias
+herramientas/capacidades. Un PASS de namespace no acredita Docker real, systemd,
+reinicios ni una migración de reglas heredadas en el destino. La matriz obligatoria
+de CI conserva su comprobación normal sin aceptación automática.
+
+La aceptación de mantenimiento se conserva en la política actual. Si un rollback
+la deja vacía, `boot-restore` sigue rechazando versiones no aprobadas y mantiene
+la barrera. El ensayo de arranque comprueba ese rechazo y, con el opt-in, realiza
+un `load --accept-version-change` explícito antes de repetir la restauración.
+No demuestra restauración desatendida de una versión no aprobada. Si `legacy`
+falla al leer `/proc/net/ip_tables_names` dentro de un user namespace, registra
+el fallo de capacidad y usa una VM; no cargues módulos ni eleves las pruebas
+contra el firewall del anfitrión para sortearlo.
+
+`python3 -I tests/test_isolated_runner.py` comprueba permisos de staging,
+exclusión de archivos y opt-in mediante herramientas simuladas; no prueba el
+kernel. El mismo ensayo figura entre los unitarios de CI y de la VM.
+
 CI separa unidades, generación, kernel, tráfico y QEMU. La matriz obligatoria falla
 ante dependencias ausentes o códigos no cero, incluido 77: nunca SKIP=PASS.
 Una combinación no soportada se rechaza/excluye expresamente del contrato, no

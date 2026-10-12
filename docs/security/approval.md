@@ -82,6 +82,39 @@ arbitrariamente breves ni certifica tráfico externo IPv6 durante reboots.
 La combinación de arranque H3 fue **suite nftables + Docker iptables/frontend nft**;
 las otras cuatro combinaciones solo tienen la evidencia Docker normal.
 
+## Ensayo adicional de arneses en Debian 13
+
+El **2026-10-12**, sobre fuentes de `3c34108aa0513479edb0266a48d734ced44ab1da`,
+se corrigió el staging con `umask 0002` heredada: permisos privados, Python sin
+cachés iniciales y exclusión de archivos no versionados. Tres nuevas regresiones
+del wrapper usan herramientas simuladas; no acreditan el kernel. ShellCheck
+0.9.0, sintaxis Bash, generación y regresiones unitarias/documentales pertinentes
+pasaron localmente con Python 3.12.3. La nueva regresión también pasó con 3.13.5.
+
+Los fuentes de los ocho scripts de ensayo afectados/utilizados se cotejaron por
+SHA-256 contra ese commit. En una copia temporal, como usuario sin privilegios,
+con namespaces de usuario/red/mount y `/run` privado, se ejecutó
+`tests/isolated-run.sh --accept-version-change` para `check-engine.py`,
+`integration.py`, `transaction-flows.py`, `policy-flows.py`,
+`docker-topology-flows.py`, `h2-flows.py` y `boot-flows.py`, con
+`SUITE_TEST_FRONTEND=nft` y máscara inicial `0002`.
+
+Entorno: Debian 13, kernel `6.12.107+deb13-amd64`, Python 3.13.5,
+nftables 1.1.3 e iptables/ip6tables 1.8.11 (`nf_tables`). Resultado final:
+**10 comprobaciones de motor y 29 métodos de integración/regresión aprobados**
+(17+2+4+4+1+1), ambos motores de la suite. Incluye tráfico sintético IPv4/IPv6,
+SIGKILL, watchdog de proceso, concurrencia y conservación de objetos ajenos.
+El ensayo de arranque comprueba el rechazo tras rollback a vacío y recuperación
+mediante aceptación manual, según [testing](../testing/README.md).
+
+Los intentos `legacy` fallaron por permisos al leer `/proc/net/ip_tables_names`;
+no se cuentan como PASS ni amplían la matriz aprobada. Tampoco se ejecutaron
+Docker real, QEMU, watchdog systemd o reboots en este ensayo. La copia instalada
+y el firewall del anfitrión no se modificaron. Esta evidencia limitada no aprueba
+iptables 1.8.11 para todos los flujos ni acredita una migración productiva remota.
+Los errores intermedios corregidos del arnés no se cuentan como nuevos defectos
+de la política del producto. No hubo un nuevo run de CI remoto en este cierre.
+
 ## Condiciones y nueva revisión
 
 Lee [limitaciones vigentes](limitations.md) antes de aceptar un destino. En especial:
