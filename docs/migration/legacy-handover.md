@@ -37,7 +37,12 @@ sudo /opt/l4d2-firewall/ipp.sh apply --env-file /etc/l4d2-firewall/server.conf \
 El núcleo comprueba candidata y snapshot restaurable con `nft -c`, conserva el
 snapshot en el journal y arma el watchdog systemd común antes de escribir.
 Vuelve a cotejar la tabla y ejecuta eliminación por handle y creación en un solo
-`nft -f`. El fallo/expiración restaura exclusivamente esa tabla y deja `current`
+`nft -f`. Dentro del mismo lote, `destroy table` por nombre después de la
+eliminación por handle invalida la caché de evaluación de nft: permite reemplazar
+medidores homónimos con otra capacidad. Un handle obsoleto hace fallar todo el
+lote, incluido ese `destroy`; no se divide la operación. Requiere que el motor
+acepte esa sintaxis en `check`; se ensaya con nftables 1.0.9 y 1.1.3.
+El fallo/expiración restaura exclusivamente esa tabla y deja `current`
 vacío como antes. No se permite `--local`. Tras una reversión se recrea la tabla:
 el manifiesto anterior deja de ser válido, aunque las reglas coincidan.
 

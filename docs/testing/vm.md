@@ -78,6 +78,12 @@ puerto SSH se puede cambiar si el default está ocupado. Para QEMU extraído man
 
 ## Casos obligatorios
 
+Antes de la matriz, una entrega heredada explícita se aplica con el watchdog
+systemd de producción. Tres conexiones SSH separadas arman el cambio, comprueban
+acceso nuevo y observan la expiración sin invocar recuperación. Se exige restaurar
+la tabla anterior y dejar el registro vacío. El caso cambia la capacidad de un
+medidor homónimo para comprobar la sustitución atómica; no usa reglas privadas.
+
 El runner falla ante cualquier salida distinta de cero, incluyendo el código
 `77` que un harness usa para indicar `SKIP`; esta matriz no puede reportar
 éxito por omitir un caso. Ejecuta unit tests del core/configuración/GeoIP
