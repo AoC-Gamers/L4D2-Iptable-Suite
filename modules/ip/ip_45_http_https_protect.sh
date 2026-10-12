@@ -70,7 +70,4 @@ ip_45_http_https_protect_apply() {
         return 0
     fi
 
-    if iptables -S DOCKER-USER >/dev/null 2>&1; then
-        ip_45_http_https_protect_apply_chain DOCKER-USER "$HTTP_HTTPS_PORTS" HTTPHTTPSNEWDOCKER
-    fi
 }

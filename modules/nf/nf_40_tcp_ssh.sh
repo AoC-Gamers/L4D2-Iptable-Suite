@@ -55,8 +55,8 @@ nf_40_tcp_ssh_apply() {
     log_ssh_abuse="$(nf_log_prefix_safe "${LOG_PREFIX_SSH_ABUSE} ")"
 
     for chain in $(nf_get_target_chains_for_domain admin); do
-        nf_add_rule "$chain" tcp dport "$ssh_ports_expr" ct state new limit rate "$normalized_rate" burst "$SSH_BURST" packets accept
-        nf_add_rule "$chain" tcp dport "$ssh_ports_expr" ct state new limit rate over 30/minute burst 10 packets log prefix "\"$log_ssh_abuse\""
+        nf_add_rule "$chain" tcp dport "$ssh_ports_expr" ct state new meter "ssh_${chain}_under" "{ ip saddr . tcp dport timeout ${SSH_METER_TIMEOUT:-1m} limit rate $normalized_rate burst $SSH_BURST packets }" accept
+        nf_add_rule "$chain" tcp dport "$ssh_ports_expr" ct state new limit rate 30/minute burst 10 packets log prefix "\"$log_ssh_abuse\""
         nf_add_rule "$chain" tcp dport "$ssh_ports_expr" ct state new drop
         nf_add_rule "$chain" tcp dport "$ssh_ports_expr" ct state established,related accept
     done

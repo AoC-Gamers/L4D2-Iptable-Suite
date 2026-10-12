@@ -146,7 +146,7 @@ nf_15_geo_country_filter_create_set_from_files() {
     tmp_file="$(mktemp)"
 
     {
-        echo "add set $NF_TABLE_FAMILY $NF_TABLE_NAME $set_name { type ipv4_addr; flags interval; }"
+        echo "add set $NF_TABLE_FAMILY $NF_TABLE_NAME $set_name { type ipv4_addr; flags interval; auto-merge; }"
         for file in "$@"; do
             [ -f "$file" ] || continue
             while IFS= read -r cidr; do

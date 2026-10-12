@@ -69,7 +69,7 @@ nf_45_http_https_protect_apply() {
             # Docker DNAT has already replaced the public destination port when
             # the forward hook runs (for example, 443 -> 8443 for Traefik).
             # Match and meter the original public port kept by conntrack.
-            port_match=(ct original proto-dst "$ports_expr")
+            port_match=(meta l4proto tcp ct original proto-dst "$ports_expr")
             meter_key="ip saddr . ct original proto-dst"
         else
             port_match=(tcp dport "$ports_expr")
@@ -82,7 +82,7 @@ nf_45_http_https_protect_apply() {
             accept
         nf_add_rule "$chain" "${port_match[@]}" ct state new \
             meter "${meter_prefix}_over_log" \
-            "{ ${meter_key} timeout ${NFT_HTTP_HTTPS_METER_TIMEOUT} limit rate over 30/minute burst 10 packets }" \
+            "{ ${meter_key} timeout ${NFT_HTTP_HTTPS_METER_TIMEOUT} limit rate 30/minute burst 10 packets }" \
             log prefix "\"$log_http_abuse\""
         nf_add_rule "$chain" "${port_match[@]}" ct state new drop
     done

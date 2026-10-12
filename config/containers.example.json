@@ -1,0 +1,29 @@
+{
+  "containers": [
+    {
+      "group": "public-web",
+      "source": "0.0.0.0/0",
+      "destination": "172.18.0.2/32",
+      "public_destination": "203.0.113.10/32",
+      "input": "eth0",
+      "output": "br-web",
+      "protocol": "tcp",
+      "ports": "8443",
+      "public_ports": "443",
+      "service": "http_https_protect"
+    },
+    {
+      "group": "game-queries",
+      "source": "0.0.0.0/0",
+      "destination": "172.19.0.2/32",
+      "public_destination": "203.0.113.10/32",
+      "input": "eth0",
+      "output": "br-games",
+      "protocol": "udp",
+      "ports": "27015",
+      "public_ports": "27016",
+      "service": "l4d2_udp_base",
+      "role": "gameserver"
+    }
+  ]
+}

@@ -120,7 +120,7 @@ nf_50_l4d2_udp_base_apply() {
     local sourcetv_udp_new_src_rate sourcetv_udp_new_src_burst sourcetv_udp_new_global_rate sourcetv_udp_new_global_burst
     local steam_signatures_csv steam_sig
     local -a steam_signatures
-    local log_udp_new log_udp_new_large log_udp_est log_icmp
+    local log_udp_new log_udp_new_large log_udp_est
 
     cmd_limit_leeway=$((L4D2_CMD_LIMIT + 10))
     cmd_limit_upper=$((L4D2_CMD_LIMIT + 30))
@@ -182,9 +182,9 @@ nf_50_l4d2_udp_base_apply() {
 
     if [ "${ENABLE_UDP_NEW_LARGE_FILTER}" = "true" ]; then
         if [ "${ENABLE_UDP_BASELINE_LOGS}" = "true" ]; then
-            nf_add_rule udp_new_limit meta length "${UDP_NEW_LARGE_DROP_MIN_LEN}-65535" log prefix "\"$log_udp_new_large\""
+            nf_add_rule udp_new_limit udp length "$((UDP_NEW_LARGE_DROP_MIN_LEN - 20))-65535" log prefix "\"$log_udp_new_large\""
         fi
-        nf_add_rule udp_new_limit meta length "${UDP_NEW_LARGE_DROP_MIN_LEN}-65535" drop
+        nf_add_rule udp_new_limit udp length "$((UDP_NEW_LARGE_DROP_MIN_LEN - 20))-65535" drop
     fi
 
     nf_add_rule udp_new_limit meter udp_new_src_under '{ ip saddr . udp dport timeout '"${NFT_UDP_NEW_METER_TIMEOUT}"' limit rate '"${UDP_NEW_SRC_RATE}"'/second burst '"${UDP_NEW_SRC_BURST}"' packets }' jump udp_new_limit_global
@@ -220,14 +220,9 @@ nf_50_l4d2_udp_base_apply() {
     all_udp_ports_expr="{ $(nf_ports_normalize "$L4D2_GAMESERVER_UDP_PORTS"), $(nf_ports_normalize "$L4D2_SOURCETV_UDP_PORTS") }"
 
     for chain in $(nf_get_target_chains_for_domain l4d2_udp); do
-        log_icmp="$(nf_build_log_prefix "$LOG_PREFIX_ICMP_FLOOD" "ICMP_FLOOD" "nf_50_l4d2_udp_base" "$chain" "drop" "low")"
         nf_add_rule "$chain" udp dport "$game_ports_expr" ct state new jump udp_new_limit
         nf_add_rule "$chain" udp dport "$tv_ports_expr" ct state new jump udp_new_limit_sourcetv
         nf_add_rule "$chain" udp dport "$all_udp_ports_expr" ct state established jump udp_established_limit
 
-        nf_add_rule "$chain" udp sport 53 ct state established,related accept
-        nf_add_rule "$chain" ip protocol icmp limit rate 20/second burst 2 packets accept
-        nf_add_rule "$chain" ip protocol icmp limit rate over 30/minute burst 10 packets log prefix "\"$log_icmp\""
-        nf_add_rule "$chain" ip protocol icmp drop
     done
 }

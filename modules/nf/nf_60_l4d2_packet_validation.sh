@@ -52,30 +52,30 @@ nf_60_l4d2_packet_validation_apply_chain() {
     log_malformed="$(nf_build_log_prefix "$LOG_PREFIX_MALFORMED" "MALFORMED" "nf_60_l4d2_packet_validation" "$chain" "drop" "medium")"
 
     if [ "${ENABLE_PACKET_NORMALIZATION_LOGS}" = "true" ]; then
-        nf_add_rule "$chain" udp dport "$ports_expr" meta length 0-28 limit rate over 60/minute log prefix "\"$log_invalid_size\""
+        nf_add_rule "$chain" udp dport "$ports_expr" udp length 0-8 limit rate 60/minute log prefix "\"$log_invalid_size\""
     fi
-    nf_add_rule "$chain" udp dport "$ports_expr" meta length 0-28 drop
+    nf_add_rule "$chain" udp dport "$ports_expr" udp length 0-8 drop
 
     if [ "${ENABLE_PACKET_NORMALIZATION_LOGS}" = "true" ]; then
-        nf_add_rule "$chain" udp dport "$ports_expr" meta length 2521-65535 limit rate over 60/minute log prefix "\"$log_invalid_size\""
+        nf_add_rule "$chain" udp dport "$ports_expr" udp length 2501-65535 limit rate 60/minute log prefix "\"$log_invalid_size\""
     fi
-    nf_add_rule "$chain" udp dport "$ports_expr" meta length 2521-65535 drop
+    nf_add_rule "$chain" udp dport "$ports_expr" udp length 2501-65535 drop
 
     if [ "${ENABLE_MALFORMED_FILTER}" = "true" ]; then
         if [ "${ENABLE_PACKET_NORMALIZATION_LOGS}" = "true" ]; then
-            nf_add_rule "$chain" udp dport "$ports_expr" meta length 30-32 limit rate over 60/minute log prefix "\"$log_malformed\""
+            nf_add_rule "$chain" udp dport "$ports_expr" udp length 10-12 limit rate 60/minute log prefix "\"$log_malformed\""
         fi
-        nf_add_rule "$chain" udp dport "$ports_expr" meta length 30-32 drop
+        nf_add_rule "$chain" udp dport "$ports_expr" udp length 10-12 drop
 
         if [ "${ENABLE_PACKET_NORMALIZATION_LOGS}" = "true" ]; then
-            nf_add_rule "$chain" udp dport "$ports_expr" meta length 46 limit rate over 60/minute log prefix "\"$log_malformed\""
+            nf_add_rule "$chain" udp dport "$ports_expr" udp length 26 limit rate 60/minute log prefix "\"$log_malformed\""
         fi
-        nf_add_rule "$chain" udp dport "$ports_expr" meta length 46 drop
+        nf_add_rule "$chain" udp dport "$ports_expr" udp length 26 drop
 
         if [ "${ENABLE_PACKET_NORMALIZATION_LOGS}" = "true" ]; then
-            nf_add_rule "$chain" udp dport "$ports_expr" meta length 60 limit rate over 60/minute log prefix "\"$log_malformed\""
+            nf_add_rule "$chain" udp dport "$ports_expr" udp length 40 limit rate 60/minute log prefix "\"$log_malformed\""
         fi
-        nf_add_rule "$chain" udp dport "$ports_expr" meta length 60 drop
+        nf_add_rule "$chain" udp dport "$ports_expr" udp length 40 drop
     fi
 }
 

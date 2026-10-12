@@ -1,8 +1,6 @@
 #!/bin/bash
-
-# shellcheck disable=SC1090
-. "${PROJECT_ROOT:-.}/modules/common_nft.sh"
-
+# This module's scoped policy is compiled by core/compiler.py.
+# Metadata remains literal and discoverable without importing executable code.
 nf_30_openvpn_server_metadata() {
     cat << 'EOF'
 ID=nf_openvpn_server
@@ -13,37 +11,10 @@ OPTIONAL_VARS=OVPNSRV_PROTO OVPNSRV_PORT OVPNSRV_SUBNET OVPNSRV_INTERFACE OVPNSR
 DEFAULTS=TYPECHAIN=0 OVPNSRV_PROTO=udp OVPNSRV_PORT=1194 OVPNSRV_SUBNET=10.8.0.0/24 OVPNSRV_INTERFACE=tun0 OVPNSRV_LAN_SUBNET=192.168.1.0/24
 EOF
 }
-
 nf_30_openvpn_server_validate() {
-    case "${TYPECHAIN:-}" in
-        0|1|2) ;;
-        *)
-            echo "ERROR: nf_openvpn_server: TYPECHAIN must be 0, 1 or 2"
-            return 2
-            ;;
-    esac
-
-    if ! [[ "${OVPNSRV_PORT}" =~ ^[0-9]+$ ]]; then
-        echo "ERROR: nf_openvpn_server: OVPNSRV_PORT must be numeric"
-        return 2
-    fi
-
-    if [ -z "${OVPNSRV_SUBNET:-}" ] || [ -z "${OVPNSRV_INTERFACE:-}" ]; then
-        echo "ERROR: nf_openvpn_server: OVPNSRV_SUBNET and OVPNSRV_INTERFACE are required"
-        return 2
-    fi
+    return 0
 }
-
 nf_30_openvpn_server_apply() {
-    OVPNSRV_PROTO="$(echo "$OVPNSRV_PROTO" | tr 'A-Z' 'a-z')"
-
-    if nf_chain_enabled input; then
-        nf_add_rule "$(nf_domain_chain_name input vpn)" "$OVPNSRV_PROTO" dport "$OVPNSRV_PORT" accept
-        nf_add_rule "$(nf_domain_chain_name input vpn)" iifname "$OVPNSRV_INTERFACE" ip saddr "$OVPNSRV_SUBNET" accept
-    fi
-
-    if nf_chain_enabled forward; then
-        nf_add_rule "$(nf_domain_chain_name forward vpn)" iifname "$OVPNSRV_INTERFACE" ip saddr "$OVPNSRV_SUBNET" ip daddr "$OVPNSRV_LAN_SUBNET" accept
-        nf_add_rule "$(nf_domain_chain_name forward vpn)" oifname "$OVPNSRV_INTERFACE" ip daddr "$OVPNSRV_SUBNET" ct state established,related accept
-    fi
+    echo "ERROR: use the suite entrypoint; scoped VPN/whitelist compilation belongs to the core" >&2
+    return 2
 }

@@ -141,10 +141,10 @@ ip_70_l4d2_a2s_filters_apply_chains() {
     if ip_70_l4d2_a2s_filters_limit_disabled "$L4D2_LOGIN_RATE" "$L4D2_LOGIN_BURST"; then
         iptables -A l4d2loginfilter -j ACCEPT
     else
-        iptables -A l4d2loginfilter -m hashlimit --hashlimit-upto "${L4D2_LOGIN_RATE}/sec" --hashlimit-burst "$L4D2_LOGIN_BURST" --hashlimit-mode srcip,dstip,dstport --hashlimit-name L4D2CONNECTPROTECT --hashlimit-htable-expire 1000 --hashlimit-htable-max 1048576 -m string --algo bm --string "connect" -j ACCEPT
-        iptables -A l4d2loginfilter -m hashlimit --hashlimit-upto "${L4D2_LOGIN_RATE}/sec" --hashlimit-burst "$L4D2_LOGIN_BURST" --hashlimit-mode srcip,dstip,dstport --hashlimit-name L4D2RESERVEPROTECT --hashlimit-htable-expire 1000 --hashlimit-htable-max 1048576 -m string --algo bm --string "reserve" -j ACCEPT
-        iptables -A l4d2loginfilter -m string --algo bm --string "connect" -m limit --limit 60/min --limit-burst 20 -j LOG --log-prefix "$LOG_PREFIX_L4D2_CONNECT" --log-level 4
-        iptables -A l4d2loginfilter -m string --algo bm --string "reserve" -m limit --limit 60/min --limit-burst 20 -j LOG --log-prefix "$LOG_PREFIX_L4D2_RESERVE" --log-level 4
+        iptables -A l4d2loginfilter -m hashlimit --hashlimit-upto "${L4D2_LOGIN_RATE}/sec" --hashlimit-burst "$L4D2_LOGIN_BURST" --hashlimit-mode srcip,dstip,dstport --hashlimit-name L4D2CONNECTPROTECT --hashlimit-htable-expire 1000 --hashlimit-htable-max 1048576 -m u32 --u32 '0>>22&0x3C@13=0x636f6e6e && 0>>22&0x3C@17>>8=0x656374' -j ACCEPT
+        iptables -A l4d2loginfilter -m hashlimit --hashlimit-upto "${L4D2_LOGIN_RATE}/sec" --hashlimit-burst "$L4D2_LOGIN_BURST" --hashlimit-mode srcip,dstip,dstport --hashlimit-name L4D2RESERVEPROTECT --hashlimit-htable-expire 1000 --hashlimit-htable-max 1048576 -m u32 --u32 '0>>22&0x3C@13=0x72657365 && 0>>22&0x3C@17>>8=0x727665' -j ACCEPT
+        iptables -A l4d2loginfilter -m u32 --u32 '0>>22&0x3C@13=0x636f6e6e && 0>>22&0x3C@17>>8=0x656374' -m limit --limit 60/min --limit-burst 20 -j LOG --log-prefix "$LOG_PREFIX_L4D2_CONNECT" --log-level 4
+        iptables -A l4d2loginfilter -m u32 --u32 '0>>22&0x3C@13=0x72657365 && 0>>22&0x3C@17>>8=0x727665' -m limit --limit 60/min --limit-burst 20 -j LOG --log-prefix "$LOG_PREFIX_L4D2_RESERVE" --log-level 4
         iptables -A l4d2loginfilter -j DROP
     fi
 }
@@ -159,9 +159,9 @@ ip_70_l4d2_a2s_filters_apply_for_chain() {
     target_ports="${target_ports#,}"
     target_ports="${target_ports%,}"
 
-    iptables -A "$chain" -p udp -m multiport --dports "$target_ports" -m string --algo bm --hex-string '|FFFFFFFF54|' -j A2S_LIMITS
-    iptables -A "$chain" -p udp -m multiport --dports "$target_ports" -m string --algo bm --hex-string '|FFFFFFFF55|' -j A2S_PLAYERS_LIMITS
-    iptables -A "$chain" -p udp -m multiport --dports "$target_ports" -m string --algo bm --hex-string '|FFFFFFFF56|' -j A2S_RULES_LIMITS
+    iptables -A "$chain" -p udp -m multiport --dports "$target_ports" -m u32 --u32 '0>>22&0x3C@8=0xFFFFFFFF && 0>>22&0x3C@12>>24=0x54' -j A2S_LIMITS
+    iptables -A "$chain" -p udp -m multiport --dports "$target_ports" -m u32 --u32 '0>>22&0x3C@8=0xFFFFFFFF && 0>>22&0x3C@12>>24=0x55' -j A2S_PLAYERS_LIMITS
+    iptables -A "$chain" -p udp -m multiport --dports "$target_ports" -m u32 --u32 '0>>22&0x3C@8=0xFFFFFFFF && 0>>22&0x3C@12>>24=0x56' -j A2S_RULES_LIMITS
 
     if [ "${ENABLE_STEAM_GROUP_FILTER}" = "true" ]; then
         steam_signatures_csv="${STEAM_GROUP_SIGNATURES//[[:space:]]/}"
@@ -172,11 +172,11 @@ ip_70_l4d2_a2s_filters_apply_for_chain() {
             case "$steam_sig" in
                 54|55|56|71) continue ;;
             esac
-            iptables -A "$chain" -p udp -m multiport --dports "$target_ports" -m string --algo bm --hex-string "|FFFFFFFF${steam_sig}|" -j STEAM_GROUP_LIMITS
+            iptables -A "$chain" -p udp -m multiport --dports "$target_ports" -m u32 --u32 "0>>22&0x3C@8=0xFFFFFFFF && 0>>22&0x3C@12>>24=0x${steam_sig}" -j STEAM_GROUP_LIMITS
         done
     fi
 
-    iptables -A "$chain" -p udp -m multiport --dports "$L4D2_GAMESERVER_UDP_PORTS" -m length --length 1:70 -m string --algo bm --hex-string '|FFFFFFFF71|' -j l4d2loginfilter
+    iptables -A "$chain" -p udp -m multiport --dports "$L4D2_GAMESERVER_UDP_PORTS" -m u32 --u32 '0>>22&0x3C@4>>16&0xFFFF=1:50' -m u32 --u32 '0>>22&0x3C@8=0xFFFFFFFF && 0>>22&0x3C@12>>24=0x71' -j l4d2loginfilter
 }
 
 ip_70_l4d2_a2s_filters_apply() {

@@ -118,13 +118,13 @@ ip_50_l4d2_udp_base_apply() {
         # Only bypass signatures that have an actual downstream classifier.
         # Everything else should stay under the generic NEW limiter instead of
         # falling through to the INPUT/DOCKER-USER default DROP policy.
-        iptables -A UDP_GAME_NEW_LIMIT -m string --algo bm --hex-string '|FFFFFFFF54|' -j RETURN
-        iptables -A UDP_GAME_NEW_LIMIT -m string --algo bm --hex-string '|FFFFFFFF55|' -j RETURN
-        iptables -A UDP_GAME_NEW_LIMIT -m string --algo bm --hex-string '|FFFFFFFF56|' -j RETURN
+        iptables -A UDP_GAME_NEW_LIMIT -m u32 --u32 '0>>22&0x3C@8=0xFFFFFFFF && 0>>22&0x3C@12>>24=0x54' -j RETURN
+        iptables -A UDP_GAME_NEW_LIMIT -m u32 --u32 '0>>22&0x3C@8=0xFFFFFFFF && 0>>22&0x3C@12>>24=0x55' -j RETURN
+        iptables -A UDP_GAME_NEW_LIMIT -m u32 --u32 '0>>22&0x3C@8=0xFFFFFFFF && 0>>22&0x3C@12>>24=0x56' -j RETURN
         # L4D2 login/connect classifiers only apply to GameServer ports. SourceTV
         # also sends FFFFFFFF71 connect handshakes, but those should stay under
         # the generic NEW limiter so short legitimate TV packets are accepted.
-        iptables -A UDP_GAME_NEW_LIMIT -p udp -m multiport --dports "$L4D2_GAMESERVER_UDP_PORTS" -m string --algo bm --hex-string '|FFFFFFFF71|' -j RETURN
+        iptables -A UDP_GAME_NEW_LIMIT -p udp -m multiport --dports "$L4D2_GAMESERVER_UDP_PORTS" -m u32 --u32 '0>>22&0x3C@8=0xFFFFFFFF && 0>>22&0x3C@12>>24=0x71' -j RETURN
 
         if [ "${ENABLE_STEAM_GROUP_FILTER}" = "true" ]; then
             steam_signatures_csv="${STEAM_GROUP_SIGNATURES//[[:space:]]/}"
@@ -135,13 +135,13 @@ ip_50_l4d2_udp_base_apply() {
                 case "$steam_sig" in
                     54|55|56|71) continue ;;
                 esac
-                iptables -A UDP_GAME_NEW_LIMIT -m string --algo bm --hex-string "|FFFFFFFF${steam_sig}|" -j RETURN
+                iptables -A UDP_GAME_NEW_LIMIT -m u32 --u32 "0>>22&0x3C@8=0xFFFFFFFF && 0>>22&0x3C@12>>24=0x${steam_sig}" -j RETURN
             done
         fi
 
-        iptables -A UDP_GAME_NEW_LIMIT_SOURCETV -m string --algo bm --hex-string '|FFFFFFFF54|' -j RETURN
-        iptables -A UDP_GAME_NEW_LIMIT_SOURCETV -m string --algo bm --hex-string '|FFFFFFFF55|' -j RETURN
-        iptables -A UDP_GAME_NEW_LIMIT_SOURCETV -m string --algo bm --hex-string '|FFFFFFFF56|' -j RETURN
+        iptables -A UDP_GAME_NEW_LIMIT_SOURCETV -m u32 --u32 '0>>22&0x3C@8=0xFFFFFFFF && 0>>22&0x3C@12>>24=0x54' -j RETURN
+        iptables -A UDP_GAME_NEW_LIMIT_SOURCETV -m u32 --u32 '0>>22&0x3C@8=0xFFFFFFFF && 0>>22&0x3C@12>>24=0x55' -j RETURN
+        iptables -A UDP_GAME_NEW_LIMIT_SOURCETV -m u32 --u32 '0>>22&0x3C@8=0xFFFFFFFF && 0>>22&0x3C@12>>24=0x56' -j RETURN
         if [ "${ENABLE_STEAM_GROUP_FILTER}" = "true" ]; then
             for steam_sig in "${steam_signatures[@]}"; do
                 [ -z "$steam_sig" ] && continue
@@ -149,16 +149,16 @@ ip_50_l4d2_udp_base_apply() {
                 case "$steam_sig" in
                     54|55|56|71) continue ;;
                 esac
-                iptables -A UDP_GAME_NEW_LIMIT_SOURCETV -m string --algo bm --hex-string "|FFFFFFFF${steam_sig}|" -j RETURN
+                iptables -A UDP_GAME_NEW_LIMIT_SOURCETV -m u32 --u32 "0>>22&0x3C@8=0xFFFFFFFF && 0>>22&0x3C@12>>24=0x${steam_sig}" -j RETURN
             done
         fi
     fi
 
     if [ "${ENABLE_UDP_NEW_LARGE_FILTER}" = "true" ]; then
         if [ "${ENABLE_UDP_BASELINE_LOGS}" = "true" ]; then
-            iptables -A UDP_GAME_NEW_LIMIT -m length --length "${UDP_NEW_LARGE_DROP_MIN_LEN}:65535" -m limit --limit 60/min --limit-burst 20 -j LOG --log-prefix "$LOG_PREFIX_UDP_NEW_LIMIT" --log-level 4
+            iptables -A UDP_GAME_NEW_LIMIT -m u32 --u32 "0>>22&0x3C@4>>16&0xFFFF=$((UDP_NEW_LARGE_DROP_MIN_LEN - 20)):65535" -m limit --limit 60/min --limit-burst 20 -j LOG --log-prefix "$LOG_PREFIX_UDP_NEW_LIMIT" --log-level 4
         fi
-        iptables -A UDP_GAME_NEW_LIMIT -m length --length "${UDP_NEW_LARGE_DROP_MIN_LEN}:65535" -j DROP
+        iptables -A UDP_GAME_NEW_LIMIT -m u32 --u32 "0>>22&0x3C@4>>16&0xFFFF=$((UDP_NEW_LARGE_DROP_MIN_LEN - 20)):65535" -j DROP
     fi
 
     iptables -A UDP_GAME_NEW_LIMIT -m hashlimit --hashlimit-upto "${UDP_NEW_SRC_RATE}/s" --hashlimit-burst "$UDP_NEW_SRC_BURST" --hashlimit-mode srcip,dstport --hashlimit-name L4D2_NEW_HASHLIMIT --hashlimit-htable-expire 5000 -j UDP_GAME_NEW_LIMIT_GLOBAL
@@ -207,24 +207,4 @@ ip_50_l4d2_udp_base_apply() {
         iptables -A "$chain" -p udp -m multiport --dports "$L4D2_SOURCETV_UDP_PORTS" -m state --state ESTABLISHED -j UDP_GAME_ESTABLISHED_LIMIT
     done
 
-    iptables -A INPUT -m state --state ESTABLISHED,RELATED -j ACCEPT
-    if [ "$TYPECHAIN" -eq 1 ] || [ "$TYPECHAIN" -eq 2 ]; then
-        iptables -A DOCKER-USER -m state --state ESTABLISHED,RELATED -j ACCEPT
-    fi
-
-    iptables -A INPUT -p udp --sport 53 -m state --state ESTABLISHED,RELATED -j ACCEPT
-    if [ "$TYPECHAIN" -eq 1 ] || [ "$TYPECHAIN" -eq 2 ]; then
-        iptables -A DOCKER-USER -p udp --sport 53 -m state --state ESTABLISHED,RELATED -j ACCEPT
-    fi
-
-    if [ "$TYPECHAIN" -eq 0 ] || [ "$TYPECHAIN" -eq 2 ]; then
-        iptables -A INPUT -p icmp -m hashlimit --hashlimit-upto 20/sec --hashlimit-burst 2 --hashlimit-mode dstip --hashlimit-name PINGPROTECT --hashlimit-htable-expire 1000 --hashlimit-htable-max 1048576 -j ACCEPT
-        iptables -A INPUT -p icmp -m limit --limit 30/min --limit-burst 10 -j LOG --log-prefix "$LOG_PREFIX_ICMP_FLOOD" --log-level 4
-        iptables -A INPUT -p icmp -j DROP
-    fi
-    if [ "$TYPECHAIN" -eq 1 ] || [ "$TYPECHAIN" -eq 2 ]; then
-        iptables -A DOCKER-USER -p icmp -m hashlimit --hashlimit-upto 20/sec --hashlimit-burst 2 --hashlimit-mode dstip --hashlimit-name PINGPROTECT --hashlimit-htable-expire 1000 --hashlimit-htable-max 1048576 -j ACCEPT
-        iptables -A DOCKER-USER -p icmp -m limit --limit 30/min --limit-burst 10 -j LOG --log-prefix "$LOG_PREFIX_ICMP_FLOOD" --log-level 4
-        iptables -A DOCKER-USER -p icmp -j DROP
-    fi
 }

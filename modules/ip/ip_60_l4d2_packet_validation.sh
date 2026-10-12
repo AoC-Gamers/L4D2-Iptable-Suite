@@ -43,30 +43,30 @@ ip_60_l4d2_packet_validation_apply_for_chain() {
     local ports="$2"
 
     if [ "${ENABLE_PACKET_NORMALIZATION_LOGS}" = "true" ]; then
-        iptables -A "$chain" -p udp -m multiport --dports "$ports" -m length --length 0:28 -m limit --limit 60/min -j LOG --log-prefix "$LOG_PREFIX_INVALID_SIZE" --log-level 4
+        iptables -A "$chain" -p udp -m multiport --dports "$ports" -m u32 --u32 '0>>22&0x3C@4>>16&0xFFFF=0:8' -m limit --limit 60/min -j LOG --log-prefix "$LOG_PREFIX_INVALID_SIZE" --log-level 4
     fi
-    iptables -A "$chain" -p udp -m multiport --dports "$ports" -m length --length 0:28 -j DROP
+    iptables -A "$chain" -p udp -m multiport --dports "$ports" -m u32 --u32 '0>>22&0x3C@4>>16&0xFFFF=0:8' -j DROP
 
     if [ "${ENABLE_PACKET_NORMALIZATION_LOGS}" = "true" ]; then
-        iptables -A "$chain" -p udp -m multiport --dports "$ports" -m length --length 2521:65535 -m limit --limit 60/min -j LOG --log-prefix "$LOG_PREFIX_INVALID_SIZE" --log-level 4
+        iptables -A "$chain" -p udp -m multiport --dports "$ports" -m u32 --u32 '0>>22&0x3C@4>>16&0xFFFF=2501:65535' -m limit --limit 60/min -j LOG --log-prefix "$LOG_PREFIX_INVALID_SIZE" --log-level 4
     fi
-    iptables -A "$chain" -p udp -m multiport --dports "$ports" -m length --length 2521:65535 -j DROP
+    iptables -A "$chain" -p udp -m multiport --dports "$ports" -m u32 --u32 '0>>22&0x3C@4>>16&0xFFFF=2501:65535' -j DROP
 
     if [ "${ENABLE_MALFORMED_FILTER}" = "true" ]; then
         if [ "${ENABLE_PACKET_NORMALIZATION_LOGS}" = "true" ]; then
-            iptables -A "$chain" -p udp -m multiport --dports "$ports" -m length --length 30:32 -m limit --limit 60/min -j LOG --log-prefix "$LOG_PREFIX_MALFORMED" --log-level 4
+            iptables -A "$chain" -p udp -m multiport --dports "$ports" -m u32 --u32 '0>>22&0x3C@4>>16&0xFFFF=10:12' -m limit --limit 60/min -j LOG --log-prefix "$LOG_PREFIX_MALFORMED" --log-level 4
         fi
-        iptables -A "$chain" -p udp -m multiport --dports "$ports" -m length --length 30:32 -j DROP
+        iptables -A "$chain" -p udp -m multiport --dports "$ports" -m u32 --u32 '0>>22&0x3C@4>>16&0xFFFF=10:12' -j DROP
 
         if [ "${ENABLE_PACKET_NORMALIZATION_LOGS}" = "true" ]; then
-            iptables -A "$chain" -p udp -m multiport --dports "$ports" -m length --length 46:46 -m limit --limit 60/min -j LOG --log-prefix "$LOG_PREFIX_MALFORMED" --log-level 4
+            iptables -A "$chain" -p udp -m multiport --dports "$ports" -m u32 --u32 '0>>22&0x3C@4>>16&0xFFFF=26' -m limit --limit 60/min -j LOG --log-prefix "$LOG_PREFIX_MALFORMED" --log-level 4
         fi
-        iptables -A "$chain" -p udp -m multiport --dports "$ports" -m length --length 46:46 -j DROP
+        iptables -A "$chain" -p udp -m multiport --dports "$ports" -m u32 --u32 '0>>22&0x3C@4>>16&0xFFFF=26' -j DROP
 
         if [ "${ENABLE_PACKET_NORMALIZATION_LOGS}" = "true" ]; then
-            iptables -A "$chain" -p udp -m multiport --dports "$ports" -m length --length 60:60 -m limit --limit 60/min -j LOG --log-prefix "$LOG_PREFIX_MALFORMED" --log-level 4
+            iptables -A "$chain" -p udp -m multiport --dports "$ports" -m u32 --u32 '0>>22&0x3C@4>>16&0xFFFF=40' -m limit --limit 60/min -j LOG --log-prefix "$LOG_PREFIX_MALFORMED" --log-level 4
         fi
-        iptables -A "$chain" -p udp -m multiport --dports "$ports" -m length --length 60:60 -j DROP
+        iptables -A "$chain" -p udp -m multiport --dports "$ports" -m u32 --u32 '0>>22&0x3C@4>>16&0xFFFF=40' -j DROP
     fi
 }
 

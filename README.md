@@ -1,468 +1,68 @@
-# L4D2 IPTables Suite
+# L4D2 Iptable Suite
 
-<div align="center">
+Firewall modular con dos motores: **iptables** (frontends legacy/nft) y **nftables
+nativo**. Núcleo general para configuración, composición, propiedad, bloqueo,
+aplicación, confirmación, rollback y persistencia; módulos específicos para servicios.
 
-![L4D2 IPTables Suite](https://img.shields.io/badge/L4D2-IPTables%20Suite-green.svg)
-![Version](https://img.shields.io/badge/version-2.4-blue.svg)
-![License](https://img.shields.io/badge/license-MIT-yellow.svg)
-![Platform](https://img.shields.io/badge/platform-Linux-lightgrey.svg)
+Esta revisión cambia el flujo de aplicación y configuraciones peligrosas. **Leer
+[la migración](docs/security/migration.md) antes de desplegar sobre una instalación
+anterior.** El checkout de desarrollo no debe ejecutarse como root: desplegar código
+y configuración revisados, propiedad de root y sin escritura de grupo/otros.
 
-**Suite de herramientas avanzadas para administración de iptables especializada en servidores Left 4 Dead 2**
-
-*Protección completa contra ataques DDoS específicos de Source Engine con sistema de logging y análisis integrado*
-
-</div>
-
----
-
-## 📋 Características Principales
-
-- 🛡️ **Protección Avanzada DDoS**: Mitigación específica contra ataques comunes a servidores L4D2
-- ⚖️ **Doble Backend**: Soporte modular para `iptables` (legacy) y `nftables` (modern)
-- 🐳 **Soporte Docker**: Compatibilidad completa con servidores nativos y contenedores
-- 🔐 **Soporte OpenVPN**: Acceso remoto seguro (host o Docker) sin afectar reglas de juego
-- 📊 **Sistema de Logging**: Análisis detallado de ataques con reportes JSON comprehensivos
-- ⚙️ **Gestión Simplificada**: Herramientas intuitivas para administrar reglas persistentes
-- 🎯 **Detección Inteligente**: Identificación de patrones específicos de ataques Source Engine
-- 📈 **Análisis Temporal**: Reportes por IP, puerto, día, semana, mes y tipo de ataque
-
-## 🚀 Instalación Rápida
-
-### Requisitos Previos
-
-- **Sistema**: Linux (Ubuntu 18.04+, Debian 9+, CentOS 7+)
-- **Permisos**: Acceso root/sudo
-- **Dependencias**: Python 3.6+, iptables, rsyslog
-
-### Bibliotecas/paquetes requeridos (Debian/Ubuntu)
-
-Instala primero los paquetes base del sistema:
-
-```bash
-sudo apt update
-sudo apt install -y \
-  iptables \
-  nftables \
-  rsyslog \
-  python3 \
-  python3-pip \
-  python3-venv
+```sh
+# Sin root, sin tocar reglas activas:
+./nftables.rules.sh validate --env-file config/profiles/web.conf
+./nftables.rules.sh plan --env-file config/profiles/web.conf
+./iptables.rules.sh generate --env-file config/profiles/web.conf > candidate.json
 ```
 
-Instala luego las librerías de Python del analizador:
+Una lista vacía selecciona el perfil mínimo, no todos los módulos. Perfiles disponibles:
+[host mínimo](config/profiles/host-minimal.conf), [web](config/profiles/web.conf),
+[juegos](config/profiles/games.conf), [gateway VPN](config/profiles/vpn-gateway.conf).
+Se pueden combinar. [Grants por servicio](config/access.example.json) y
+[publicaciones de contenedores](config/containers.example.json) separan acceso al host,
+redes remotas y puertos públicos/internos. Ejemplos sin datos privados ni secretos.
 
-```bash
-python3 -m pip install -r log-summary/requirements.txt
+La aplicación comprueba todos los módulos y candidatas antes de escribir. nftables
+reemplaza objetos propios en una transacción; iptables reemplaza cadenas propias por
+tabla/familia con garantías limitadas entre commits. Ambos usan un lock común,
+registro de propiedad y reversión temporizada independiente de la sesión. Confirmar
+requiere comprobar una **conexión administrativa nueva**. No se vacían tablas globales,
+no se reinicia Docker y no se reemplaza persistencia de terceros.
+
+- [Operación, confirmación y rollback](docs/security/operations.md).
+- [Arquitectura](docs/modular-loader-architecture.md).
+- [Capacidades, familias y convivencia Docker](docs/security/capabilities.md).
+- [Matriz de hallazgos](docs/security/findings.md).
+- [Resultados y limitaciones](docs/security/results.md).
+- [Gestión selectiva y persistencia](docs/ipp.md).
+
+## Pruebas
+
+```sh
+python3 -I tests/test_core.py       # lógica y composición
+python3 -I tests/test_geoip.py      # datos GeoIP sintéticos, sin descargas
+bash tests/generate.sh             # generación sin privilegios
+bash tests/public-ip-watch.sh      # watcher con mocks (no prueba Netfilter)
+bash tests/isolated-run.sh tests/check-engine.py  # kernel, namespace desechable
+bash tests/isolated-run.sh          # tráfico real, rollback y concurrencia aislados
 ```
 
-Opcional (recomendado, para aislar dependencias):
-
-```bash
-./log-summary/venv.loggin.sh
-```
-
-### Instalación
-
-```bash
-# 1. Clonar el repositorio
-git clone https://github.com/AoC-Gamers/L4D2-Iptable-Suite.git
-cd L4D2-Iptable-Suite
-
-# 2. Configurar archivo de entorno
-cp example.env .env
-nano .env  # Ajustar configuración según tu servidor
-
-# 3. Aplicar reglas de iptables
-sudo ./iptables.rules.sh
-
-# 3b. (Opcional) Aplicar reglas con backend nftables
-sudo ./nftables.rules.sh
-
-# 4. Guardar persistencia del backend activo
-sudo ./ipp.sh
-
-# 5. Configurar entorno Python (Opcional - Recomendado)
-chmod +x log-summary/venv.loggin.sh
-./log-summary/venv.loggin.sh
-# Seleccionar opción 1: Instalar entorno virtual
-
-# 6. Configurar sistema de logging
-# Método A: Con entorno virtual (recomendado)
-./log-summary/venv.loggin.sh
-# Seleccionar opción 6: Run iptable.loggin.py script
-
-# Método B: Ejecución directa
-python3 log-summary/app/iptable.loggin.py --env-file .env
-```
-
-### Configuración Básica
-
-Edita el archivo `.env` según tu configuración:
-
-```bash
-# Tipo de servidor (0=Nativo, 1=Docker, 2=Ambos)
-TYPECHAIN=0
-
-# Puertos de tu servidor L4D2
-L4D2_GAMESERVER_UDP_PORTS="27015"
-L4D2_SOURCETV_UDP_PORTS="27020"
-
-# Protección TCP RCON
-# Incluir l4d2_tcp_protect en MODULES_ONLY para activar
-
-# SSH: puertos expuestos al incluir módulo tcp_ssh
-SSH_PORT="2222,22220:22229"
-
-# IPs de confianza (bypass completo del sistema - ⚠️ TODOS los puertos)
-BYPASS_SOURCE_IPS="198.51.100.10 203.0.113.5"
-BYPASS_SOURCE_DOMAINS="admin-gateway.example.net"
-
-# OpenVPN Server (host o Docker)
-# Se configura solo si incluyes el módulo openvpn_server
-OVPNSRV_PORT=1194
-OVPNSRV_PROTO="udp"
-OVPNSRV_SUBNET="10.8.0.0/24"
-OVPNSRV_INTERFACE="tun0"  # o "tun+" para múltiples
-OVPNSRV_DOCKER_INTERFACE="docker0"  # opcional para OpenVPN en Docker
-OVPNSRV_LAN_SUBNET="192.168.1.0/24"
-OVPNSRV_LAN_INTERFACE="enp3s0"  # requerido si OVPNSRV_ENABLE_NAT=true
-OVPNSRV_ENABLE_NAT=false
-
-# (Opcional) Alias del router/LAN vía VPN server (DNAT)
-OVPNSRV_ROUTER_REAL_IP=""
-OVPNSRV_ROUTER_ALIAS_IP=""
-OVPNSRV_LOG_ENABLED=false
-OVPNSRV_LOG_PREFIX="VPN_SERVER_TRAFFIC: "
-
-# OpenVPN Site-to-Site
-# Se configura solo si incluyes el módulo openvpn_sitetosite.
-# Incompatible con openvpn_server: no usar ambos a la vez.
-OVPNS2S_INTERFACE="tun0"
-OVPNS2S_LOCAL_SUBNETS="192.168.1.0/24"
-OVPNS2S_REMOTE_SUBNETS=""
-OVPNS2S_ENABLE_NAT=false
-OVPNS2S_LOCAL_INTERFACE=""
-OVPNS2S_LOG_ENABLED=false
-OVPNS2S_LOG_PREFIX="VPN_S2S_TRAFFIC: "
-
-# (Opcional) Alias del router/LAN en modo S2S (DNAT)
-# Útil cuando hay subredes solapadas (ej. 192.168.1.0/24 en ambos sitios)
-# Formato multi-alias: "real_ip;alias_ip,real_ip;alias_ip"
-OVPNS2S_ROUTER_ALIAS=""
-
-# Formato legacy (single alias, compatible)
-OVPNS2S_ROUTER_REAL_IP=""
-OVPNS2S_ROUTER_ALIAS_IP=""
-# Si true, hace SNAT de retorno hacia el router real (requiere OVPNS2S_LOCAL_INTERFACE)
-OVPNS2S_ROUTER_ALIAS_SNAT=false
-
-# Puertos extra permitidos (servicios adicionales)
-# Formato: "puerto,puerto" o rangos "inicio:fin" (multiport)
-# Vacío = no agrega excepciones extras.
-BYPASS_UDP_PORTS=""
-BYPASS_TCP_PORTS=""
-
-# A2S / Steam Group
-# En l4d2_a2s_filters, poner RATE=0 o BURST=0 desactiva el limitador
-# específico de esa clase. Útil para diagnóstico temporal de visibilidad.
-A2S_INFO_RATE=75
-A2S_INFO_BURST=375
-A2S_PLAYERS_RATE=24
-A2S_PLAYERS_BURST=120
-A2S_RULES_RATE=12
-A2S_RULES_BURST=60
-STEAM_GROUP_RATE=30
-STEAM_GROUP_BURST=150
-L4D2_LOGIN_RATE=4
-L4D2_LOGIN_BURST=16
-
-Nota Docker: esta suite usa directamente la cadena `DOCKER-USER` en `filter` para las reglas del usuario, siguiendo el flujo recomendado por Docker.
-```
-
-> ⚠️ **ADVERTENCIA**: Las entradas de `BYPASS_SOURCE_IPS` y `BYPASS_SOURCE_DOMAINS` tendrán acceso **completo e irrestricto** a toda la máquina (SSH, Web, Bases de datos, APIs, etc.). Usar solo para administradores y orígenes absolutamente confiables.
-
-## 🛠️ Herramientas Incluidas
-
-### 1. `iptables.rules.sh` - Motor de Protección Principal
-
-Script principal que implementa reglas avanzadas de iptables específicamente diseñadas para mitigar ataques DDoS contra servidores L4D2. Incluye protección contra floods UDP, ataques challenge, validación de paquetes, consultas A2S maliciosas, spam TCP/RCON, consultas Steam Group y ping floods. 
-
-Soporta configuración flexible para servidores nativos, contenedores Docker o configuraciones híbridas mediante variables de entorno.
-
-**📖 [Documentación Completa](docs/iptables.rules.md)**
-
----
-
-### 1b. `nftables.rules.sh` - Backend Moderno
-
-Entrypoint equivalente para aplicar protección usando `nftables` con la misma filosofía modular y configuración compartida por `.env`.
-
-Ideal para entornos modernos que ya operan con reglas `nft` y desean mantener paridad funcional con el flujo legacy.
-
-**📖 [Arquitectura Modular](docs/modular-loader-architecture.md)**
-
----
-
-### 1c. `l4d2-public-ip-watch` - Recuperación ante IP dinámica
-
-Watcher `systemd` para hosts detrás de una conexión residencial con IP pública
-dinámica. Consulta la IPv4 WAN, espera confirmación de los nameservers
-autoritativos de No-IP y reaplica nftables solamente cuando detecta un cambio
-confirmado. Incluye validación previa, estado persistente y un hook opcional
-para solicitar un heartbeat a los gameservers sin reiniciarlos.
-
-**📖 [Instalación y operación](docs/public-ip-watch.md)**
-
-```bash
-make public-ip-watch-test
-sudo make public-ip-watch-install
-make public-ip-watch-status
-```
-
----
-
-### 2. `ipp.sh` - Gestor de Persistencia
-
-Herramienta interactiva con menú para gestionar reglas guardadas y persistencia operativa de ambos backends. En `iptables` maneja `iptables-persistent`; en `nftables` trabaja con `nftables.service` y `/etc/nftables.conf`.
-
-Simplifica significativamente la administración de reglas guardadas, recarga selectiva y diagnóstico del estado activo/persistente.
-
-**📖 [Documentación Completa](docs/ipp.md)**
-
----
-
-### 3. `iptable.loggin.py` - Sistema de Análisis
-
-Herramienta avanzada de logging y análisis que configura automáticamente rsyslog para capturar logs de iptables y genera reportes JSON detallados. Proporciona análisis temporal por IP, puerto, día, semana, mes y tipo de ataque, permitiendo identificar patrones maliciosos y tendencias de seguridad.
-
-Incluye detección de 12 tipos específicos de ataques contra servidores L4D2 con categorización por severidad y recomendaciones de mitigación.
-
-**📖 [Documentación Completa](log-summary/docs/iptable.loggin.md)**
-
----
-
-### 4. `log-summary/venv.loggin.sh` - Gestor de Entorno Virtual
-
-Sistema avanzado de gestión de entorno virtual Python con interfaz interactiva de 8 opciones. Facilita la instalación, configuración y uso de `iptable.loggin.py` ubicado en `log-summary/app/` mediante aislamiento de dependencias y compatibilidad multiplataforma.
-
-**Características principales:**
-- 🖥️ **Compatibilidad multiplataforma**: Windows, Linux, macOS
-- 🔧 **Instalación automática**: Crea y configura el entorno virtual automáticamente
-- 🐍 **Ejecución guiada**: Ejecuta el analizador desde `log-summary/` con el entorno listo
-- 📊 **Verificación completa**: Confirma dependencias y archivos antes de ejecutar
-- 🎯 **Uso directo**: Opción 6 ejecuta el script sin activación manual del entorno
-
-**Menú interactivo:**
-```
-Available options:
-  1. 🔧 Install virtual environment
-  2. ▶️  Activate virtual environment  
-  3. ⏹️  Deactivate virtual environment
-  4. 📊 Check environment status
-  5. 🔄 Reinstall dependencies
-  6. 🐍 Run iptable.loggin.py script
-  7. ❓ Help
-  8. 🚪 Exit
-```
-
-**📖 [Documentación Completa](log-summary/docs/venv.loggin.md)**
-
----
-
-### 5. Tooling de Modularidad
-
-- **Smoke tests modulares**: `tests/smoke-modules.sh`
-  - Verifica contrato mínimo por módulo y ejecuta `--dry-run` de ambos backends si hay privilegios/dependencias.
-
-Comando rápido:
-
-```bash
-./tests/smoke-modules.sh
-```
-
----
-
-### 6. Contenedor de Resumen Rápido de Logs
-
-Herramienta opcional para generar resúmenes rápidos desde logs estructurados `FW_EVT` en formato JSON/TXT, útil para operación por SSH o revisión rápida.
-
-Ruta:
-
-```bash
-log-summary
-```
-
-Documentación:
-
-```bash
-log-summary/docs/log-summary-container.md
-```
-
----
-
-## 🎮 Casos de Uso Específicos
-
-### Servidor Individual L4D2
-```bash
-# .env configuration
-TYPECHAIN=0
-L4D2_GAMESERVER_UDP_PORTS="27015"
-L4D2_SOURCETV_UDP_PORTS="27020"
-# Activación TCP protect por módulo: incluir l4d2_tcp_protect en MODULES_ONLY
-```
-
-### Múltiples Servidores
-```bash
-# .env configuration
-TYPECHAIN=0
-L4D2_GAMESERVER_UDP_PORTS="27015:27030"  # 16 servidores
-L4D2_SOURCETV_UDP_PORTS="27115:27130"          # 16 SourceTV
-# Activación TCP protect por módulo: incluir l4d2_tcp_protect en MODULES_ONLY
-```
-
-### Servidores en Docker
-```bash
-# .env configuration
-TYPECHAIN=1  # Solo Docker
-L4D2_GAMESERVER_UDP_PORTS="27015:27018"
-TCP_DOCKER="80,443"  # Puertos adicionales
-SSH_DOCKER="2222"
-```
-
-### Configuración Híbrida
-```bash
-# .env configuration
-TYPECHAIN=2  # Nativo + Docker
-L4D2_GAMESERVER_UDP_PORTS="27015:27020"
-L4D2_SOURCETV_UDP_PORTS="27115:27120"
-TCP_DOCKER="80,443,8080"
-# Activación TCP protect por módulo: incluir l4d2_tcp_protect en MODULES_ONLY
-```
-
-## 📊 Tipos de Ataques Detectados
-
-El sistema identifica y mitiga los siguientes patrones de ataque:
-
-| Tipo de Ataque | Descripción | Severidad | Impacto |
-|---|---|---|---|
-| **A2S_INFO_FLOOD** | Flood de consultas de información del servidor | Media | Saturación CPU/Bandwidth |
-| **A2S_PLAYERS_FLOOD** | Flood de consultas de lista de jugadores | Media | Mayor consumo de bandwidth |
-| **A2S_RULES_FLOOD** | Flood de consultas de variables del servidor | Alta | Respuesta muy grande |
-| **L4D2_CONNECT_FLOOD** | Flood de paquetes "connect" | Alta | Bloquea conexiones legítimas |
-| **L4D2_RESERVE_FLOOD** | Flood de paquetes "reserve" | Alta | Inestabilidad de lobby |
-| **UDP_NEW_LIMIT** | Límite de conexiones UDP nuevas | Baja | Protección preventiva |
-| **UDP_EST_LIMIT** | Límite de conexiones UDP establecidas | Media | Afecta jugadores activos |
-| **TCP_RCON_BLOCK** | Intentos de acceso RCON malicioso | Alta | Compromiso administrativo |
-| **INVALID_SIZE** | Paquetes con tamaños maliciosos | Baja | Consumo CPU |
-| **MALFORMED** | Paquetes UDP malformados | Baja | Potencial crash |
-| **STEAM_GROUP_FLOOD** | Flood de consultas Steam | Media | Recursos Steam API |
-| **ICMP_FLOOD** | Ping flood | Baja | Degradación de red |
-
-## 📈 Flujo de Trabajo Recomendado
-
-### Backends de Firewall
-
-```bash
-# Legacy (iptables)
-sudo ./iptables.rules.sh
-
-# Modern (nftables)
-sudo ./nftables.rules.sh
-```
-
-### Estructura modular actual
-
-```text
-modules/
-├─ common_loader.sh
-├─ preload.sh
-├─ postload.sh
-├─ common_nft.sh
-├─ ip/   # módulos ip_*.sh
-└─ nf/   # módulos nf_*.sh
-```
-
-### Mapa de módulos (split TCP)
-
-- **SSH base**
-  - `ip_tcp_ssh` / `nf_tcp_ssh`
-  - Variables: `SSH_PORT`, `SSH_DOCKER`, `SSH_RATE`, `SSH_BURST`, `LOG_PREFIX_SSH_ABUSE`
-- **Protección TCP L4D2 (separada)**
-  - `ip_l4d2_tcp_protect` / `nf_l4d2_tcp_protect`
-  - Variables: `L4D2_GAMESERVER_UDP_PORTS`, `LOG_PREFIX_TCP_RCON_BLOCK`
-- **Cadena anti-spam TCP (ip específico)**
-  - `ip_l4d2_tcpfilter_chain` / `nf_l4d2_tcpfilter_chain` (compatibilidad)
-  - En `nftables`, la protección efectiva la aplica `nf_l4d2_tcp_protect`.
-
-### 1. Instalación Inicial
-```bash
-# Configurar reglas básicas
-sudo ./iptables.rules.sh
-
-# Guardar persistencia del backend activo
-sudo ./ipp.sh  # iptables: Install + Save | nftables: Save to /etc/nftables.conf
-
-# Configurar logging con entorno virtual (recomendado)
-./log-summary/venv.loggin.sh  # Opción 1: Install, Opción 6: Run script
-
-# O configurar logging directamente
-python3 log-summary/app/iptable.loggin.py --env-file .env
-# Si vas a usar la opción 1 (configurar rsyslog), ejecútalo con sudo
-```
-
-### 2. Monitoreo Regular
-```bash
-# Generar reportes semanales con entorno virtual
-./log-summary/venv.loggin.sh  # Opción 6: Run script, Opción 4: Analyze logs
-
-# O generar reportes directamente
-python3 log-summary/app/iptable.loggin.py --env-file .env  # Opción 4: Analyze logs
-
-# Verificar estado de reglas
-sudo ./ipp.sh  # Opción 9: Status
-```
-
-### 3. Mantenimiento
-```bash
-# Actualizar configuración
-nano .env
-sudo ./iptables.rules.sh  # Reaplicar reglas
-sudo ./ipp.sh  # Opción 5: Save rules
-
-# Limpiar logs antiguos
-sudo logrotate -f /etc/logrotate.d/l4d2-iptables
-```
-
-## 📚 Documentación Completa
-
-- **[📖 iptables.rules.sh](docs/iptables.rules.md)** - Documentación técnica del motor de protección
-- **[📖 nftables.rules.sh](docs/modular-loader-architecture.md)** - Arquitectura y operación del backend moderno
-- **[📡 Public IP watcher](docs/public-ip-watch.md)** - Detección de cambios WAN, confirmación No-IP y recarga segura
-- **[📖 Arquitectura Modular](docs/modular-loader-architecture.md)** - Contrato de módulos, paridad y validación
-- **[🧭 Auditoría Operativa](docs/operational-audit.md)** - Hallazgos prácticos, falsos positivos y checklist de diagnóstico
-- **[📖 ipp.sh](docs/ipp.md)** - Guía del gestor de persistencia
-- **[📖 iptable.loggin.py](log-summary/docs/iptable.loggin.md)** - Manual del sistema de análisis
-- **[📖 log-summary/venv.loggin.sh](log-summary/docs/venv.loggin.md)** - Guía del gestor de entorno virtual
-- **[📋 example.env](example.env)** - Archivo de configuración de ejemplo  
-- **[📊 log-summary/summary_example/](log-summary/summary_example/)** - Ejemplos de reportes JSON
-- **[📚 Documentación de Módulos](docs/modules/README.md)** - Índice con descripciones breves de cada módulo
-
-## 🤝 Créditos y Reconocimientos
-
-Este proyecto está basado en el trabajo original de **SirPlease** y su repositorio [IPTables](https://github.com/SirPlease/IPTables). La suite L4D2 IPTables incluye modificaciones significativas, nuevas funcionalidades y herramientas complementarias desarrolladas por la comunidad **AoC-Gamers**.
-
-### Contribuidores de la Suite
-- **[SirPlease](http://steamcommunity.com/profiles/76561198004878749)** - Creador del script base de iptables para L4D2
-- **[AoC-Gamers](https://steamcommunity.com/groups/aoc-gamer)** - Desarrollo de herramientas complementarias y mejoras
-- **[Sheo](http://steamcommunity.com/profiles/76561198034909367)** - Por sus aportes para el bloqueo de ataques A2S.
-- Comunidad L4D2 - Testing y feedback
-
----
-
-<div align="center">
-
-**¿Te ha sido útil esta suite? ⭐ ¡Dale una estrella al repositorio!**
-
-*Desarrollado para la comunidad de Left 4 Dead 2*
-
-</div>
+Falta de dependencias/privilegios falla, no cuenta como aprobado. CI separa sintaxis,
+unitarias, generación, comprobación del motor y tráfico. La matriz de versiones y
+las pruebas aún pendientes están en results.md. Las topologías Docker sintéticas
+no certifican una versión real del daemon ni un reinicio completo de VM.
+
+El módulo web limita conexiones de red; no reemplaza límites de peticiones del proxy
+o aplicación. Las reglas locales no mitigan saturación del enlace. Los filtros de
+juego se prueban con tráfico sintético y requieren validación adicional con clientes
+reales y capturas representativas antes del despliegue.
+
+Los analizadores de logs continúan en [log-summary](log-summary/docs/log-summary-container.md).
+La documentación operativa anterior queda como referencia histórica cuando su aviso
+indique que fue reemplazada. La autoridad actual es `docs/security/`.
+
+## Créditos
+
+Basado en [SirPlease/IPTables](https://github.com/SirPlease/IPTables), con módulos y
+herramientas de AoC-Gamers y contribuciones de Sheo y la comunidad L4D2.

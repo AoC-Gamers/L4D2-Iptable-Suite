@@ -1,3 +1,5 @@
+> **Referencia histórica anterior al núcleo transaccional.** Las instrucciones de aplicación, configuración y persistencia de esta página fueron reemplazadas por [operación actual](../security/operations.md), [capacidades](../security/capabilities.md) y [migración](../security/migration.md). No ejecutar las recetas antiguas.
+
 # Módulo unificado — l4d2_tcp_protect (ip/nf)
 
 ## Objetivo
