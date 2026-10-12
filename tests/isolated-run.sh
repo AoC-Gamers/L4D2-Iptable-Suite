@@ -12,7 +12,7 @@ if [[ "${1:-}" == --root-net ]]; then
     shift
 fi
 test_script="${1:-tests/integration.py}"
-case "$test_script" in tests/integration.py|tests/check-engine.py|tests/transaction-flows.py|tests/policy-flows.py) ;; *) exit 2 ;; esac
+case "$test_script" in tests/integration.py|tests/check-engine.py|tests/transaction-flows.py|tests/policy-flows.py|tests/docker-topology-flows.py) ;; *) exit 2 ;; esac
 staging="$(mktemp -d)"
 trap 'rm -rf "$staging"' EXIT
 mkdir "$staging/repo"

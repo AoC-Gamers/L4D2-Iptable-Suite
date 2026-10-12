@@ -78,12 +78,9 @@ def preflight(policy, previous, live):
         require(docker != 'mixed', 'Ambiguous Docker backends: nft tables plus DOCKER-USER; migrate explicitly')
         require(v['DOCKER_BACKEND'] in ('auto', docker), 'Declared Docker backend differs from kernel objects')
         require(policy['backend'] != 'iptables' or docker == 'iptables', 'iptables suite with native nft Docker unsupported')
-        if docker == 'iptables':
-            for f in ('4', '6'):
-                if f == '6' and v['FAMILY_POLICY'] != 'dual':
-                    continue
-                text = live['iprules'][f]
-                require(':DOCKER-USER ' in text and '-A FORWARD -j DOCKER-USER' in text, f"Missing/reordered Docker integration in IPv{f}; no service restart attempted")
+        if docker == 'iptables' and policy['backend'] == 'iptables':
+            diagnostic = docker_forward_diagnostic(live, ('4', '6'), previous if previous and not previous.get('disabled') else None)
+            require(diagnostic['ok'], 'Docker integration preflight failed: ' + '; '.join(diagnostic['errors']))
     if policy['backend'] == 'nftables' and policy['access']['forward'] and not policy.get('disabled'):
         require(live['docker'] not in ('iptables', 'mixed'), 'Native nft routed grants with Docker iptables may encounter FORWARD DROP; use iptables suite or migrate Docker explicitly')
     if policy['backend'] == 'nftables':
@@ -115,6 +112,11 @@ def preflight(policy, previous, live):
             for f in ('4','6'):
                 parsed = parse_save(live['iprules'][f])
                 for table, parent, c in previous.get('hooks', []):
+                    # Removing the last container grant must remain possible if
+                    # Docker has gone away or its own hook has changed. The
+                    # candidate no longer relies on DOCKER-USER in that case.
+                    if parent == 'DOCKER-USER' and not policy.get('access', {}).get('containers'):
+                        continue
                     rs = [r for r in parsed.get(table, {}).get('rules', []) if r[1] == parent]
                     if c not in previous.get('families', {}).get(f, {}).get(table, {}):
                         continue
@@ -139,6 +141,113 @@ def parse_save(text):
 
 def hook_rule(parent, target):
     return ['-A', parent, '-m', 'comment', '--comment', 'l4d2-suite:integration', '-j', target]
+
+
+def _jump_targets(rule, chain):
+    """Return jump/goto operations in one parsed iptables-save rule."""
+    result = []
+    i = 2
+    while i < len(rule):
+        token = rule[i]
+        if token in ('-j', '--jump', '-g', '--goto') and i + 1 < len(rule):
+            result.append((token, rule[i + 1]))
+            i += 2
+        elif token.startswith('--jump='):
+            result.append(('--jump', token.split('=', 1)[1]))
+            i += 1
+        elif token.startswith('--goto='):
+            result.append(('--goto', token.split('=', 1)[1]))
+            i += 1
+        else:
+            i += 1
+    return [(operation, target) for operation, target in result if target == chain]
+
+
+def _unconditional_jump(rule, source, target):
+    """Accept only a plain jump plus inert comment/counter syntax."""
+    if len(rule) < 3 or rule[:2] != ['-A', source]:
+        return False
+    tokens = list(rule[2:])
+    if len(tokens) >= 3 and tokens[0] == '-c' and all(x.isdecimal() for x in tokens[1:3]):
+        tokens = tokens[3:]
+    jumps = 0
+    i = 0
+    while i < len(tokens):
+        token = tokens[i]
+        if token == '-m' and i + 1 < len(tokens) and tokens[i + 1] == 'comment':
+            if i + 3 >= len(tokens) or tokens[i + 2] != '--comment':
+                return False
+            i += 4
+            continue
+        if token in ('-j', '--jump') and i + 1 < len(tokens) and tokens[i + 1] == target:
+            jumps += 1
+            i += 2
+            continue
+        if token == '--jump=' + target:
+            jumps += 1
+            i += 1
+            continue
+        return False
+    return jumps == 1
+
+
+def docker_forward_diagnostic(live, families=('4', '6'), previous=None):
+    """Read-only structural diagnosis for iptables Docker forwarding.
+
+    Docker's FORWARD chain must reach DOCKER-USER through one unconditional,
+    first rule. When a registered suite hook is already installed there, it must
+    remain the unique first rule in DOCKER-USER. The function only inspects the
+    supplied iptables-save snapshots; it never repairs topology.
+    """
+    report = {'ok': True, 'families': {}, 'errors': []}
+    for family in families:
+        parsed = parse_save(live.get('iprules', {}).get(str(family), ''))
+        rules = parsed.get('filter', {}).get('rules', [])
+        chains = parsed.get('filter', {}).get('chains', {})
+        forward = [rule for rule in rules if len(rule) >= 2 and rule[1] == 'FORWARD']
+        links = [(index, rule) for index, rule in enumerate(forward) if _jump_targets(rule, 'DOCKER-USER')]
+        errors = []
+        if 'FORWARD' not in chains:
+            errors.append('filter/FORWARD chain is absent')
+        if 'DOCKER-USER' not in chains:
+            errors.append('filter/DOCKER-USER chain is absent')
+        if len(links) != 1:
+            errors.append(f'expected one FORWARD jump to DOCKER-USER, found {len(links)}')
+        elif links[0][0] != 0:
+            errors.append(f'FORWARD rule {links[0][0] + 1} jumps to DOCKER-USER; it must be first')
+        elif not _unconditional_jump(links[0][1], 'FORWARD', 'DOCKER-USER'):
+            errors.append('first FORWARD link to DOCKER-USER is conditional or has unsupported syntax')
+
+        own_target = None
+        if previous:
+            own_hooks = [h for h in previous.get('hooks', []) if h[:2] == ['filter', 'DOCKER-USER']]
+            prior_chains = previous.get('families', {}).get(str(family), {}).get('filter', {})
+            for _table, _parent, target in own_hooks:
+                if target not in prior_chains or target not in chains:
+                    continue  # No registered object in this family: restore can recreate it.
+                own_target = target
+                own_rule = hook_rule('DOCKER-USER', target)
+                duser_rules = [rule for rule in rules if len(rule) >= 2 and rule[1] == 'DOCKER-USER']
+                count = duser_rules.count(own_rule)
+                if count != 1:
+                    errors.append(f'DOCKER-USER has {count} exact suite hooks to {target}; expected one')
+                elif not duser_rules or duser_rules[0] != own_rule:
+                    errors.append(f'DOCKER-USER rule 1 is not the suite hook to {target}')
+                break
+
+        status = {
+            'ok': not errors,
+            'forward_chain': 'present' if 'FORWARD' in chains else 'absent',
+            'docker_user_chain': 'present' if 'DOCKER-USER' in chains else 'absent',
+            'forward_link_count': len(links),
+            'forward_link_position': links[0][0] + 1 if links else None,
+            'suite_hook_target': own_target,
+            'errors': errors,
+        }
+        report['families'][str(family)] = status
+        report['errors'].extend([f'IPv{family}: {message}' for message in errors])
+    report['ok'] = not report['errors']
+    return report
 
 
 def actual_hooks(policy, live):
