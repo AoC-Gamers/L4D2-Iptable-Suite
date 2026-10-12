@@ -175,6 +175,46 @@ política no cambia ese comportamiento. El watcher carece de verificador externo
 configurado y rechaza recargas desatendidas. Las comprobaciones aisladas no
 acreditan cada cliente real, carga sostenida ni toda ruta externa del destino.
 
+## Habilitación posterior de arranque del 2026-10-12
+
+Tras el cierre anterior se habilitaron guard y restore en el destino, sin
+`--now`. La política confirmada incorpora `tcp_ssh` con puerto administrativo
+explícito y `ADMIN_SOURCES` limitado al host de respaldo; conserva los bypass
+previamente autorizados y el reenvío `unmanaged`. La candidata pasó nftables 1.1.3,
+se aplicó con timer de 600 s, se confirmó desde SSH nuevo y se guardó. El manifiesto
+contiene una recuperación limitada a fuente, destino, interfaz y puerto. El
+servicio SSH conserva su arranque independiente de readiness para poder recuperar
+un restore fallido.
+
+Se retiró el cargador heredado exclusivo de la suite mediante deshabilitación sin
+parada y un drop-in local que vacía start/reload/stop, dejando `ExecStart=true`.
+El archivo anterior se preservó. No se modificaron unidades Docker ni su reenvío.
+La verificación estática de systemd 257.13 pasó; las cinco tablas ajenas y el
+PID/inicio Docker se conservaron. `ready` verificó la política confirmada y el
+manifiesto corresponde a la persistencia nueva. Las unidades quedan habilitadas,
+inactivas hasta el siguiente arranque; eso no se presenta como ejecución exitosa.
+
+El ensayo focalizado QEMU/KVM **`boot-host-19e9918b60`** terminó con salida 0:
+**dos reinicios del guest**, restore válido, rechazo SSH desde una fuente distinta
+en IPv4/IPv6, listener TCP permitido con política normal y bloqueado al corromper
+el schema persistido, SSH nuevo de recuperación durante ese fallo, reparación
+selectiva y conservación de una tabla/persistencia ajena. Se ensayó también la
+retirada del cargador heredado sin parada. Producto y unidades proceden de
+`19fc3f3`; el helper operacional se conserva fuera del repositorio y no es un nuevo
+gate CI. El guest sustituyó fuente/destino/interfaz y puerto SSH por los de su red
+QEMU (SSH/22); la conexión al puerto del destino se comprobó separadamente.
+Versiones: Ubuntu Noble `20260926`, kernel `6.8.0-142-generic`, Python 3.12.3,
+systemd `255.4-1ubuntu8.17` y nftables 1.0.9. Los intentos anteriores del helper
+fallaron por permisos del archivo de prueba, una aserción textual sobre contadores
+y disponibilidad del puerto local; no acreditan aprobación.
+
+**Límites:** no se reinició el destino ni ningún servicio de acceso, Docker, red o
+VPN. Su arranque real queda pendiente de una ventana operativa; el ensayo Ubuntu
+no acredita un reboot Debian del destino ni toda su topología. El watcher sigue
+sin verificador externo. Permanecen las limitaciones de clientes reales, carga y
+muestreo del bloque anterior. El procedimiento canónico de preparación y retirada
+del cargador está en [arranque](../boot/README.md).
+
 ## Condiciones y nueva revisión
 
 Lee [limitaciones vigentes](limitations.md) antes de aceptar un destino. En especial:
