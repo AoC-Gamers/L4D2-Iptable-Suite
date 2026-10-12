@@ -1389,7 +1389,10 @@ def cleanup():
         require_guard()
     for raw_path, expected_hash in state.get('docker_dropins', {}).items():
         path = Path(raw_path)
-        if path.exists() and not path.is_symlink():
+        if path_exists(path):
+            if path.is_symlink():
+                errors.append(f'refusing to remove replaced Docker test drop-in symlink {path}')
+                continue
             if hashlib.sha256(path.read_bytes()).hexdigest() == expected_hash:
                 path.unlink()
             else:
@@ -1421,7 +1424,10 @@ def cleanup():
          'l4d2-firewall.service', 'l4d2-firewall-guard.service'], check=False)
     for unit, expected_hash in state.get('units', {}).items():
         path = Path('/etc/systemd/system') / unit
-        if path.exists() and not path.is_symlink():
+        if path_exists(path):
+            if path.is_symlink():
+                errors.append(f'refusing to remove replaced test unit symlink {path}')
+                continue
             actual = hashlib.sha256(path.read_bytes()).hexdigest()
             if actual == expected_hash:
                 path.unlink()

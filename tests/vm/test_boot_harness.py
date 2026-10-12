@@ -181,6 +181,17 @@ class BootHarnessOwnershipTests(unittest.TestCase):
             boot.remove_owned_manifest_file(state, access)
         self.assertEqual(access.read_bytes(), b'operator-owned\n')
 
+    def test_fixture_symlink_is_preserved_and_reported(self):
+        state = boot.manifest()
+        access = self.state / 'closure-h3-access.json'
+        target = self.root / 'operator-file'
+        target.write_text('operator data')
+        access.symlink_to(target)
+        with self.assertRaises(boot.H3Error):
+            boot.remove_owned_manifest_file(state, access)
+        self.assertTrue(access.is_symlink())
+        self.assertEqual(target.read_text(), 'operator data')
+
     def test_bootstrap_preflight_rejects_fixture_paths_and_network_names(self):
         with patch.object(boot, 'MANIFEST', self.root / 'preexisting-manifest'):
             boot.MANIFEST.write_text('do not replace')
