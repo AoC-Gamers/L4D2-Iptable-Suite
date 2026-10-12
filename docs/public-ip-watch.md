@@ -1,209 +1,164 @@
-> **Referencia histórica anterior al núcleo transaccional.** Las instrucciones de aplicación, configuración y persistencia de esta página fueron reemplazadas por [operación actual](security/operations.md), [capacidades](security/capabilities.md) y [migración](security/migration.md). No ejecutar las recetas antiguas.
+# Vigilancia de IP pública
 
-# Vigilancia de IP pública para Valpo2
+`l4d2-public-ip-watch` detecta cambios de IPv4 pública y coordina una
+reaplicación controlada de la política nftables del suite. El router sigue
+actualizando el registro DDNS; este servicio no inicia sesión en No-IP ni cambia
+registros DNS.
 
-## Objetivo
+La unidad systemd es un servicio `oneshot` root, endurecido y limitado a una
+ejecución de tres minutos. El timer comienza dos minutos después del arranque y
+vuelve a programarlo cada diez minutos, con una variación de hasta 30 segundos
+y recuperación de ejecuciones perdidas. El servicio espera a la red y a
+`l4d2-firewall.service`.
 
-`l4d2-public-ip-watch` vigila la IPv4 pública del servidor Valpo2, ubicado
-detrás de una conexión Movistar Hogar con dirección dinámica. El router sigue
-siendo responsable de actualizar No-IP; este componente solamente detecta y
-confirma el cambio desde el host.
+## Verificación y decisión
 
-Cuando la IP WAN cambia y los nameservers autoritativos de No-IP ya publican
-la misma dirección, el watcher valida y reaplica el backend nftables. Esto
-limpia estado de red local y deja disponible un hook opcional para renovar el
-heartbeat de los gameservers ante el master server de Steam.
+En cada ejecución normal, el watcher:
 
-## Flujo DNS actual
+1. Consulta el detector IPv4 de No-IP con `curl -4`, límite de tiempo y un
+   reintento. Valida el formato y descarta rangos privados, loopback,
+   link-local, multicast y los rangos reservados/documentación que enumera el
+   script.
+2. Si `REQUIRE_DDNS_MATCH=true`, pregunta por el registro A configurado a los
+   nameservers indicados y exige al menos `DDNS_MIN_MATCHES` respuestas iguales
+   a la IP detectada. Cada servidor cuenta como máximo una coincidencia.
+3. Lee el estado guardado, compara las direcciones y decide si debe recargar.
+4. Ante un cambio confirmado (o `--force`), la IP nueva sólo dispara la
+   operación: primero valida y luego reaplica la configuración nftables
+   indicada por `FIREWALL_ENV_FILE`. El watcher no inserta la IP detectada en
+   reglas ni la pasa como argumento al entrypoint.
+5. Ejecuta el hook opcional y guarda la nueva IP después de que todas las
+   acciones anteriores terminen correctamente.
 
-```text
-Router Movistar
-  -> actualiza valparaiso.dns.aoc-gamers.com en No-IP
-  -> Cloudflare publica CNAME DNS-only hacia el hostname de No-IP
-  -> los usuarios consumen los nombres finales de aoc-gamers.com
-```
+Una primera ejecución sin `current-ip` sólo inicializa el estado: no aplica
+firewall ni llama el hook. Un fallo de consulta o una discrepancia DNS no
+cambia el firewall ni avanza el estado. El estado se actualiza de forma
+atómica en `/var/lib/l4d2-public-ip-watch/current-ip`.
 
-Cloudflare no necesita una actualización de dirección mientras los registros
-finales continúen siendo CNAME `Solo DNS`: al resolverlos se sigue la dirección
-vigente publicada por No-IP.
+`--check` consulta WAN y DDNS y muestra la IP guardada; no crea el lock del
+watcher ni modifica estado o firewall. `--dry-run` hace la misma evaluación
+bajo el lock y muestra la acción que tomaría, sin actualizar la IP guardada,
+ejecutar el hook ni cambiar el firewall. `--force` solicita una reaplicación
+aunque la IP guardada no haya cambiado; igualmente exige la validación DDNS
+configurada. Se pueden combinar `--dry-run --force` para ver esa decisión sin
+aplicarla.
 
-## Decisión de recarga
+## Configuración
 
-Cada ejecución realiza estas comprobaciones:
+La unidad lee `/etc/default/l4d2-public-ip-watch`. Es un archivo declarativo
+`CLAVE=VALOR`; no se ejecuta como shell. `PUBLIC_IP_WATCH_CONFIG` permite elegir
+otro archivo para una ejecución manual. Una clave presente en el archivo
+prevalece sobre una variable de entorno del mismo nombre; si falta, el watcher
+usa la variable de entorno y luego su valor predeterminado.
 
-1. Obtiene la IPv4 WAN desde el servicio oficial de detección de No-IP.
-2. Valida que sea una IPv4 pública enrutable.
-3. Consulta directamente `ns1.no-ip.com` hasta `ns4.no-ip.com`, evitando la
-   caché de resolvers recursivos.
-4. Exige que al menos `DDNS_MIN_MATCHES` servidores autoritativos publiquen la
-   misma IP detectada.
-5. Compara la dirección confirmada con el estado persistente.
-6. Si cambió, ejecuta primero `nftables.rules.sh --dry-run` y luego la carga
-   real.
-7. Ejecuta `POST_CHANGE_HOOK`, si está configurado.
-8. Guarda la IP nueva únicamente cuando todas las acciones terminan bien.
+Las opciones principales son:
 
-Los fallos transitorios de HTTP o DNS no alteran el firewall ni el estado. Un
-lock evita dos ejecuciones simultáneas.
+| Clave | Uso |
+| --- | --- |
+| `NOIP_CHECK_URL`, `NOIP_USER_AGENT`, `HTTP_TIMEOUT_SECONDS` | Endpoint de detección, agente y timeout HTTP |
+| `DDNS_HOSTNAME` | Nombre cuyo registro A se compara con la IP WAN |
+| `DDNS_NAMESERVERS` | Lista de servidores consultados; por defecto `ns1.no-ip.com` a `ns4.no-ip.com` |
+| `DDNS_MIN_MATCHES` | Coincidencias mínimas; por defecto 2 |
+| `REQUIRE_DDNS_MATCH` | `true` (predeterminado) exige la coincidencia; `false` omite sólo esa comprobación |
+| `FIREWALL_SCRIPT` | Entry point ejecutable, normalmente `/opt/l4d2-firewall/nftables.rules.sh` |
+| `FIREWALL_ENV_FILE` | Archivo de configuración pasado al entrypoint, normalmente `/opt/l4d2-firewall/.env` |
+| `EXTERNAL_ADMIN_VERIFIER` | Ejecutable confiable que verifica una conexión administrativa nueva desde otro host |
+| `POST_CHANGE_HOOK` | Ejecutable opcional llamado con `IP_ANTERIOR IP_ACTUAL` |
+| `STATE_FILE`, `LOCK_FILE` | Estado persistente y lock propio del watcher |
 
-La primera ejecución normal solamente inicializa el estado y no recarga las
-reglas.
+El ejemplo versionado está en
+[`config/l4d2-public-ip-watch.env.example`](../config/l4d2-public-ip-watch.env.example).
+Reemplaza `games.example.net`, las rutas del host y el verificador de ejemplo
+por valores reales. Protege la configuración como archivo root-owned modo
+`0600`; el servicio valida la confianza de sus rutas antes de ejecutar el
+firewall, el archivo de entorno o el hook. Mantén el archivo del watcher en
+`/etc/default/l4d2-public-ip-watch`; el `.env` raíz del suite configura la
+política que se reaplica y debe estar en la instalación confiable, normalmente
+`/opt/l4d2-firewall/.env`.
 
-## Frecuencia y No-IP
+El watcher exige `EXTERNAL_ADMIN_VERIFIER` para una reaplicación desatendida.
+Ese verificador se ejecuta después de aplicar la candidata y debe comprobar
+desde un equipo independiente que se puede abrir una conexión administrativa
+nueva; el suite confirma automáticamente sólo si devuelve éxito. Si falla, el
+watchdog transaccional restaura la política anterior. El verificador recibe el
+token de confirmación en `SUITE_CONFIRM_TOKEN`; no debe imprimirlo en logs.
 
-No-IP documenta un servicio de detección para equipos detrás de NAT y solicita
-que los clientes no consulten con una frecuencia inferior a cinco minutos. El
-timer utiliza diez minutos.
+`POST_CHANGE_HOOK` corre como root, después de que el verificador confirmó el
+firewall, con la IP previa y la nueva como dos argumentos. Debe ser un
+ejecutable root confiable, acotado y probado. Si el hook falla, no revierte la
+política nftables ya confirmada y el watcher no actualiza `current-ip`; una
+ejecución posterior reintentará el flujo. El hook no debe reiniciar servidores
+como efecto implícito.
 
-Durante la revisión no se encontró un webhook oficial de cambio de IP en la
-documentación pública de No-IP. La API documentada permite actualizar DDNS y
-consultar registros DNS, por lo que el sondeo periódico confirmado contra los
-servidores autoritativos es el mecanismo utilizado.
+## Locks y recuperación
 
-Referencias:
+El watcher mantiene `/run/l4d2-public-ip-watch/watch.lock` durante consulta,
+comparación, recarga, hook y guardado. Esto evita ejecuciones duplicadas del
+watcher y serializa su estado. La recarga llama `nftables.rules.sh --dry-run`
+y luego `nftables.rules.sh --verify-with VERIFICADOR`; el entrypoint usa el
+mismo lock, journal y watchdog del resto de operaciones del suite. El lock del
+watcher no sustituye al lock global del escritor y no coordina herramientas
+externas que modifiquen Netfilter por fuera del suite.
 
-- [Detección de IP de No-IP](https://www.noip.com/integrate/ip-detection)
-- [Endpoint de actualización DDNS](https://developer.noip.com/reference/nic_update)
-- [Consulta de registros DNS](https://developer.noip.com/reference/v1-dns-records-get-rrset)
-- [Administración de IP dinámica en Cloudflare](https://developers.cloudflare.com/dns/manage-dns-records/how-to/managing-dynamic-ip-addresses/)
+El firewall no se actualiza con un flush global. La operación recompone la
+política completa del suite a partir de `FIREWALL_ENV_FILE` y la aplica como
+transacción, conservando las reglas ajenas. Si el verificador no confirma la
+candidata antes del plazo, systemd ejecuta el rollback. El watcher deja la IP
+anterior guardada para que la próxima ejecución reintente.
 
-## Hallazgo relacionado en nftables
+## Instalación y operación
 
-El backend nftables creaba meters dinámicos sin timeout de elementos. Cada
-combinación de IP origen y puerto quedaba retenida hasta recrear la tabla. En
-un host público con tráfico UDP de orígenes aleatorios, el set
-`udp_new_src_under` podía alcanzar su capacidad de 65.535 elementos.
-
-Reaplicar `nftables.rules.sh` recreaba la tabla y vaciaba esos meters, lo que
-explica por qué la visibilidad de los gameservers podía recuperarse justo
-después de ejecutar el script, aunque las reglas no dependieran de la IP WAN.
-
-El backend aplica ahora estos timeouts:
-
-```dotenv
-NFT_UDP_NEW_METER_TIMEOUT=5s
-NFT_UDP_EST_METER_TIMEOUT=5s
-NFT_A2S_METER_TIMEOUT=5s
-NFT_LOGIN_METER_TIMEOUT=1s
-```
-
-Las entradas se renuevan mientras continúa el tráfico y se liberan después de
-quedar inactivas. No se recomienda desactivar la expiración.
-
-Referencia: [Meters de nftables](https://wiki.nftables.org/wiki-nftables/index.php/Meters).
-
-## Archivos
-
-- `scripts/network/public-ip-watch.sh`: detector y ejecutor de acciones.
-- `config/l4d2-public-ip-watch.env.example`: configuración de producción.
-- `systemd/l4d2-public-ip-watch.service`: servicio oneshot endurecido.
-- `systemd/l4d2-public-ip-watch.timer`: programación cada diez minutos.
-- `tests/public-ip-watch.sh`: pruebas aisladas con WAN, DNS y firewall
-  simulados.
-
-En el host los archivos instalados son:
-
-- `/usr/local/sbin/l4d2-public-ip-watch`
-- `/etc/default/l4d2-public-ip-watch`
-- `/etc/systemd/system/l4d2-public-ip-watch.service`
-- `/etc/systemd/system/l4d2-public-ip-watch.timer`
-- `/var/lib/l4d2-public-ip-watch/current-ip`
-
-## Instalación
-
-Desde la raíz del repositorio:
+Prueba primero el script aislado. Antes de instalar el timer, prepara una
+configuración real: el instalador copia el ejemplo sólo si
+`/etc/default/l4d2-public-ip-watch` no existe y luego habilita el timer.
+Conserva y revisa cualquier archivo existente.
 
 ```bash
 make public-ip-watch-test
-sudo make public-ip-watch-install
+if ! sudo test -e /etc/default/l4d2-public-ip-watch; then
+  sudo install -o root -g root -m 0600 \
+    config/l4d2-public-ip-watch.env.example \
+    /etc/default/l4d2-public-ip-watch
+fi
+sudoedit /etc/default/l4d2-public-ip-watch
+make public-ip-watch-install
 ```
 
-El instalador conserva un `/etc/default/l4d2-public-ip-watch` existente. Antes
-de usarlo en otro nodo se deben revisar especialmente `DDNS_HOSTNAME`,
-`FIREWALL_SCRIPT` y `FIREWALL_ENV_FILE`.
-
-## Operación
+`make public-ip-watch-install` instala el script en
+`/usr/local/sbin/l4d2-public-ip-watch`, copia la unidad y el timer, conserva
+una configuración ya existente, ejecuta `systemctl daemon-reload` y habilita
+el timer. Las rutas de `FIREWALL_SCRIPT` y `FIREWALL_ENV_FILE` deben apuntar a
+la instalación real del suite.
 
 ```bash
-# Resumen del timer, estado guardado y resolución WAN/DDNS
 make public-ip-watch-status
-
-# Consultar sin cambiar estado ni recargar reglas
 sudo /usr/local/sbin/l4d2-public-ip-watch --check
-
-# Simular la decisión completa
 sudo /usr/local/sbin/l4d2-public-ip-watch --dry-run
-
-# Ver la próxima ejecución
 systemctl list-timers l4d2-public-ip-watch.timer
-
-# Seguir los registros
 journalctl -u l4d2-public-ip-watch.service -f
 ```
 
-`--force` fuerza una validación y recarga aunque la dirección no haya cambiado;
-debe reservarse para pruebas controladas.
-
-## Runbook: servidores ausentes del grupo Steam
-
-### 1. Comprobar conectividad directa
-
-Si el DNS permite entrar al servidor, el proceso, el port-forwarding y la ruta
-básica funcionan. El problema puede estar en la publicación del master server
-o en filtros aplicados a sus consultas UDP.
-
-### 2. Comparar WAN, No-IP y estado local
-
-```bash
-sudo /usr/local/sbin/l4d2-public-ip-watch --check
-```
-
-- Si WAN y No-IP no coinciden, esperar al router/No-IP; el watcher no recarga.
-- Si coinciden pero el estado guardado es anterior, la próxima ejecución debe
-  validar y reaplicar nftables.
-- Si los tres valores coinciden, continuar con los meters y Steam.
-
-### 3. Revisar crecimiento de meters
-
-```bash
-sudo nft list table inet firewall_main
-```
-
-Los sets dinámicos deben mostrar `flags timeout,dynamic` o
-`flags dynamic,timeout`, y sus elementos deben incluir `expires`. Una cantidad
-que crece indefinidamente indica que las reglas persistentes o activas son de
-una versión anterior.
-
-### 4. Revisar publicación Steam
-
-Valve documenta que los servidores Source pueden compartir el socket UDP del
-juego con el tráfico de registro del master server, y ofrece una operación de
-heartbeat forzado. Si nftables deja pasar el tráfico y el servidor sigue
-ausente, se debe capturar el intercambio y luego configurar
-`POST_CHANGE_HOOK` para enviar `heartbeat` a las instancias mediante su canal de
-administración, sin reiniciarlas.
-
-Referencia: [ISteamGameServer y `ForceHeartbeat`](https://partner.steamgames.com/doc/api/isteamgameserver#ForceHeartbeat).
-
-El hook se invoca como:
-
-```text
-hook IP_ANTERIOR IP_ACTUAL
-```
-
-No se debe reiniciar masivamente los gameservers como primera respuesta: una
-recarga controlada y un heartbeat atacan directamente los dos subsistemas
-involucrados y son menos disruptivos.
-
-## Desactivación y recuperación
+`make public-ip-watch-status` muestra el resultado de `--check`, el timer y la
+IP guardada. Para dejar de sondear, deshabilita y detén el timer:
 
 ```bash
 sudo systemctl disable --now l4d2-public-ip-watch.timer
 ```
 
-Esto detiene la vigilancia, pero no elimina el estado ni revierte las reglas
-activas. Para reactivarla:
+Esto no borra `current-ip`, no revierte una política confirmada ni elimina un
+timer de rollback que ya estuviera activo. Reactivar el timer reanuda el
+sondeo; una IP sin guardar vuelve a evaluarse en la siguiente ejecución.
 
-```bash
-sudo systemctl enable --now l4d2-public-ip-watch.timer
-```
+## Límites
+
+- El watcher detecta IPv4; no administra IPv6 ni actualiza No-IP.
+- La comprobación DNS depende de las respuestas disponibles y de la lista de
+  nameservers configurada; no sustituye supervisión DNSSEC ni verifica que el
+  router haya recibido una dirección correcta fuera del detector consultado.
+- Un timeout, bloqueo de red o respuestas inconsistentes se reintentan en
+  ejecuciones futuras; no se aplica una regla basada en una respuesta parcial.
+- La política sólo cambia cuando el watcher confirma una IP distinta o se usa
+  `--force`. El hook opcional no forma parte de una transacción conjunta con
+  Netfilter.
+- El comportamiento y la configuración del daemon/router DDNS quedan fuera de
+  este servicio.

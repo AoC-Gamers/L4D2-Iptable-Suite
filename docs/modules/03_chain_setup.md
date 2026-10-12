@@ -1,30 +1,9 @@
-> **Referencia histórica anterior al núcleo transaccional.** Las instrucciones de aplicación, configuración y persistencia de esta página fueron reemplazadas por [operación actual](../security/operations.md), [capacidades](../security/capabilities.md) y [migración](../security/migration.md). No ejecutar las recetas antiguas.
+# `chain_setup` — núcleo obligatorio
 
-# Módulo unificado — chain_setup (ip/nf)
+El núcleo genera las cadenas/tablas privadas y hooks base del backend seleccionado. `chain_setup` no se carga ni se excluye como módulo funcional: es parte del contrato obligatorio junto a `finalize` y `loopback`.
 
-## Objetivo
-Inicializar cadenas/tablas base y políticas por defecto antes de módulos funcionales.
+- nftables: tabla `inet` privada y cadenas de input/forward; límites y propiedad se validan antes de aplicar.
+- iptables: cadenas propias por tabla/familia e inserción selectiva en hooks; no vacía tablas compartidas.
+- La base acepta loopback, estados relacionados y errores ICMP/ICMPv6 necesarios. `FAMILY_POLICY=ipv4-block-ipv6` agrega bloqueo explícito IPv6 de input/forward con excepciones ICMPv6/ND del host; no equivale a conectividad IPv6 completa.
 
-## Backends
-- iptables: `modules/ip_chain_setup.sh` (`ID=ip_chain_setup`)
-- nftables: `modules/nf_chain_setup.sh` (`ID=nf_chain_setup`)
-
-## Variables
-- `TYPECHAIN` (`0=input`, `1=docker/forward`, `2=ambos`)
-- `DOCKER_INPUT_COMPAT`, `DOCKER_CHAIN_AUTORECOVER` (principalmente `ip`)
-
-## Alcance
-- `chain_setup` no gestiona políticas de dominio L4D2.
-- La protección TCP L4D2 se maneja en `l4d2_tcp_protect`; `l4d2_tcpfilter_chain` es cadena real en `ip` y compatibilidad no-op en `nf`.
-
-## Diferencias por backend
-- `ip`: limpieza amplia de tablas/cadenas y compatibilidad Docker opcional.
-- `nf`: crea tabla `inet firewall_main` y cadenas hook `input/forward/output`.
-- `nf`: separa reglas por dominio mediante subcadenas regulares:
-  - `input_core_allow`, `forward_core_allow`
-  - `forward_docker_egress`
-  - `input_vpn`, `forward_vpn`
-  - `input_admin`, `forward_admin`
-  - `input_l4d2_tcp`, `forward_l4d2_tcp`
-  - `input_web`, `forward_web`
-  - `input_l4d2_udp`, `forward_l4d2_udp`
+`TYPECHAIN` solo se conserva como alias de migración: `0` traduce host activo/contenedores apagados, `1` host apagado/contenedores restrictivos, `2` ambos activos/restrictivos. Conflictos con `HOST_SERVICES` o `CONTAINER_POLICY` se rechazan. Para permisos use políticas y grants de [capacidades](../security/capabilities.md), no `TYPECHAIN`.

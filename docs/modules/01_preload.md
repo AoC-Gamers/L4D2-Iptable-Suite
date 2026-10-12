@@ -1,18 +1,5 @@
-> **Referencia histórica anterior al núcleo transaccional.** Las instrucciones de aplicación, configuración y persistencia de esta página fueron reemplazadas por [operación actual](../security/operations.md), [capacidades](../security/capabilities.md) y [migración](../security/migration.md). No ejecutar las recetas antiguas.
+# `preload.sh` — compatibilidad retirada
 
-# Módulo transversal — preload
+`modules/preload.sh` conserva una función de compatibilidad para instalaciones antiguas. La función `run_preload` informa que el preload fue retirado y termina con error; no parsea argumentos ni carga la configuración actual.
 
-## Objetivo
-Preparar el entorno antes de cargar módulos de backend.
-
-## Módulo
-- `modules/preload.sh`
-
-## Alcance
-- Carga de variables globales y parámetros de ejecución.
-- Parseo de opciones (`--env-file`, `--only`, `--skip`, `--dry-run`, `--verbose`, `--set`).
-- Preparación de listas de módulos a ejecutar/saltar.
-
-## Recomendaciones
-- Mantener este módulo idempotente y sin lógica de filtrado específica.
-- Usarlo solo para bootstrap y validaciones transversales al backend.
+Use `ipp.sh` como CLI (`--env-file`, `--set`, `--only`, `--skip`, `--profile`) y consulte [operaciones](../security/operations.md) y [migración](../security/migration.md). El CLI lee `.env` como asignaciones `KEY=VALUE`, nunca como shell. Las pruebas unitarias y `validate` no aplican reglas al kernel.

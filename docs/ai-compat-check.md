@@ -1,162 +1,102 @@
-# Instrucciones para IA en servidor: verificación de compatibilidad (Docker + iptables/nftables)
+# Revisión de compatibilidad asistida: Docker y Netfilter
 
-Objetivo: validar si el host puede ejecutar este proyecto de forma segura para GameServers dockerizados, y recomendar backend (`iptables` o `nftables`) con evidencia.
+Usa este procedimiento para recopilar evidencia antes de recomendar un backend.
+Una auditoría no autoriza cambios. No ejecutes `apply`, `disable`, `load`,
+`confirm`, `rollback`, instalaciones ni reinicios. Una excepción importante:
+`status`, `doctor` y `check` pueden primero recuperar un journal de aplicación
+vencido; si se requiere una observación estrictamente pasiva, limita la revisión
+a los comandos de lectura del sistema y a `validate`/`plan` sin privilegios.
+Consulta el [índice de documentación](README.md) y la
+[referencia de configuración](configuration.md) antes de interpretar una candidata.
 
-## 1) Reglas de ejecución para la IA
+## Evidencia local sin privilegios
 
-- Ejecutar todos los comandos con privilegios root (o `sudo`).
-- No modificar reglas al inicio; primero auditar en modo lectura.
-- Si encuentra riesgo crítico, detenerse y reportar.
-- Reportar en formato estructurado (sección 8).
+Desde el repositorio, describe el código y genera la configuración objetivo sin
+consultar ni cambiar el firewall:
 
-## 2) Contexto esperado del proyecto
+```sh
+git status --short --branch
+git rev-parse --short HEAD
+./nftables.rules.sh validate --env-file /ruta/config.conf
+./nftables.rules.sh generate --env-file /ruta/config.conf > /tmp/candidate.json
+./nftables.rules.sh plan --env-file /ruta/config.conf --against /ruta/previous.json
+bash tests/smoke-modules.sh
+```
 
-- Backend `iptables` usa cadena `DOCKER-USER` para tráfico Docker.
-- Backend `nftables` NO debe hacer `flush ruleset` global; solo sus tablas propias (`inet firewall_main`, `ip vpn_s2s_nat` cuando aplique).
-- Archivo de configuración base: `.env`.
+Repite la composición con `iptables.rules.sh` si se evalúa ese backend. `validate`
+y `generate` no acceden al kernel; `plan` compara políticas generadas, no prueba
+el kernel ni el tráfico. `smoke-modules.sh` ejecuta pruebas lógicas y no aplica
+reglas. Mantén la salida candidata en una ubicación privada si revela configuración.
 
-## 3) Chequeo del entorno (solo lectura)
+## Lectura del host
 
-Ejecutar y guardar salida:
+Con autorización operativa y privilegios apropiados, recoge sin alterar estado:
 
-```bash
-set -e
+```sh
 uname -a
-cat /etc/os-release || true
-command -v docker && docker --version
-command -v nft && nft --version
-command -v iptables && iptables --version
-iptables -V || true
-update-alternatives --display iptables 2>/dev/null || true
+cat /etc/os-release
+docker --version
+nft --version
+iptables --version
+ip6tables --version
+sudo nft list ruleset
+sudo iptables-save
+sudo ip6tables-save
 ```
 
-Criterios:
-- PASS si existen `docker`, `iptables` y/o `nft` según backend a evaluar.
-- WARN si `iptables` está en modo legacy en hosts modernos con Docker+nft mezclado.
+No hace falta `sudo` para un binario ausente: regístralo como faltante. La suite
+no cambia alternativas de iptables. Si el backend depende de iptables, comprueba
+qué frontend usa Docker y qué frontend será seleccionado (`IPTABLES_FRONTEND`);
+no infieras integración por la sola presencia de `DOCKER-USER` o por el nombre de
+una tabla. `doctor` es útil para inspeccionar versiones y objetos reconocidos,
+pero requiere root y puede recuperar una transacción vencida.
 
-## 4) Chequeo Docker + cadenas firewall
+## Pruebas de motor y tráfico
 
-### 4.1 iptables (lectura)
+`check` requiere root/capacidades de Netfilter y comprueba una candidata contra
+el estado del motor, sin aplicarla salvo posible recuperación de un journal vencido.
+Para parser de kernel o tráfico real utiliza únicamente la prueba aislada, que
+crea namespaces de usuario, red y montaje y un `/run` privado:
 
-```bash
-iptables -S
-iptables -S FORWARD
-iptables -S DOCKER-USER 2>/dev/null || true
-iptables -t nat -S
+```sh
+bash tests/isolated-run.sh
 ```
 
-Criterios para `iptables`:
-- PASS si existe `DOCKER-USER` y `FORWARD` referencia flujo Docker.
-- FAIL si `DOCKER-USER` no existe y Docker está activo.
+Si no se permiten namespaces, marca la prueba como omitida con el motivo; no
+ejecutes estas pruebas contra el namespace de red del host ni uses un `dry-run`
+privilegiado como sustituto. La prueba aislada valida el kernel local disponible,
+pero no demuestra compatibilidad del Docker daemon de producción ni conectividad
+desde clientes reales. Para esos casos consulta las [capacidades y combinaciones
+probadas](security/capabilities.md) y su evidencia en
+[`security/results.md`](security/results.md).
 
-### 4.2 nftables (lectura)
+## Criterios y formato de informe
 
-```bash
-nft list ruleset
-nft list table inet firewall_main 2>/dev/null || true
-nft list table ip vpn_s2s_nat 2>/dev/null || true
-```
-
-Criterios para `nftables`:
-- PASS si `ruleset` existe y no hay conflictos obvios entre tablas Docker y `inet firewall_main`.
-- WARN si hay reglas Docker pero no hooks esperados en `forward` para tráfico contenedor.
-
-## 5) Validación estática del repo (seguridad de implementación)
-
-Desde raíz del proyecto:
-
-```bash
-grep -RIn "flush ruleset" modules/nf nftables.rules.sh || true
-grep -RIn "DOCKER-USER" modules/ip || true
-grep -RIn "\bDOCKER\b" modules/ip || true
-```
-
-Criterios:
-- FAIL si aparece `nft flush ruleset` en flujo activo de backend `nf`.
-- PASS si módulos `ip` apuntan a `DOCKER-USER` para ruta contenedores.
-- WARN si hay referencias residuales a `DOCKER` en módulos `ip` que no sean texto histórico controlado.
-
-## 6) Prueba funcional mínima (dry-run)
-
-> Ejecutar en ventana de mantenimiento (puede tocar reglas según backend/script).
-
-```bash
-./tests/smoke-modules.sh
-```
-
-Si no es root o faltan binarios, reportar como `SKIPPED` con razón.
-
-Criterios:
-- PASS si smoke test completa y backend objetivo no falla.
-- FAIL si falla contrato de módulos o dry-run de backend objetivo.
-
-## 7) Matriz de decisión
-
-- Recomendar `iptables` cuando:
-  - Host usa Docker intensivamente.
-  - `DOCKER-USER` está presente y estable.
-  - Se requiere máxima predictibilidad con flujo Docker.
-
-- Recomendar `nftables` cuando:
-  - El host opera nativamente en nft.
-  - No existe `flush ruleset` global en la implementación.
-  - Pruebas muestran hooks correctos para tráfico de contenedores.
-
-- Bloquear despliegue (`NO-GO`) cuando:
-  - Falta `DOCKER-USER` en escenario Docker+iptables.
-  - Se detecta limpieza global de ruleset en backend `nf`.
-  - Fallan smoke tests críticos.
-
-## 8) Formato de salida obligatorio (JSON)
+Separa claramente: herramientas/versiones observadas; motor y frontend efectivos;
+reglas y cadenas previas relevantes; resultado de composición; resultado de
+check/prueba aislada; limitaciones no cubiertas. Recomienda un backend solo si
+coincide con la integración Docker observada y la combinación consta como probada.
+Marca `NO-GO` si la configuración no genera, el preflight falla, objetos externos
+entran en conflicto, o la política candidata cortaría rutas que el operador necesita.
+La ausencia de un test real no es un PASS.
 
 ```json
 {
-  "host": {
-    "os": "...",
-    "docker": "ok|missing",
-    "iptables": "ok|missing",
-    "nft": "ok|missing"
-  },
+  "host": {"os": "...", "docker": "version|missing", "nft": "version|missing", "iptables": "version|missing"},
   "checks": [
-    {"id": "env-tools", "status": "PASS|WARN|FAIL", "evidence": "..."},
-    {"id": "iptables-docker-user", "status": "PASS|WARN|FAIL", "evidence": "..."},
-    {"id": "nft-no-global-flush", "status": "PASS|WARN|FAIL", "evidence": "..."},
-    {"id": "smoke-test", "status": "PASS|WARN|FAIL|SKIPPED", "evidence": "..."}
+    {"id": "policy-generation", "status": "PASS|FAIL|SKIPPED", "evidence": "..."},
+    {"id": "existing-firewall", "status": "PASS|WARN|FAIL|SKIPPED", "evidence": "..."},
+    {"id": "isolated-kernel-test", "status": "PASS|FAIL|SKIPPED", "evidence": "..."},
+    {"id": "docker-combination", "status": "PASS|WARN|SKIPPED", "evidence": "..."}
   ],
   "recommended_backend": "iptables|nftables|none",
-  "go_live": "GO|NO-GO",
-  "actions": [
-    "...",
-    "..."
-  ]
+  "go_live": "GO|NO-GO|NOT-ASSESSED",
+  "actions": ["..."]
 }
 ```
 
-## 9) Prompt listo para pegar en la IA del servidor
-
-Usa este prompt literal:
-
-```text
-Eres un auditor técnico de compatibilidad de firewall para L4D2-Iptable-Suite en un host Linux con Docker.
-
-Objetivo:
-1) Verificar compatibilidad real para GameServers dockerizados.
-2) Determinar si conviene iptables o nftables.
-3) Entregar veredicto GO/NO-GO con evidencia.
-
-Instrucciones estrictas:
-- Ejecuta solo comandos de lectura al inicio.
-- Si detectas riesgo crítico, detente y marca NO-GO.
-- Evalúa específicamente:
-  - existencia y salud de DOCKER-USER en iptables,
-  - ausencia de flush ruleset global en backend nft,
-  - consistencia de hooks para tráfico Docker.
-- Si puedes, ejecuta tests/smoke-modules.sh y clasifica resultado.
-- Devuelve SOLO JSON con este esquema:
-  host, checks[], recommended_backend, go_live, actions[].
-
-Criterios:
-- Docker en producción prioriza iptables+DOCKER-USER salvo evidencia sólida de nft estable.
-- Si falta DOCKER-USER en escenario Docker+iptables => FAIL.
-- Si hay flush ruleset global en nft activo => FAIL.
-```
+Un veredicto `GO` es solo una recomendación de compatibilidad y no despliega la
+política. La aplicación productiva requiere revisión humana del plan, acceso de
+consola y confirmación tras probar una conexión administrativa nueva. Consulta
+[flujo transaccional](security/operations.md) y
+[migración](security/migration.md).

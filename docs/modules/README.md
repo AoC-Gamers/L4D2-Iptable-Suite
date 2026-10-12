@@ -1,33 +1,26 @@
-> **Referencia histórica anterior al núcleo transaccional.** Las instrucciones de aplicación, configuración y persistencia de esta página fueron reemplazadas por [operación actual](../security/operations.md), [capacidades](../security/capabilities.md) y [migración](../security/migration.md). No ejecutar las recetas antiguas.
+# Módulos y composición actual
 
-# Índice de módulos
+Esta carpeta documenta IDs de compatibilidad y funciones visibles al componer la política. No describe un loader que ejecute todos los `*.sh`: el CLI `ipp.sh` lee metadata literal y `core/compiler.py` compone reglas solo para módulos seleccionados. Los módulos shell son una interfaz de generación interna restringida; no controlan servicios, Docker ni el firewall directamente.
 
-Breve índice de la documentación de cada módulo. Cada entrada enlaza al fichero con la descripción y recomendaciones de uso.
+## Contrato común
 
-- [01_preload.md](01_preload.md) — Preparación e inicialización previa a la carga de módulos.
-- [02_postload.md](02_postload.md) — Limpieza y verificación tras aplicar los módulos.
-- [03_chain_setup.md](03_chain_setup.md) — Inicialización base de cadenas/tablas (ip/nf).
-- [04_whitelist.md](04_whitelist.md) — Whitelist IP/dominio (ip/nf).
-- [05_allowlist_ports.md](05_allowlist_ports.md) — Excepciones de puertos (ip/nf).
-- [06_openvpn.md](06_openvpn.md) — Reglas OpenVPN (ip/nf).
-- [07_tcp_ssh.md](07_tcp_ssh.md) — SSH base (ip/nf).
-- [08_http_https_protect.md](08_http_https_protect.md) — Protección HTTP/HTTPS (ip/nf).
-- [09_l4d2_udp_base.md](09_l4d2_udp_base.md) — Base UDP L4D2 (ip/nf).
-- [10_l4d2_packet_validation.md](10_l4d2_packet_validation.md) — Validación de paquetes L4D2 (ip/nf).
-- [11_l4d2_a2s_filters.md](11_l4d2_a2s_filters.md) — Filtros A2S L4D2 (ip/nf).
-- [12_finalize.md](12_finalize.md) — Cierre final (ip/nf).
-- [13_ip_loopback.md](13_ip_loopback.md) — Módulo específico `ip`.
-- [14_ip_l4d2_tcpfilter_chain.md](14_ip_l4d2_tcpfilter_chain.md) — Módulo específico `ip` (`ip_l4d2_tcpfilter_chain`).
-- [15_l4d2_tcp_protect.md](15_l4d2_tcp_protect.md) — Protección TCP L4D2 (ip/nf).
-- [16_docker_dns_egress.md](16_docker_dns_egress.md) — Egreso DNS para subredes Docker (ip/nf).
-- [17_docker_monitor_egress.md](17_docker_monitor_egress.md) — Egreso de monitoreo Docker hacia targets LAN (ip/nf).
-- [18_geo_country_filter.md](18_geo_country_filter.md) — Allowlist/denylist geográfica IPv4 para UDP de juego (nft).
+- CLI: `ipp.sh validate|generate|plan|check|apply|confirm|rollback|disable|save|load|status|doctor`. Consulte [operaciones](../security/operations.md).
+- Perfiles: `host-minimal` (SSH), `web` (SSH + HTTP/HTTPS), `games` (SSH + UDP base, validación y A2S), `vpn-gateway` (SSH + OpenVPN server). Los módulos `chain_setup`, `finalize` y `loopback` son siempre core.
+- `--only` de CLI reemplaza selección del archivo; `--only ''` intencionalmente elige core-only. En contraste, una asignación `MODULES_ONLY=` vacía en el archivo de configuración conserva el fallback del perfil. El entorno exportado del proceso no reemplaza el archivo de configuración. `--skip` excluye IDs funcionales, nunca el core.
+- `.env` son asignaciones declarativas `KEY=VALUE`; no es shell. Opciones desconocidas, duplicadas, expansiones y valores incompatibles se rechazan.
+- `TYPECHAIN=0/1/2` es un alias transitorio y contradictorio con las opciones nuevas falla. Use `HOST_SERVICES`, `CONTAINER_POLICY`, `ROUTED_POLICY` y grants `ACCESS_POLICY` explícitos. Los defaults descartan el routing y no abren permisos NAT.
+- Los valores no vacíos de `SSH_DOCKER`, `TCP_DOCKER` y `UDP_DOCKER` se rechazan. `DOCKER_INPUT_COMPAT=true` y `DOCKER_CHAIN_AUTORECOVER=true` también se rechazan; sus valores `false` son válidos. Los módulos heredados de egress Docker se rechazan. Use grants delimitados; TCP y UDP son independientes.
+- iptables con módulos de juego requiere `FAMILY_POLICY=ipv4-block-ipv6`. nftables puede jugar dual-stack. GeoIP sigue IPv4-only y en modo dual necesita declarar denegación IPv6.
+- No excluya controles de juego por separado: UDP base, packet validation y A2S requieren selección conjunta. `l4d2_tcp_protect` es opt-in.
 
-## Componentes operativos
+Las filas de módulo explican propósito actual y migraciones; fuentes de verdad de permisos y evidencia: [capacidades](../security/capabilities.md), [migración](../security/migration.md), [resultados](../security/results.md).
 
-- [Vigilancia de IP pública](../public-ip-watch.md) — Confirmación WAN/No-IP,
-  recarga segura de nftables y runbook de visibilidad en Steam Group.
-- [Guía operativa](../operations-guide.md) — Despliegue, inspección y
-  diagnóstico del firewall en producción.
-- [Auditoría operativa](../operational-audit.md) — Problemas conocidos,
-  hallazgos corregidos y comprobaciones de bajo riesgo.
+## Referencias por ID
+
+- [preload](01_preload.md) y [postload](02_postload.md): compatibilidad retirada/helpers históricos.
+- [chain setup](03_chain_setup.md), [whitelist](04_whitelist.md), [allowlist ports](05_allowlist_ports.md), [OpenVPN](06_openvpn.md).
+- [SSH](07_tcp_ssh.md), [HTTP/HTTPS](08_http_https_protect.md), [UDP base](09_l4d2_udp_base.md), [validación](10_l4d2_packet_validation.md), [A2S](11_l4d2_a2s_filters.md).
+- [finalize](12_finalize.md) y [loopback](13_ip_loopback.md): core obligatorio.
+- [TCPfilter](14_ip_l4d2_tcpfilter_chain.md): compatibilidad; [protección TCP de juego](15_l4d2_tcp_protect.md).
+- [egress DNS Docker](16_docker_dns_egress.md) y [egress monitoreo Docker](17_docker_monitor_egress.md): retirados, migrar a grants.
+- [GeoIP](18_geo_country_filter.md): nftables e IPv4 solamente.

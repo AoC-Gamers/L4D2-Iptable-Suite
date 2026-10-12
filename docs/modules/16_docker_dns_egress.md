@@ -1,27 +1,5 @@
-> **Referencia histórica anterior al núcleo transaccional.** Las instrucciones de aplicación, configuración y persistencia de esta página fueron reemplazadas por [operación actual](../security/operations.md), [capacidades](../security/capabilities.md) y [migración](../security/migration.md). No ejecutar las recetas antiguas.
+# `docker_dns_egress` — retirado, requiere migración
 
-# Módulo unificado — docker_dns_egress (ip/nf)
+La configuración rechaza seleccionar `docker_dns_egress`: la antigua regla por subred y puerto 53 no identifica interfaz ni destino DNS y concedía un ámbito de forwarding demasiado amplio.
 
-## Objetivo
-Permitir salida DNS (`UDP/TCP 53`) desde subredes de contenedores Docker para evitar bloqueos en resolución (por ejemplo, ACME/Cloudflare en Traefik).
-
-## Backends
-- iptables: `modules/ip/ip_22_docker_dns_egress.sh` (`ID=ip_docker_dns_egress`)
-- nftables: `modules/nf/nf_22_docker_dns_egress.sh` (`ID=nf_docker_dns_egress`)
-
-## Alias de activación
-- `docker_dns_egress`
-
-## Variables
-- `TYPECHAIN`
-- `DOCKER_DNS_EGRESS_SUBNETS` (CIDRs separados por coma)
-
-## Defaults
-- `DOCKER_DNS_EGRESS_SUBNETS="172.16.0.0/12"`
-
-## Alcance de reglas
-- `nftables`: agrega reglas en cadena `forward`.
-- `iptables`: agrega reglas en cadena `DOCKER-USER` (cuando `TYPECHAIN` incluye flujo Docker).
-
-## Nota operativa
-Este módulo abre únicamente DNS saliente para subredes Docker definidas; no expone servicios DNS del host a clientes externos.
+Declare un grant `forward` con grupo, origen, destino DNS exacto, protocolo UDP/TCP y puerto 53, interfaces de entrada/salida. Los grants forward requieren `ROUTED_POLICY=drop`; si otra política administra rutas, el modo `unmanaged` delega esas rutas y la suite no las protege. No agregue reglas manualmente a `DOCKER-USER` ni dé por sentado que Docker consulta su DNS en un destino concreto. [Capacidades](../security/capabilities.md).

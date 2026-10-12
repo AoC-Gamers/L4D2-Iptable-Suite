@@ -1,7 +1,12 @@
 # Matriz inicial — 2026-10-11
 
-Revisión directa: main limpio, aeabda7cbba25ecd94629797f5637a9a6987c147.
+Revisión histórica directa: `main` limpio en aeabda7cbba25ecd94629797f5637a9a6987c147.
 Rama de implementación: security/modular-safe-apply. No hay AGENTS.md aplicable.
+
+Los estados de esta primera tabla corresponden a esa base, no al código actual.
+La [matriz final](#matriz-final) registra las soluciones; el
+[estado operativo](../operational-audit.md) y los [resultados](results.md)
+distinguen implementación, evidencia posterior y pendientes.
 
 | ID | Estado inicial | Evidencia y consecuencia | Solución prevista | Regresión |
 |---|---|---|---|---|

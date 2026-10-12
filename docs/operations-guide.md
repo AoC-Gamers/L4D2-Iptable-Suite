@@ -1,451 +1,150 @@
-> **Referencia histórica anterior al núcleo transaccional.** Las instrucciones de aplicación, configuración y persistencia de esta página fueron reemplazadas por [operación actual](security/operations.md), [capacidades](security/capabilities.md) y [migración](security/migration.md). No ejecutar las recetas antiguas.
+# Guía operativa
 
-# Guía operativa rápida
+La suite compone una política declarativa y administra únicamente los objetos
+registrados como propios. Antes de un cambio, entiende la política activa del
+host y revisa la candidata. Para migraciones o cambios de backend, ensaya primero
+en una VM. El contrato detallado y sus límites están en [operaciones](security/operations.md),
+[capacidades probadas](security/capabilities.md) y [migración](security/migration.md).
+El [índice de documentación](README.md) y la [referencia de configuración](configuration.md)
+describen perfiles y permisos disponibles.
 
-Esta guía resume el flujo recomendado para operar `L4D2-Iptable-Suite` en servidores reales, especialmente cuando conviven Docker, game servers L4D2, SourceTV, OpenVPN, GeoIP y logging.
+Los entrypoints `nftables.rules.sh` e `iptables.rules.sh` aplican por defecto si
+se invocan sin operación; escribe siempre `validate`, `generate`, `plan`, `check`
+o `apply` explícitamente. `ipp.sh` sin argumentos solo muestra ayuda.
 
-La idea es reducir falsos diagnósticos y evitar cambios destructivos en producción. Porque romper el firewall por “probar rápido” sigue siendo una tradición humana bastante popular, pero no por eso recomendable.
+## Preparar y revisar una candidata
 
----
+Usa una configuración declarativa `KEY=VALUE`, por ejemplo uno de los archivos
+de [perfiles](../config/profiles/). Un archivo vacío no carga todos los módulos:
+se usa `PROFILE=host-minimal`. La precedencia es `--set`, archivo y defaults;
+una clave vacía sigue vacía y no recibe el default. `--only` y `--skip` reemplazan
+la selección del archivo. Perfiles y módulos deben escogerse conscientemente.
 
-## 1. Elección de backend
-
-La suite mantiene dos entrypoints:
-
-- `iptables.rules.sh`: backend legacy basado en `iptables`.
-- `nftables.rules.sh`: backend moderno basado en `nftables`.
-
-Ambos usan el mismo `.env` y el mismo modelo modular.
-
-### Usa `iptables` cuando
-
-- El host usa Docker intensivamente.
-- Quieres enganchar reglas de contenedores en `DOCKER-USER`.
-- Necesitas máxima predictibilidad con el flujo tradicional de Docker.
-- El host ya opera estable con `iptables`/`iptables-nft` y no hay una razón fuerte para migrar.
-
-### Usa `nftables` cuando
-
-- El host ya opera nativamente con `nft`.
-- Validaste que no existe `flush ruleset` global en el flujo activo.
-- Validaste que las cadenas de Docker y las tablas de la suite no se pisan.
-- Necesitas mantener reglas modernas en `inet firewall_main`.
-
-### No desplegar todavía cuando
-
-- Docker está activo y falta `DOCKER-USER` en un escenario `iptables`.
-- El backend `nftables` intenta limpiar el ruleset global.
-- Fallan los smoke tests críticos.
-- No sabes si el tráfico real entra por host, Docker o ambos. Adivinar rutas de firewall es una forma elegante de perder conectividad.
-
----
-
-## 2. Variables base que debes revisar antes de aplicar
-
-Antes de ejecutar reglas reales, revisa al menos estas variables del `.env`:
-
-```bash
-TYPECHAIN=0
-MODULES_ONLY=""
-L4D2_GAMESERVER_UDP_PORTS="27015"
-L4D2_SOURCETV_UDP_PORTS="27020"
-L4D2_GAMESERVER_TCP_PORTS=""
-BYPASS_SOURCE_IPS=""
-BYPASS_SOURCE_DOMAINS=""
-GEO_POLICY_MODE=off
-ENABLE_MALFORMED_FILTER=false
-ENABLE_PACKET_NORMALIZATION_LOGS=false
-NFT_UDP_NEW_METER_TIMEOUT=5s
-NFT_UDP_EST_METER_TIMEOUT=5s
-NFT_A2S_METER_TIMEOUT=5s
-NFT_LOGIN_METER_TIMEOUT=1s
+```sh
+./nftables.rules.sh validate --env-file config/profiles/web.conf
+./nftables.rules.sh generate --env-file config/profiles/web.conf > /tmp/web-candidate.json
+./nftables.rules.sh plan --env-file config/profiles/web.conf --against /tmp/previous.json
+./iptables.rules.sh plan --env-file /etc/l4d2-firewall/server.conf
 ```
 
-### `TYPECHAIN`
+`validate` valida y genera lógicamente, pero no consulta el kernel. `generate`
+imprime el bundle JSON; `plan` muestra reglas y, si se proporciona una candidata
+anterior, diferencias y objetos/cadenas que desaparecerían. `--dry-run` es alias
+de `plan`, no una simulación del kernel ni del tráfico. Redirige la salida JSON a
+un archivo protegido si contiene datos de configuración sensibles.
 
-- `0`: protege tráfico nativo por `INPUT`.
-- `1`: protege tráfico de contenedores por `DOCKER-USER`.
-- `2`: protege ambos caminos.
+Prueba el comportamiento del motor solo en un entorno aislado. Las pruebas
+unitarias y de generación no requieren root; `tests/isolated-run.sh` crea namespaces
+de usuario, red y montaje desechables, y mantiene `/run` privado para que el lock
+de xtables no comparta archivo con el host:
 
-### `MODULES_ONLY`
-
-Permite aplicar un subconjunto de módulos. Es útil para pruebas, pero peligroso si lo dejas limitado sin querer.
-
-Ejemplo para pruebas L4D2:
-
-```bash
-MODULES_ONLY="chain_setup,loopback,whitelist,geo_country_filter,allowlist_ports,l4d2_udp_base,l4d2_packet_validation,l4d2_a2s_filters,finalize"
+```sh
+bash tests/smoke-modules.sh
+bash tests/isolated-run.sh
 ```
 
----
+El script requiere `unshare`, `mount`, `nft`, iptables/ip6tables, `ip` y Python.
+Si el kernel no permite namespaces, no lo sustituyas por ejecución directa de
+pruebas con root sobre la red anfitriona.
 
-## 3. Flujo seguro de aplicación
+## Comprobación y aplicación
 
-### 3.1 Validación sin aplicar
+### Instalar desde una ruta confiable
 
-```bash
-sudo ./iptables.rules.sh --dry-run --verbose
-sudo ./nftables.rules.sh --dry-run --verbose
+Las operaciones privilegiadas requieren el árbol revisado completo bajo una ruta
+confiable, por ejemplo `/opt/l4d2-firewall`, y configuración/ACL/GeoIP que use
+la operación bajo `/etc/l4d2-firewall`. Los archivos, directorios y ancestros
+relevantes deben ser root-owned, no escribibles por grupo/otros y sin symlinks.
+El checkout editable bajo el home de un usuario no sirve como instalación root:
+la suite valida la propiedad antes de cargar código y configuración. Despliega
+una versión revisada y conserva los permisos ejecutables de los entrypoints.
+La suite no copia el árbol ni corrige propietarios/permisos por sí sola.
+
+Haz la composición y revisión con rutas explícitas:
+
+```sh
+/opt/l4d2-firewall/nftables.rules.sh validate --env-file /etc/l4d2-firewall/server.conf
+/opt/l4d2-firewall/nftables.rules.sh plan --env-file /etc/l4d2-firewall/server.conf
 ```
 
-También puedes ejecutar:
+`check` requiere privilegios y consulta el estado actual para verificar la
+candidata contra el motor, sin aplicarla, excepto que la CLI primero recupera un
+journal de aplicación ya vencido. `status`, `doctor`, `save`, `load` y `disable`
+también procesan una transacción vencida antes de continuar. Antes de producción,
+comprueba la configuración en VM y establece consola fuera de banda. Los comandos
+siguientes son una secuencia operativa: elige un solo backend y usa la misma configuración.
 
-```bash
-./tests/smoke-modules.sh
+```sh
+sudo /opt/l4d2-firewall/nftables.rules.sh check --env-file /etc/l4d2-firewall/server.conf
+sudo /opt/l4d2-firewall/nftables.rules.sh apply --env-file /etc/l4d2-firewall/server.conf --timeout 120
 ```
 
-Resultado esperado:
+El comando prepara y comprueba todas las transacciones antes de registrar el
+journal. Después arma el watchdog systemd y solo entonces modifica Netfilter.
+Si aplica sin `--local` ni `--verify-with`, entrega un token y deja
+la candidata pendiente durante el timeout. Desde otra máquina, abre y prueba una
+conexión administrativa **nueva**; una sesión SSH ya establecida no demuestra
+acceso futuro. `--admin-verified` es una declaración del operador; la suite no
+puede demostrar que hiciste la conexión. Solo entonces confirma:
 
-- No hay errores de contrato `metadata/validate/apply`.
-- No faltan variables requeridas.
-- El resumen final muestra módulos ejecutados u omitidos de forma clara.
-
-### 3.2 Aplicación real
-
-Elige un solo backend para producción, salvo que estés haciendo pruebas controladas.
-
-```bash
-sudo ./iptables.rules.sh
+```sh
+sudo /opt/l4d2-firewall/nftables.rules.sh confirm --token TOKEN --admin-verified
 ```
 
-O:
+Si la prueba falla, o si prefieres revertir de inmediato, ejecuta `rollback`:
 
-```bash
-sudo ./nftables.rules.sh
+```sh
+sudo /opt/l4d2-firewall/nftables.rules.sh rollback
 ```
 
-### 3.3 Persistencia
+Al expirar el plazo, el watchdog independiente restaura los objetos anteriores.
+La suite no garantiza una reversión si el kernel o un escritor externo bloquea
+Netfilter. `--local` omite el watchdog y confirma para uso desde consola/arranque;
+no lo uses para cambios remotos. `--verify-with` solo es apropiado con un verificador
+root confiable que pruebe una conexión nueva desde fuera del host.
 
-Para `iptables`:
+## Operación y persistencia
 
-```bash
-sudo ./ipp.sh
+`/opt/l4d2-firewall/ipp.sh status` muestra el registro de política; `doctor` inspecciona los motores
+y objetos presentes. `disable` inicia un cambio temporizado que retira únicamente
+los objetos y hooks registrados por la suite; pruébalo y confírmalo igual que
+`apply`. `save` guarda la política
+confirmada de la suite en `/var/lib/l4d2-firewall/persisted.json`; `load` vuelve a
+comprobarla y la aplica con el mismo flujo de confirmación. Ninguna de estas
+operaciones edita persistencia global de nftables/iptables ni adopta objetos por
+su nombre. Revisa [gestión selectiva y persistencia](ipp.md) antes de usar esas
+operaciones.
+
+```sh
+sudo /opt/l4d2-firewall/ipp.sh status
+sudo /opt/l4d2-firewall/ipp.sh doctor
+sudo /opt/l4d2-firewall/ipp.sh save
+sudo /opt/l4d2-firewall/ipp.sh load --timeout 120
 ```
 
-Usa la opción de guardar reglas activas.
-
-Para `nftables`, `ipp.sh` puede guardar las tablas administradas por la suite en `/etc/nftables.conf`, pero revisa siempre el ruleset exportado antes de depender de él en producción.
-
-```bash
-sudo nft list ruleset
-sudo cat /etc/nftables.conf
-```
-
----
-
-## 4. Docker y `DOCKER-USER`
-
-En Docker, el punto seguro para reglas de usuario es `DOCKER-USER`.
-
-Validación rápida:
-
-```bash
-sudo iptables -S DOCKER-USER 2>/dev/null || true
-sudo iptables -S FORWARD
-sudo iptables -t nat -S
-```
-
-Si `TYPECHAIN=1` o `TYPECHAIN=2`, pero `DOCKER-USER` no existe, detén el despliegue y revisa Docker antes de culpar al módulo L4D2. El firewall no puede proteger una cadena que no existe, por muy optimista que esté el `.env`.
-
-Con `TYPECHAIN=0` y Docker instalado, revisa:
-
-```bash
-DOCKER_INPUT_COMPAT=true
-DOCKER_CHAIN_AUTORECOVER=true
-```
-
-Esto ayuda a preservar o recuperar cadenas Docker cuando solo quieres proteger tráfico nativo por `INPUT`.
-
----
-
-## 5. SourceTV no debe mezclarse con GameServer
-
-Mantén separados:
-
-```bash
-L4D2_GAMESERVER_UDP_PORTS="27001:27008"
-L4D2_SOURCETV_UDP_PORTS="27101:27108"
-```
-
-Motivo:
-
-- A2S puede aplicar a ambos rangos.
-- `connect/reserve` solo debe tratarse como login de GameServer.
-- SourceTV puede usar handshakes cortos que deben pasar por el limitador base, no por el subfiltro de login.
-
-Si un cliente no puede conectar a SourceTV, valida primero:
-
-```bash
-ss -lunp | grep -E ':27101|:27108'
-sudo tcpdump -nni any udp port 27101 -vv -XX
-sudo nft list chain inet firewall_main input_l4d2_udp 2>/dev/null || true
-sudo nft list chain inet firewall_main udp_new_limit 2>/dev/null || true
-```
-
----
-
-## 6. GeoIP puede bloquear sin generar eventos `FW_EVT`
-
-El módulo GeoIP puede bloquear antes de que existan logs de abuso. Por eso, ausencia de eventos no significa ausencia de bloqueo.
-
-Diagnóstico recomendado:
-
-```bash
-make geoip-check-ip IP=IP_DEL_CLIENTE
-```
-
-Con resolución de dominios confiables:
-
-```bash
-make geoip-check-ip IP=IP_DEL_CLIENTE RESOLVE_DOMAINS=1
-```
-
-Si estás investigando conectividad, revisa GeoIP antes de ajustar límites UDP. Así evitas subir límites por un bloqueo que ni siquiera venía del rate limiter, una pequeña tragedia administrativa.
-
----
-
-## 7. Logs: qué muestran y qué no muestran
-
-Los reportes solo ven paquetes que el firewall decidió loguear.
-
-No aparecerán necesariamente en los reportes:
-
-- Paquetes aceptados por whitelist.
-- Tráfico aceptado bajo umbral de rate limit.
-- Drops de GeoIP si el módulo no loguea ese caso.
-- Tráfico bloqueado por reglas externas a la suite.
-
-Revisión rápida:
-
-```bash
-tail -n 100 /var/log/firewall-suite.log
-python3 log-summary/app/iptable.loggin.py --env-file .env
-```
-
-Para diagnóstico temporal puedes activar:
-
-```bash
-ENABLE_PACKET_NORMALIZATION_LOGS=true
-```
-
-No lo dejes activo sin razón en producción. Los logs también pueden convertirse en otro incendio, porque aparentemente incluso registrar problemas puede crear problemas.
-
----
-
-## 8. `ENABLE_MALFORMED_FILTER` es agresivo
-
-Valor recomendado por defecto:
-
-```bash
-ENABLE_MALFORMED_FILTER=false
-```
-
-Actívalo solo si tienes evidencia real, idealmente captura `pcap` o patrón confirmado.
-
-```bash
-sudo tcpdump -nni any udp port 27015 -vv -XX -w l4d2-debug.pcap
-```
-
-Si lo activas y aparecen falsos positivos:
-
-1. Vuelve a `false`.
-2. Reaplica reglas.
-3. Captura tráfico real.
-4. Ajusta solo con evidencia.
-
----
-
-## 9. Desactivar temporalmente limitadores A2S
-
-El módulo `l4d2_a2s_filters` permite usar `0` en `*_RATE` o `*_BURST` para desactivar el limitador específico de esa clase.
-
-Ejemplo útil para diagnosticar visibilidad/browser:
-
-```bash
-A2S_INFO_RATE=0
-A2S_INFO_BURST=0
-STEAM_GROUP_RATE=0
-STEAM_GROUP_BURST=0
-```
-
-Esto desactiva el rate limit específico de `A2S_INFO` y `Steam Group`, pero no toca el limitador base `UDP_NEW`/`UDP_EST`.
-
-Si la visibilidad mejora tras este cambio, el problema estaba en `l4d2_a2s_filters`. Si no mejora, el siguiente sospechoso es el módulo base UDP.
-
-Para una prueba aún más agresiva también puedes desactivar temporalmente:
-
-```bash
-A2S_PLAYERS_RATE=0
-A2S_PLAYERS_BURST=0
-A2S_RULES_RATE=0
-A2S_RULES_BURST=0
-```
-
-Usa esto solo como diagnóstico temporal. No lo dejes desactivado en producción sin una razón clara.
-
----
-
-## 10. Estado dinámico de nftables
-
-Los rate limits nftables por IP y puerto usan meters dinámicos. Todos deben
-tener expiración; sin ella, el tráfico UDP desde orígenes aleatorios puede
-consumir gradualmente las 65.535 entradas del set.
-
-Comprobación rápida:
-
-```bash
-sudo nft list table inet firewall_main | grep -E 'set udp_|set a2s_|set steam_|set login_|flags|expires'
-```
-
-Resultado esperado:
-
-- Los sets dinámicos contienen el flag `timeout`.
-- Los elementos activos muestran `expires`.
-- La cantidad de entradas fluctúa y baja cuando cesa el tráfico; no crece de
-  manera monótona durante horas.
-
-Las variables recomendadas son:
-
-```bash
-NFT_UDP_NEW_METER_TIMEOUT=5s
-NFT_UDP_EST_METER_TIMEOUT=5s
-NFT_A2S_METER_TIMEOUT=5s
-NFT_LOGIN_METER_TIMEOUT=1s
-```
-
-Si las reglas activas no tienen timeout, actualiza la configuración y reaplica
-el backend. No uses la recarga periódica como sustituto de la expiración.
-
----
-
-## 11. Protección TCP L4D2 no abre puertos
-
-Esta variable:
-
-```bash
-L4D2_GAMESERVER_TCP_PORTS="27015"
-```
-
-define puertos TCP a proteger o rate-limitar. No funciona como allowlist general.
-
-Si quieres permitir servicios adicionales, usa las variables de bypass correspondientes:
-
-```bash
-BYPASS_TCP_PORTS="8080,9090"
-BYPASS_UDP_PORTS=""
-```
-
-Para Docker también revisa:
-
-```bash
-TCP_DOCKER="80,443"
-SSH_DOCKER="2222"
-```
-
----
-
-## 12. IP dinámica y publicación Steam
-
-En Valpo2 el router actualiza `valparaiso.dns.aoc-gamers.com` en No-IP y los
-registros finales de Cloudflare son CNAME DNS-only. El watcher local comprueba
-WAN y No-IP cada diez minutos, y reaplica nftables cuando confirma un cambio.
-
-Instalación y estado:
-
-```bash
-make public-ip-watch-test
-sudo make public-ip-watch-install
-make public-ip-watch-status
-```
-
-Logs:
-
-```bash
-journalctl -u l4d2-public-ip-watch.service -f
-```
-
-Si un servidor acepta conexión directa pero no aparece en Steam Group:
-
-1. Ejecuta `l4d2-public-ip-watch --check` para comparar WAN, No-IP y estado.
-2. Confirma que los meters activos tengan timeout.
-3. Captura tráfico del puerto UDP del juego.
-4. Si la red funciona, investiga el registro/heartbeat del master server.
-
-Consulta [Vigilancia de IP pública para Valpo2](public-ip-watch.md) para el
-flujo completo y la integración opcional mediante `POST_CHANGE_HOOK`.
-
----
-
-## 13. Checklist ante problema de conectividad
-
-Ejecuta en este orden:
-
-```bash
-# 1. Confirmar que el proceso escucha
-ss -lunp | grep -E ':27015|:27101'
-
-# 2. Confirmar ruta del tráfico
-sudo tcpdump -nni any udp port 27015 -vv -XX
-
-# 3. Revisar GeoIP
-make geoip-check-ip IP=IP_DEL_CLIENTE
-
-# 4. Revisar logs
-sudo tail -n 100 /var/log/firewall-suite.log
-
-# 5. Revisar reglas activas iptables
-sudo iptables -S
-sudo iptables -S DOCKER-USER 2>/dev/null || true
-
-# 6. Revisar reglas activas nftables
-sudo nft list ruleset
-
-# 7. Reaplicar después de cambios de .env
-sudo ./iptables.rules.sh
-# o
-sudo ./nftables.rules.sh
-
-# 8. En Valpo2, comparar WAN, No-IP y estado guardado
-sudo /usr/local/sbin/l4d2-public-ip-watch --check
-```
-
----
-
-## 14. Checklist antes de mergear cambios al firewall
-
-```bash
-make firewall-validate
-make public-ip-watch-test
-make geoip-check
-./tests/smoke-modules.sh
-python3 -m py_compile \
-  log-summary/app/fw_log_summary.py \
-  log-summary/app/iptable.loggin.py \
-  scripts/geoip/build_geo_country_sets.py \
-  scripts/geoip/check_geo_policy_ip.py
-find . -path './.git' -prune -o -type f -name '*.sh' -print0 | xargs -0 -n1 bash -n
-```
-
-Resultado esperado:
-
-- Validación bash sin errores.
-- Pruebas del watcher sin recargas reales ni cambios fuera del entorno simulado.
-- Smoke test sin fallos de contrato modular.
-- Python compila sin errores.
-- GeoIP valida updater, módulo y checker.
-
----
-
-## 15. Resumen operativo corto
-
-- Docker productivo: prioriza `iptables` + `DOCKER-USER`, salvo evidencia clara para `nftables`.
-- `nftables`: nunca debe hacer `flush ruleset` global.
-- SourceTV y GameServer deben ir separados.
-- GeoIP puede bloquear sin aparecer en `FW_EVT`.
-- Los logs no representan todo el tráfico.
-- Los meters nftables deben incluir timeout; una recarga no sustituye la
-  expiración del estado dinámico.
-- En Valpo2, el watcher confirma WAN y No-IP antes de reaplicar nftables.
-- `ENABLE_MALFORMED_FILTER=false` por defecto.
-- `L4D2_GAMESERVER_TCP_PORTS` protege TCP, no abre puertos.
-- Siempre usa `--dry-run` y smoke tests antes de aplicar en producción.
+Una política pendiente impide iniciar otra aplicación: confirma o revierte antes
+de continuar. Cambios parciales requieren una política confirmada y se recomponen
+como candidata completa; no admiten `--env-file`. Si eliminas un módulo con grants
+de contenedor, actualiza `ACCESS_POLICY` con un archivo que retire esos grants en
+la misma operación. Para Docker, grants o cambios de backend, consulta las
+garantías y requisitos de [operaciones](security/operations.md) y [migración](security/migration.md).
+
+## Configuración y límites de lectura
+
+`HOST_SERVICES`, `CONTAINER_POLICY` y `ROUTED_POLICY` son controles independientes;
+el forwarding por defecto se descarta. NAT o una publicación de Docker no otorgan
+permiso por sí solos. Los grants declaran origen, destino, interfaces, protocolo,
+puertos y, para contenedores, los extremos público e interno. `TYPECHAIN` es un
+alias heredado y no sustituye grants ni política de routing.
+
+Los módulos publican metadata literal (`ID`, aliases, variables requeridas,
+opcionales y defaults). La configuración se valida antes de que generadores de
+módulo produzcan registros; los módulos no invocan el motor durante la generación.
+El código de módulos sigue siendo código confiable, no una sandbox. Los detalles
+de familia IP, Docker, VPN, límites de estado y garantías por motor están en
+[capacidades](security/capabilities.md).
+
+Los registros y capturas solo describen tráfico que las reglas decidieron registrar;
+ausencia de evento no demuestra ausencia de bloqueo. Para diagnosticar, consulta
+el estado del motor y las guías específicas, y no reapliques una política sin pasar
+por `check` y la confirmación temporizada.

@@ -1,26 +1,7 @@
-> **Referencia histórica anterior al núcleo transaccional.** Las instrucciones de aplicación, configuración y persistencia de esta página fueron reemplazadas por [operación actual](../security/operations.md), [capacidades](../security/capabilities.md) y [migración](../security/migration.md). No ejecutar las recetas antiguas.
+# `l4d2_tcp_protect` — TCP de juego/RCON
 
-# Módulo unificado — l4d2_tcp_protect (ip/nf)
+Aplica limitación de conexiones TCP NEW por origen a `L4D2_GAMESERVER_TCP_PORTS`. La lista vacía no abre ni controla puertos. El módulo es opt-in y no forma parte del perfil `games` por defecto; `l4d2_tcpfilter_chain` es solo compatibilidad y depende de este módulo.
 
-## Objetivo
-Aplicar protección TCP específica para puertos de juego/RCON de L4D2.
+El módulo no ofrece una variante de control TCP de juego para contenedores. Los valores no vacíos de `TCP_DOCKER` se rechazan. Si solo necesita permitir una publicación TCP, un grant `containers` con `service=allowlist_ports` y el módulo seleccionado expresa ese permiso acotado, pero no aplica el limitador TCP de juego. Use `service=tcp_ssh` solo para una publicación SSH real; no es sustituto del control de juego. Evite superponer puertos host con SSH/web/allowlist: el validador rechaza ambigüedades.
 
-## Backends
-- iptables: `modules/ip/ip_42_l4d2_tcp_protect.sh` (`ID=ip_l4d2_tcp_protect`)
-- nftables: `modules/nf/nf_42_l4d2_tcp_protect.sh` (`ID=nf_l4d2_tcp_protect`)
-
-## Variables
-- `L4D2_GAMESERVER_TCP_PORTS`
-- `LOG_PREFIX_TCP_RCON_BLOCK`
-- `TYPECHAIN`
-
-## Diferencias por backend
-- `ip`: limita conexiones TCP `NEW` por `INPUT` y opcionalmente `DOCKER-USER` según `TYPECHAIN`.
-- `nf`: aplica rate-limit por origen/puerto en cadenas objetivo nativas (`input`/`forward`) según `TYPECHAIN`.
-
-## Nota operativa
-- Se activa al incluir `l4d2_tcp_protect` en `MODULES_ONLY`.
-- La exposición SSH se gestiona en `tcp_ssh`, separado de este módulo.
-- No usa `L4D2_GAMESERVER_UDP_PORTS` ni `L4D2_SOURCETV_UDP_PORTS` como acoplamiento automático.
-- Solo protege los puertos declarados explícitamente en `L4D2_GAMESERVER_TCP_PORTS`.
-- Si `L4D2_GAMESERVER_TCP_PORTS` está vacío, el módulo se omite sin error.
+La tasa/límite específico y evidencia de backend están en [capacidades](../security/capabilities.md) y [resultados](../security/results.md).

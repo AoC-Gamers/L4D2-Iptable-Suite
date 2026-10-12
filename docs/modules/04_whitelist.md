@@ -1,20 +1,7 @@
-> **Referencia histórica anterior al núcleo transaccional.** Las instrucciones de aplicación, configuración y persistencia de esta página fueron reemplazadas por [operación actual](../security/operations.md), [capacidades](../security/capabilities.md) y [migración](../security/migration.md). No ejecutar las recetas antiguas.
+# `whitelist` — bypass privilegiado al host
 
-# Módulo unificado — bypass_source (ip/nf)
+El módulo reconoce `BYPASS_SOURCE_IPS` y dominios resueltos, pero la lista no concede acceso por sí sola: la configuración exige seleccionar `whitelist` y declarar `PRIVILEGED_BYPASS=true`. El permiso resultante es un bypass de input al host; no es un grant de forwarding ni una autorización general de contenedores.
 
-## Objetivo
-Permitir tráfico completo desde IPs/dominios de confianza.
+Para dominios también se requiere `DNS_ALLOWED_CIDRS`. La resolución falla cerrada si falla DNS, excede el límite de respuestas o produce una IP fuera de esos CIDR. Prefiera grants `host`/`forward` de `ACCESS_POLICY` cuando necesite acotar servicio, protocolo y puerto. Revise el bypass privilegiado en `plan` antes de aplicar.
 
-## Backends
-- iptables: `modules/ip/ip_10_whitelist.sh` (`ID=ip_whitelist`)
-- nftables: `modules/nf/nf_10_whitelist.sh` (`ID=nf_whitelist`)
-
-## Variables
-- `TYPECHAIN`
-- `BYPASS_SOURCE_IPS` (separado por espacios)
-- `BYPASS_SOURCE_DOMAINS` (resolución al aplicar)
-
-
-## Diferencias por backend
-- Ambos resuelven dominios y deduplican IPs.
-- En `nft`, las reglas se aplican a cadenas objetivo según `TYPECHAIN`.
+No migre antiguas listas de confianza sin verificar su alcance. Detalle en [capacidades](../security/capabilities.md) y [migración](../security/migration.md).

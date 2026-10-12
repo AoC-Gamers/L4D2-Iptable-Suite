@@ -1,18 +1,5 @@
-> **Referencia histórica anterior al núcleo transaccional.** Las instrucciones de aplicación, configuración y persistencia de esta página fueron reemplazadas por [operación actual](../security/operations.md), [capacidades](../security/capabilities.md) y [migración](../security/migration.md). No ejecutar las recetas antiguas.
+# `allowlist_ports` — puertos adicionales al host
 
-# Módulo unificado — bypass_ports (ip/nf)
+`BYPASS_TCP_PORTS` y `BYPASS_UDP_PORTS` permiten los puertos listados para los servicios del host cuando se selecciona `allowlist_ports`. No son grants de routing ni autorizaciones Docker. Las listas UDP globales no se admiten junto con el conjunto de controles de juego; la superposición TCP con SSH, web o protección TCP de juego se rechaza.
 
-## Objetivo
-Abrir puertos TCP/UDP explícitos como excepción operacional.
-
-## Backends
-- iptables: `modules/ip/ip_20_allowlist_ports.sh` (`ID=ip_allowlist_ports`)
-- nftables: `modules/nf/nf_20_allowlist_ports.sh` (`ID=nf_allowlist_ports`)
-
-## Variables
-- `TYPECHAIN`
-- `BYPASS_UDP_PORTS`
-- `BYPASS_TCP_PORTS`
-
-## Nota operativa
-Usar para puertos puntuales de infraestructura; evitar mezclar con lógica L4D2 de protección.
+Para forwarding use grants `forward` con source/destination, interfaces, protocolo y puertos. Para publicaciones Docker use grants `containers` que declaren el tuple público e interno y servicio. TCP no abre UDP/QUIC. Vea [capacidades](../security/capabilities.md) y [migración](../security/migration.md).

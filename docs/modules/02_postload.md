@@ -1,18 +1,5 @@
-> **Referencia histórica anterior al núcleo transaccional.** Las instrucciones de aplicación, configuración y persistencia de esta página fueron reemplazadas por [operación actual](../security/operations.md), [capacidades](../security/capabilities.md) y [migración](../security/migration.md). No ejecutar las recetas antiguas.
+# `postload.sh` — helper heredado
 
-# Módulo transversal — postload
+`modules/postload.sh` es un helper de salida histórica, no el cierre del flujo actual. El núcleo genera y valida la candidata antes de entregarla al motor transaccional; los módulos no controlan servicios.
 
-## Objetivo
-Ejecutar el cierre posterior a la carga modular del backend.
-
-## Módulo
-- `modules/postload.sh`
-
-## Alcance
-- Resumen final de ejecución.
-- Reporte de módulos ejecutados y omitidos.
-- Mensajería operativa de cierre.
-
-## Recomendaciones
-- Mantenerlo libre de reglas de firewall específicas.
-- Priorizar acciones de cierre no destructivas y trazables.
+No use este script para inferir que una política quedó aplicada o confirmada. Consulte `ipp.sh status` y [operaciones](../security/operations.md). La evidencia de integración y sus límites está en [resultados](../security/results.md).

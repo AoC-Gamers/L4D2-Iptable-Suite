@@ -1,38 +1,56 @@
-# Arquitectura modular
+# Arquitectura modular y contrato del generador
 
-El núcleo está en `core/`: `config.py` resuelve datos/composición, `compiler.py` genera
-política, `engine.py` implementa operaciones Netfilter, `store.py` serializa escrituras
-y journal/rollback, `fw.py` expone la CLI. Los entrypoints y `ipp.sh` delegan al mismo
-escritor. `preload.sh` y `run_target_modules` antiguos fallan explícitamente para
-impedir aplicación imperativa por una ruta alternativa.
+Los entrypoints [`nftables.rules.sh`](../nftables.rules.sh) e
+[`iptables.rules.sh`](../iptables.rules.sh) invocan el mismo CLI Python aislado
+(`core/fw.py`); [`ipp.sh`](ipp.md) delega en él. `core/config.py` interpreta
+configuración y metadata; `core/compiler.py` valida módulos y convierte las
+llamadas registradas a una política JSON; `core/engine.py` inspecciona y prepara
+transacciones Netfilter; `core/store.py` serializa operaciones, journal y
+rollback temporizado.
 
-Los módulos shell existentes mantienen IDs/aliases y metadata literal. El núcleo
-lee esos heredocs sin ejecutar código. Selecciona el conjunto efectivo, aplica sólo
-defaults ausentes, comprueba dependencias/conflictos y valida datos. Después importa
-solamente módulos seleccionados en un proceso con entorno controlado. Todos sus
-validadores terminan antes de llamar a generadores. En ese proceso `nft`/`iptables`
-son funciones de registro; no se llama al motor activo. Reinicios/operaciones Docker
-están prohibidos. No es una sandbox para módulos maliciosos: código root debe ser
-revisado y protegido, incluidos directorios y helpers. El bootstrap verifica los
-archivos Python antes de importar código del proyecto.
+## Composición y generación
 
-La representación común es deliberadamente pequeña: configuración, módulos, grants
-host/forward/containers y un bundle de objetos/reglas por motor. No intenta modelar
-todo Netfilter. VPN y grants se compilan desde permisos explícitos; servicios de juego,
-SSH/web y GeoIP reutilizan sus módulos. Setup/finalize, ICMP/ICMPv6, propiedad y
-transacciones son responsabilidades obligatorias del núcleo.
+Cada módulo declara metadata en un heredoc literal: `ID`, `ALIASES`, `DESCRIPTION`,
+`REQUIRED_VARS`, `OPTIONAL_VARS` y `DEFAULTS`. El núcleo lee esos campos como
+datos, resuelve los módulos/perfiles efectivos y defaults únicamente para claves
+ausentes, comprueba dependencias, incompatibilidades y valores, y después ejecuta
+validadores/generadores de los módulos seleccionados en un entorno controlado.
+Los entrypoints antiguos `preload.sh` y `run_target_modules` no son rutas de
+aplicación; fallan explícitamente. No interpretes metadata como configuración de
+confianza: los scripts seleccionados siguen siendo código y deben pertenecer a
+una instalación root no modificable por usuarios.
 
-Recorrido UDP de juego: validación de longitud → clasificación A2S/Steam/login →
-límite específico y veredicto; tráfico restante → límites base NEW/ESTABLISHED →
-veredicto. El ACCEPT genérico establecido queda después de estos controles. SourceTV
-permanece separado de login GameServer. nft usa longitud UDP, independiente del tamaño
-de cabecera IP; iptables conserva matching IPv4 y rechaza prometer juego IPv6.
-Meters por dirección IPv4/IPv6 tienen capacidad y timeout; los logs tienen un límite
-escalar y las reglas de descarte no dependen de ese presupuesto. Los límites TCP/web
-controlan nuevas conexiones; no son límites por petición.
+El entorno de generación reemplaza `nft` e `iptables` por funciones de registro.
+Los generadores no aplican reglas, no reinician servicios ni reparan Docker. El
+resultado incluye backend, configuración resuelta, selección, grants y objetos
+o cadenas/reglas para ese motor. `validate`, `generate` y `plan` realizan esta
+composición sin consultar el kernel; `check` compila las transacciones y hace
+preflight/kernel check; `apply` pasa por el mismo preflight antes de escribir.
+La CLI también puede recuperar un journal ya vencido antes de estas operaciones
+privilegiadas. Ver [operación](security/operations.md) para el contrato completo,
+[configuración](configuration.md) para la selección efectiva y el
+[índice documental](README.md) para otras guías.
 
-Una operación parcial recompone el bundle completo partiendo de política confirmada;
-comprueba objetos y dependencias existentes. Guardar/cargar/desactivar usan el registro,
-no listas manuales de nombres de cadenas. [Operación y garantías](security/operations.md),
-[capacidades](security/capabilities.md) y [migración](security/migration.md) contienen
-el contrato operativo actual.
+## Política y límites
+
+La política del núcleo separa servicios de host, forwarding y contenedores.
+`HOST_SERVICES`, `ROUTED_POLICY` y `CONTAINER_POLICY` son controles independientes;
+por defecto forwarding es `drop` y contenedores están `off`. Los grants describen
+direcciones, interfaces, protocolo y puertos; grants de contenedor incluyen IP y
+puertos públicos/internos y validan DNAT. NAT por sí solo no autoriza tráfico.
+`TYPECHAIN` es compatibilidad de configuración y no concede permisos sin grants.
+
+El núcleo posee setup/finalize, loopback, controles ICMP/ICMPv6, transacciones y
+registro de objetos. Los módulos de juego se seleccionan como grupo con validación,
+A2S y UDP base. SourceTV se separa de login GameServer. `nftables` compara longitud
+del datagrama UDP y puede aplicar política dual; `iptables` juego requiere
+`FAMILY_POLICY=ipv4-block-ipv6`. Meter/hashlimit tienen capacidad limitada por
+`STATE_CAPACITY` y timeouts; los registros de descarte están separados de los
+presupuestos de rate limit.
+
+Las garantías de reemplazo difieren por motor: nftables cambia las tablas propias
+en una transacción; iptables confirma cada tabla/familia por separado y no garantiza
+atomicidad conjunta. No se vacía el ruleset global, no se cambia política de cadenas
+compartidas ni se adopta un objeto solo por su nombre. Los límites detallados de
+Docker, VPN, familias y pruebas están en [capacidades](security/capabilities.md)
+y [resultados](security/results.md).

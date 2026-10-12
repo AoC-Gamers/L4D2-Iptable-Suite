@@ -1,36 +1,7 @@
-> **Referencia histórica anterior al núcleo transaccional.** Las instrucciones de aplicación, configuración y persistencia de esta página fueron reemplazadas por [operación actual](../security/operations.md), [capacidades](../security/capabilities.md) y [migración](../security/migration.md). No ejecutar las recetas antiguas.
+# `http_https_protect` — HTTP/HTTPS
 
-# Módulo unificado — http_https_protect (ip/nf)
+Controla conexiones TCP nuevas a `HTTP_HTTPS_PORTS` (por defecto `80,443`) con tasa y ráfaga por origen y puerto. En nftables el medidor tiene expiración; el núcleo deriva timeout suficiente para el refill cuando no se fija uno, y rechaza un timeout explícito insuficiente.
 
-## Objetivo
-Limitar abuso de conexiones nuevas HTTP/HTTPS sin compartir el presupuesto de
-tráfico entre clientes independientes.
+Para una publicación Docker, un grant `containers` `service=http_https_protect` vincula la dirección/puerto público con destino/puerto interno y protocolo. El filtro usa el puerto público original tras DNAT. La protección no abre UDP/443: QUIC necesita un grant UDP independiente, normalmente `service=allowlist_ports` y módulo seleccionado.
 
-## Backends
-- iptables: `modules/ip/ip_45_http_https_protect.sh` (`ID=ip_http_https_protect`)
-- nftables: `modules/nf/nf_45_http_https_protect.sh` (`ID=nf_http_https_protect`)
-
-## Variables
-- `HTTP_HTTPS_PORTS`
-- `HTTP_HTTPS_RATE`, `HTTP_HTTPS_BURST`
-- `NFT_HTTP_HTTPS_METER_TIMEOUT` (sólo nftables; por defecto `5m`)
-- `LOG_PREFIX_HTTP_HTTPS_ABUSE`
-
-## Nota operativa
-- La activación depende de incluir `http_https_protect` en `MODULES_ONLY`; no se usa flag `ENABLE_*`.
-
-## Diferencias por backend
-- `nf` normaliza `sec/min` a formato nativo (`second/minute`) cuando corresponde.
-- Ambos backends aplican `HTTP_HTTPS_RATE` y `HTTP_HTTPS_BURST` por IP de origen
-  y puerto de destino. En nftables esto se implementa con meters sobre
-  `ip saddr . tcp dport`; no debe reemplazarse por un `limit` global, porque el
-  tráfico agregado de Internet podría agotar el presupuesto y bloquear clientes
-  legítimos.
-- Las entradas dinámicas de esos meters expiran tras
-  `NFT_HTTP_HTTPS_METER_TIMEOUT` de inactividad. El valor es configurable en
-  `.env` y evita que IP de escaneos antiguos ocupen el conjunto indefinidamente.
-- En la cadena nftables `forward_web`, el selector y el meter usan
-  `ct original proto-dst`. El hook forward se ejecuta después de DNAT y el puerto
-  efectivo puede haber cambiado (por ejemplo, `443` público a `8443` en el
-  contenedor); filtrar allí por `tcp dport` dejaría fuera los puertos públicos
-  declarados en `HTTP_HTTPS_PORTS`.
+La salida de `plan` muestra la composición; el tráfico real por versiones probadas y las limitaciones se separan en [capacidades](../security/capabilities.md) y [resultados](../security/results.md).

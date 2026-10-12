@@ -1,5 +1,9 @@
 # Auditoría iterativa de flujos
 
+Este registro conserva rondas históricas y sus entornos. La sección final
+[continuación con kernel propio](#continuación-con-kernel-propio) amplía la
+evidencia inicial; consultar [resultados](results.md) para los límites actuales.
+
 Fecha: 2026-10-11. Punto de partida: `148875e272783e24cdd517d818f7f7992a24ab76`,
 rama `security/modular-safe-apply`, sin cambios locales versionados al comenzar.
 Tres agentes GPT-6 Luna con esfuerzo alto revisan configuración/automatización,

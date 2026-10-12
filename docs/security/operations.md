@@ -24,6 +24,12 @@ bundle JSON con reglas concretas, permisos, familias, módulos y registro de
 objetos; `plan` muestra esas reglas y, con `--against`, diferencias y eliminaciones.
 Sin baseline no se puede afirmar qué objetos desaparecerán del firewall activo.
 
+Los comandos privilegiados toman el lock y recuperan primero cualquier journal
+vencido. Por ello `check`, `status` y `doctor` pueden ejecutar rollback de un
+cambio anterior expirado; no son observación estrictamente pasiva. Para una
+auditoría pasiva usar las operaciones lógicas sin root y consultas directas de
+lectura del motor. La candidata de `check` no se aplica.
+
 Las siguientes operaciones necesitan privilegios. Probar primero en VM o
 namespace desechable, nunca sobre el firewall que mantiene acceso al repositorio:
 
