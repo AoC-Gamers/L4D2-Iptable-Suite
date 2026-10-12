@@ -157,11 +157,17 @@ class Store:
         engine.check(tx)  # Nothing active changes before every table/family has checked.
         token = secrets.token_hex(16)
         deadline = time.time() + timeout
-        self.put('pending', {'token': token, 'deadline': deadline, 'deadline_monotonic': time.monotonic() + timeout, 'boot_id': Path('/proc/sys/kernel/random/boot_id').read_text().strip(), 'previous': previous, 'snapshot': snap, 'candidate': candidate})
+        monotonic_deadline = time.monotonic() + timeout
+        tx.deadline = monotonic_deadline
+        self.put('pending', {'token': token, 'deadline': deadline, 'deadline_monotonic': monotonic_deadline, 'boot_id': Path('/proc/sys/kernel/random/boot_id').read_text().strip(), 'previous': previous, 'snapshot': snap, 'candidate': candidate})
+        execution_started = False
         try:
             if not local:
                 self.arm(token, timeout, watchdog)
+            execution_started = True
             engine.execute(tx)
+            if remaining(self.get('pending')) <= 0:
+                require(False, 'Apply exceeded its confirmation deadline; previous suite policy restored')
             if verifier:
                 trusted(verifier)
                 r = subprocess.run([verifier], env={**engine.SAFE_ENV, 'SUITE_CONFIRM_TOKEN': token}, timeout=max(1, int(remaining(self.get('pending'))) - 1), check=False)
@@ -170,7 +176,12 @@ class Store:
                 self.confirm_locked(token)
                 return None
         except BaseException:
-            self.rollback_locked(token)
+            # A watchdog setup failure precedes every Netfilter write. Deleting
+            # the journal is sufficient and avoids rewriting live policy.
+            if execution_started:
+                self.rollback_locked(token)
+            else:
+                self.delete('pending')
             raise
         return token
 

@@ -2,19 +2,34 @@
 import json
 import shlex
 import subprocess
+import time
 from .config import PolicyError, require
 
 SAFE_ENV = {'PATH': '/usr/sbin:/usr/bin:/sbin:/bin', 'LANG': 'C'}
 
 
-def command(argv, text=None, optional=False):
-    r = subprocess.run(argv, input=text, text=True, capture_output=True, env=SAFE_ENV, timeout=120, check=False)
+def command(argv, text=None, optional=False, deadline=None):
+    timeout = 120
+    if deadline is not None:
+        timeout = min(timeout, deadline - time.monotonic())
+        require(timeout > 0, 'Apply deadline expired before the next firewall operation')
+        if argv and argv[0].endswith('-restore'):
+            require(timeout >= 1, 'Insufficient deadline budget to acquire the iptables lock safely')
+            argv = [*argv]
+            wait_at = argv.index('--wait') + 1
+            argv[wait_at] = str(max(1, min(10, int(timeout))))
+    r = subprocess.run(argv, input=text, text=True, capture_output=True, env=SAFE_ENV, timeout=timeout, check=False)
     if not optional:
         require(r.returncode == 0, f"{' '.join(argv)} failed: {r.stderr.strip()}")
     return r
 
 
 _frontend = 'auto'
+
+
+class TransactionBatch(list):
+    """Sequence of engine transactions with an optional apply deadline."""
+    deadline = None
 
 def ipcmd(f, suffix=''):
     base = 'iptables' if str(f) == '4' else 'ip6tables'
@@ -46,8 +61,18 @@ def preflight(policy, previous, live):
     require(not previous or previous['backend'] == policy['backend'], 'Backend change requires disabling old suite and an explicit migration')
     v = policy['config']
     if previous and policy['backend'] == 'iptables':
-        require(previous.get('versions', live['versions']) == live['versions'], 'iptables backend/version changed; migrate explicitly')
-    if policy['access']['containers']:
+        if policy.get('disabled'):
+            expected = previous.get('config', {}).get('IPTABLES_FRONTEND')
+            if expected not in ('nft', 'legacy'):
+                old_versions = previous.get('versions', {})
+                markers = {'nft' if '(nf_tables)' in value else 'legacy' if '(legacy)' in value else 'unknown'
+                           for value in old_versions.values()}
+                expected = next(iter(markers)) if len(markers) == 1 else 'unknown'
+            require(expected in ('nft', 'legacy') and live.get('frontend') == expected,
+                    'iptables frontend changed; refusing to disable through a different engine')
+        else:
+            require(previous.get('versions', live['versions']) == live['versions'], 'iptables backend/version changed; migrate explicitly')
+    if policy['access']['containers'] and not policy.get('disabled'):
         docker = live['docker']
         require(docker != 'none', 'No Docker integration objects detected; start/configure Docker separately before applying')
         require(docker != 'mixed', 'Ambiguous Docker backends: nft tables plus DOCKER-USER; migrate explicitly')
@@ -59,7 +84,7 @@ def preflight(policy, previous, live):
                     continue
                 text = live['iprules'][f]
                 require(':DOCKER-USER ' in text and '-A FORWARD -j DOCKER-USER' in text, f"Missing/reordered Docker integration in IPv{f}; no service restart attempted")
-    if policy['backend'] == 'nftables' and policy['access']['forward']:
+    if policy['backend'] == 'nftables' and policy['access']['forward'] and not policy.get('disabled'):
         require(live['docker'] not in ('iptables', 'mixed'), 'Native nft routed grants with Docker iptables may encounter FORWARD DROP; use iptables suite or migrate Docker explicitly')
     if policy['backend'] == 'nftables':
         registered = {(x['family'], x['name']) for x in (previous or {}).get('objects', [])}
@@ -75,13 +100,25 @@ def preflight(policy, previous, live):
                     require(chain not in live_tables.get(t, {}).get('chains', {}) or chain in old.get(f, {}).get(t, {}), f"Chain not registered: {f}/{t}/{chain}")
     # Never silently run beside an old layout with broad/bypassing rules.
     if previous and policy['backend'] == 'iptables' and not policy.get('disabled'):
-        for f in ('4','6'):
+        # At boot, the confirmed journal may outlive the kernel ruleset. Permit
+        # a full restore only when none of the registered suite chains exist;
+        # if any do exist, keep requiring intact first-position integration.
+        registered = previous.get('families', {})
+        owned_present = False
+        for f, tables in registered.items():
             parsed = parse_save(live['iprules'][f])
-            for table, parent, c in previous.get('hooks', []):
-                rs = [r for r in parsed.get(table, {}).get('rules', []) if r[1] == parent]
-                if c not in previous.get('families', {}).get(f, {}).get(table, {}):
-                    continue
-                require(rs and rs[0] == hook_rule(parent, c), f'Suite integration missing or no longer first: IPv{f} {table}/{parent}; operator review required')
+            owned_present |= any(
+                chain in parsed.get(table, {}).get('chains', {})
+                for table, chains in tables.items() for chain in chains
+            )
+        if owned_present:
+            for f in ('4','6'):
+                parsed = parse_save(live['iprules'][f])
+                for table, parent, c in previous.get('hooks', []):
+                    rs = [r for r in parsed.get(table, {}).get('rules', []) if r[1] == parent]
+                    if c not in previous.get('families', {}).get(f, {}).get(table, {}):
+                        continue
+                    require(rs and rs[0] == hook_rule(parent, c), f'Suite integration missing or no longer first: IPv{f} {table}/{parent}; operator review required')
     if not previous:
         require(not any(':UDP_GAME_NEW_LIMIT ' in x or ':SSHfilter ' in x for x in live['iprules'].values()), 'Legacy suite detected; follow migration guide before claiming new objects')
 
@@ -197,11 +234,11 @@ def ip_transaction(target, union, live, f):
 def prepare(target, union, live):
     backend = target['backend'] if target else next(p['backend'] for p in union if p)
     if backend == 'nftables':
-        return [('nft', nft_transaction(target, union, live))]
+        return TransactionBatch([('nft', nft_transaction(target, union, live))])
     result = []
     for f in ('4', '6'):
         result += [(ipcmd(f, '-restore'), t) for t in ip_transaction(target, union, live, f)]
-    return result
+    return TransactionBatch(result)
 
 
 def check(transactions):
@@ -211,9 +248,10 @@ def check(transactions):
 
 
 def execute(transactions):
+    deadline = getattr(transactions, 'deadline', None)
     for engine, text in transactions:
         argv = ['nft', '-f', '-'] if engine == 'nft' else [engine, '--wait', '10', '--noflush']
-        command(argv, text)
+        command(argv, text, deadline=deadline)
 
 
 def require_owned_present(policy, live):

@@ -70,8 +70,13 @@ def configuration(args, privileged=False, previous=None):
         overrides[k] = v
     if previous and (args.partial or args.remove):
         require(not args.env_file, 'Partial operation uses confirmed configuration; use --set for explicit updates')
-        c = Configuration(args.backend, overrides={**previous['config'], **overrides, 'ACCESS_POLICY': ''}, only=previous['selected'], privileged=privileged)
-        c.access = previous['access']
+        access_changed = 'ACCESS_POLICY' in overrides
+        merged = {**previous['config'], **overrides}
+        if not access_changed:
+            # Avoid reopening an old path while retaining its confirmed parsed ACL.
+            merged['ACCESS_POLICY'] = ''
+        c = Configuration(args.backend, overrides=merged, only=previous['selected'], privileged=privileged)
+        c.access = c.access if access_changed else previous['access']
         if args.partial:
             require(args.only is not None, '--partial requires --only')
             selected = Configuration(args.backend, overrides=c.values, only=csvargs(args.only), privileged=privileged)
@@ -87,7 +92,7 @@ def configuration(args, privileged=False, previous=None):
             remaining = set(previous['selected']) - set(remove.selected)
             require(remaining, 'Use disable to remove the entire suite')
             c = Configuration(args.backend, overrides=c.values, only=sorted(remaining), privileged=privileged)
-            c.access = previous['access']
+            c.access = c.access if access_changed else previous['access']
             require(all(g['service'] in c.names for g in c.access['containers']), 'Remove container grants before removing their service')
         return c
     require(not args.partial and not args.remove, 'Partial/removal needs a confirmed policy')
