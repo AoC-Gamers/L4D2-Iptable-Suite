@@ -62,7 +62,7 @@ solicitado; una dependencia o permiso ausente produce fallo, no skip aprobado.
 No se ejecutó CI remoto. Los logs finales están en `tmp/iterative-audit/` y se
 copian a la entrega de evidencia.
 
-## Limitaciones conservadas
+## Limitaciones de la primera ejecución
 
 iptables-legacy sigue sin aprobarse localmente: el nuevo intento desde namespace
 de usuario falla leyendo `/proc/net/ip_tables_names`; el intento anterior en
@@ -83,3 +83,37 @@ La regresión ejecuta motores sólo después de comprobar red y montaje privados
 Un plazo limita cuánto puede continuar la aplicación; no garantiza un tiempo
 máximo de restauración si el kernel o un administrador externo bloquean el motor.
 Los mocks de fallos y concurrencia no demuestran aceptación de reglas ni tráfico.
+
+## Continuación con kernel propio
+
+La continuación solicitada añade una VM QEMU/KVM desechable, Ubuntu noble imagen
+20260926, kernel `6.8.0-142-generic`. La matriz completa pasa con iptables-nft y
+legacy: **20 comprobaciones de candidatas y 46 casos de integración/regresión**.
+El fallo legacy del entorno anterior se conserva como histórico; ya no limita
+esta evidencia sobre el kernel nuevo. No se cargaron módulos en el anfitrión.
+
+Cinco combinaciones con Docker Engine 29.8.2 real pasan DNAT remapeado IPv4/IPv6, retorno,
+separación TCP/UDP, conservación e idempotencia; el egreso se verifica cuando
+la suite lo administra. OpenVPN 2.6.19 con PKI temporal pasa grants v4/v6,
+routing S2S y alias, con drop contado del origen no autorizado. El updater GeoIP
+completo pasa usando ZIP local sintético y tráfico nftables real.
+
+El timer systemd de producción pasa rollback tras SIGKILL postcommit y timeout
+sin confirmación. Una nueva conexión SSH autenticada confirma la candidata.
+Dos reinicios completos pasan restore nftables e iptables-legacy v4/v6 con
+unidad real, boot IDs distintos y digest idéntico. Los detalles se registran en
+`vm-transactions.md`.
+Revisión cruzada del harness y pruebas nuevas no confirmaron issues adicionales
+del producto. Los errores del código de pruebas nuevo se corrigieron antes de
+entregarlo; no inflan la cuenta de **10 issues corregidos**.
+
+Los límites actuales sustituyen a los de la ejecución inicial y están en
+[results.md](results.md), [vm-clients.md](vm-clients.md) y
+[vm-docker.md](vm-docker.md). Tráfico sintético de juego no certifica clientes
+L4D2/SourceTV reales; tampoco se afirma un ensayo de carga prolongado.
+
+El runner completo terminó aprobado en una VM fresca:
+`20261012T022119Z-164e7eae`, salida 0, sin SKIP, con ambas limpiezas posteriores
+a reboot. Se conserva la evidencia de los intentos fallidos e interrumpidos;
+las mejoras del harness no inflan los diez IDs de auditoría cerrados. La última
+revisión cruzada del código final confirmó cero issues adicionales.

@@ -1,25 +1,25 @@
 # Capacidades y convivencia
 
-La capacidad implementada y la evidencia observada son cosas distintas. Versiones
-locales: Linux 7.0.0-38-generic, nftables 1.0.9, iptables 1.8.10 (nf_tables y binarios
-legacy), Python 3.12. Docker anfitrión 29.8.2: sólo se consultó su inventario/versión
-y se usó un contenedor de prueba `--network none`; no se modificaron sus firewalls,
-configuración ni servicios. La documentación oficial de Docker consultada describe
-el backend nftables introducido como experimental en 29.0.0.
+La capacidad implementada y la evidencia observada son cosas distintas. La
+continuación se probó en VM QEMU/KVM con kernel propio `6.8.0-142-generic`,
+nftables `1.0.9`, iptables `1.8.10` (frontends nft y legacy), OpenVPN `2.6.19`
+y Docker Engine `29.8.2`. El daemon de prueba y su red son privados; el Docker y
+firewall del anfitrión permanecieron intactos. Docker nftables es experimental
+según su documentación oficial. Versiones y límites en [results.md](results.md).
 
 | Capacidad | nftables nativo | iptables-nft | iptables-legacy |
 |---|---|---|---|
-| Host mínimo / SSH / web doble pila | Implementado; tráfico real | Implementado; tráfico real | Implementado; requiere tablas/módulos legacy v4/v6; pendiente suite completa local |
-| Juego UDP, A2S, Steam Group, login, TV | IPv4/IPv6; tráfico sintético real | IPv4; tráfico sintético real | Generación compartida; pendiente tráfico completo local |
+| Host mínimo / SSH / web doble pila | Implementado; tráfico real | Implementado; tráfico real | Implementado; tráfico real en VM |
+| Juego UDP, A2S, Steam Group, login, TV | IPv4/IPv6; tráfico sintético real | IPv4; tráfico sintético real | IPv4; tráfico sintético real en VM |
 | Juego dual pila | Sí | Rechazado: matcher u32 IPv4 | Rechazado: matcher u32 IPv4 |
 | Alternativa juego IPv4 | `FAMILY_POLICY=ipv4-block-ipv6` | Obligatoria | Obligatoria |
-| SSH por origen / web por origen+puerto | Meter por familia, timeout, capacidad | Hashlimit por familia, timeout, capacidad | Mismo emisor restore; comprobación depende de extensiones disponibles |
+| SSH por origen / web por origen+puerto | Meter por familia, timeout, capacidad | Hashlimit por familia, timeout, capacidad | Hashlimit por familia; capacidad efectiva probada en VM |
 | Logs acotados + descarte independiente | Límite escalar por regla | `limit` por regla | Mismo emisor |
-| Reenvío nativo / VPN sin Docker | Grants v4/v6 probados con tráfico | Grants v4/v6 probados con tráfico | Pendiente integración local completa |
-| OpenVPN server NAT / DNAT | Implementado, candidata kernel comprobada | Implementado, candidata kernel comprobada | Pendiente motor completo local |
-| OpenVPN S2S NAT / alias / SNAT | Implementado, candidata kernel comprobada | Implementado, candidata kernel comprobada | Pendiente motor completo local |
+| Reenvío nativo / VPN sin Docker | Grants v4/v6 probados con tráfico | Grants v4/v6 probados con tráfico | Grants v4/v6 probados con tráfico en VM |
+| OpenVPN server NAT / DNAT | NAT con tráfico de integración; TLS/alias en VM | NAT con tráfico de integración; TLS/alias en VM | NAT con tráfico de integración; alias candidata kernel; TLS legacy no ensayado |
+| OpenVPN S2S NAT / alias / SNAT | Ruta S2S/alias/TLS con tráfico; SNAT candidata kernel | Ruta S2S/alias/TLS con tráfico; SNAT candidata kernel | DNAT/SNAT candidata kernel; tráfico S2S/TLS legacy no ensayado |
 | NAT concede permiso de filtrado | Nunca | Nunca | Nunca |
-| Puertos públicos frente a internos | Tuple original + DNAT + destino/interfaces + puerto interno | Igual, conntrack explícito | Igual, sujeto a prueba completa |
+| Puertos públicos frente a internos | Tuple original + DNAT + destino/interfaces + puerto interno | Igual, conntrack explícito | Igual; tráfico DNAT real en VM |
 | SSH_DOCKER / TCP_DOCKER / UDP_DOCKER | Rechazo con migración a grants | Mismo rechazo | Mismo rechazo |
 | GeoIP | Sólo IPv4; dual exige `GEO_IPV6_POLICY=deny` | Módulo no disponible, ID rechazado | Módulo no disponible, ID rechazado |
 | Whitelist por DNS | Privilegio explícito + CIDRs esperados + fallo cerrado | Igual | Igual |
@@ -50,9 +50,9 @@ a las demás reglas. No confundir ese modo con protección del reenvío por la s
 
 | Suite / Docker | Integración y estado |
 |---|---|
-| iptables / Docker iptables en el mismo frontend | Hook propio en DOCKER-USER. Se exige cadena y salto de FORWARD existentes. Topología con DNAT/retorno probada en kernel; daemon real pendiente. |
-| nftables / Docker iptables | Tabla propia, forward prioridad -5; DROP previo a Docker. Topología probada; permisos deben corresponder a publicaciones que Docker permita. Grants nativos de reenvío se rechazan por posible FORWARD DROP de Docker. |
-| nftables / Docker nftables | Tabla propia antes de las cadenas de Docker. Topología probada; no se modifica docker-bridges. Daemon real pendiente. |
+| iptables / Docker iptables en el mismo frontend | Hook propio en DOCKER-USER. Se exige cadena y salto de FORWARD existentes. Daemon Docker 29.8.2 real: DNAT/retorno TCP IPv4/IPv6, UDP independiente, egreso explícito y conservación; frontends nft y legacy. |
+| nftables / Docker iptables | Tabla propia, forward prioridad -5; DROP previo a Docker. Daemon Docker 29.8.2 real (frontend nft y legacy): DNAT/retorno TCP IPv4/IPv6 y UDP independiente; permisos deben corresponder a publicaciones que Docker permita. Grants nativos de reenvío se rechazan por posible FORWARD DROP de Docker. |
+| nftables / Docker nftables | Tabla propia antes de las cadenas de Docker. Daemon Docker 29.8.2 real: DNAT/retorno TCP IPv4/IPv6, UDP independiente, egreso explícito y conservación. No se modifica docker-bridges. |
 | iptables / Docker nftables | Rechazado explícitamente. Migrar motor o elegir nftables. |
 | Tablas Docker nft + DOCKER-USER residual | Diagnóstico ambiguo y rechazo con grants de contenedores; migración explícita. |
 | Docker en otro frontend legacy/nft distinto al elegido | No se presume integración. Si no aparecen los objetos requeridos en el frontend seleccionado, falla antes de aplicar. Usar doctor y revisar alternativas/daemon manualmente. |
@@ -87,6 +87,10 @@ No hay reinicios ni reparación automática de redes Docker.
   pero las cadenas de usuario declaradas se reconstruyen; `--test` no hace commit.
 - [Docker con iptables: DOCKER-USER y DNAT](https://docs.docker.com/engine/network/firewall-iptables/).
 - [Docker con nftables: ausencia de DOCKER-USER y prioridades](https://docs.docker.com/engine/network/firewall-nftables/).
+
+Las pruebas con daemon real y tráfico publicado IPv4/IPv6 se detallan en
+[vm-docker.md](vm-docker.md). Se verifican también hooks/reglas ajenas completos;
+la mera existencia de una tabla no se usa como prueba de conservación.
 
 Estas referencias explican la semántica; las versiones efectivamente comprobadas
 se registran en results.md. No sustituyen pruebas sobre el kernel/Docker de destino.

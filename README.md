@@ -35,6 +35,7 @@ no se reinicia Docker y no se reemplaza persistencia de terceros.
 - [Capacidades, familias y convivencia Docker](docs/security/capabilities.md).
 - [Matriz de hallazgos](docs/security/findings.md).
 - [Resultados y limitaciones](docs/security/results.md).
+- [Runner VM desechable: Docker, OpenVPN, systemd y reinicio](docs/security/vm-runner.md).
 - [Gestión selectiva y persistencia](docs/ipp.md).
 
 ## Pruebas
@@ -50,8 +51,10 @@ bash tests/isolated-run.sh          # tráfico real, rollback y concurrencia ais
 
 Falta de dependencias/privilegios falla, no cuenta como aprobado. CI separa sintaxis,
 unitarias, generación, comprobación del motor y tráfico. La matriz de versiones y
-las pruebas aún pendientes están en results.md. Las topologías Docker sintéticas
-no certifican una versión real del daemon ni un reinicio completo de VM.
+las pruebas aún pendientes están en results.md. Además de las topologías sintéticas,
+el runner VM ejecuta Docker y OpenVPN reales, conexiones SSH nuevas, el timer
+systemd de producción y reinicios completos del guest; exige un kernel propio y
+nunca aplica reglas en el anfitrión.
 
 El módulo web limita conexiones de red; no reemplaza límites de peticiones del proxy
 o aplicación. Las reglas locales no mitigan saturación del enlace. Los filtros de
