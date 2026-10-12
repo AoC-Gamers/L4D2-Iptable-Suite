@@ -10,6 +10,7 @@ import sys
 import time
 from .config import ROOT, require, trusted, isolated_userns, isolated_network
 from . import engine
+from .schema import canonical_for_storage, migrate_record
 
 DEFAULT_STATE = Path('/var/lib/l4d2-firewall')
 
@@ -57,10 +58,10 @@ class Store:
         if not p.exists():
             return None
         trusted(p)
-        return json.loads(p.read_text())
+        return migrate_record(name, json.loads(p.read_text()))
 
     def put(self, name, value):
-        atomic_json(self.path / (name + '.json'), value)
+        atomic_json(self.path / (name + '.json'), canonical_for_storage(name, value))
 
     def delete(self, name):
         (self.path / (name + '.json')).unlink(missing_ok=True)

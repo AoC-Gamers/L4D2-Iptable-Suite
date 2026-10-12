@@ -70,7 +70,10 @@ class TransactionTests(unittest.TestCase):
             acl = Path(d) / 'empty.json'
             acl.write_text(json.dumps({'host': [], 'forward': [], 'containers': []}))
             previous = {
-                'config': {'ACCESS_POLICY': '', 'PROFILE': 'web'},
+                'schema': 2,
+                'config': {'ACCESS_POLICY': '', 'PROFILE': 'web', 'HOST_SERVICES': 'true',
+                           'CONTAINER_POLICY': 'restrict', 'ROUTED_POLICY': 'drop',
+                           'BYPASS_SOURCE_DOMAINS': ''},
                 'selected': ['tcp_ssh', 'http_https_protect'],
                 'access': {'host': [], 'forward': [], 'containers': [{'service': 'http_https_protect'}]},
             }
@@ -83,7 +86,7 @@ class TransactionTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as d:
             s = object.__new__(Store)
             s.path = Path(d)
-            candidate = {'backend': 'nftables', 'config': {}, 'objects': [], 'access': {'containers': [], 'forward': []}}
+            candidate = {'schema': 2, 'backend': 'nftables', 'config': {}, 'objects': [], 'access': {'containers': [], 'forward': []}}
             with patch('core.store.trusted'), patch.object(engine, 'inspect', return_value={'tables': [], 'versions': {}, 'iprules': {}, 'docker': 'none'}), \
                     patch.object(engine, 'preflight'), patch.object(engine, 'snapshot', return_value=None), \
                     patch.object(engine, 'prepare', return_value=engine.TransactionBatch([('nft', '')])), \
@@ -99,7 +102,7 @@ class TransactionTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as d:
             s = object.__new__(Store)
             s.path = Path(d)
-            candidate = {'backend': 'nftables', 'config': {}, 'objects': [], 'access': {'containers': [], 'forward': []}}
+            candidate = {'schema': 2, 'backend': 'nftables', 'config': {}, 'objects': [], 'access': {'containers': [], 'forward': []}}
             rollback = []
             with patch('core.store.trusted'), patch.object(engine, 'inspect', return_value={'tables': [], 'versions': {}, 'iprules': {}, 'docker': 'none'}), \
                     patch.object(engine, 'preflight'), patch.object(engine, 'snapshot', return_value=None), \

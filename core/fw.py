@@ -28,10 +28,11 @@ if os.geteuid() == 0:
                 sys.exit(2)
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from core.config import ROOT, Configuration, PolicyError, require, splitlist, trusted
+from core.config import ROOT, Configuration, PolicyError, access_file, require, splitlist, trusted
 from core.compiler import generate
 from core import engine
 from core.store import DEFAULT_STATE, Store
+from core.schema import migrate_policy
 
 
 def parser():
@@ -69,17 +70,29 @@ def configuration(args, privileged=False, previous=None):
         k, v = pair.split('=', 1)
         overrides[k] = v
     if previous and (args.partial or args.remove):
+        previous = migrate_policy(previous)
+        require('TYPECHAIN' not in overrides,
+                'TYPECHAIN is legacy input only; partial/remove operations use normalized host/container settings')
         require(not args.env_file, 'Partial operation uses confirmed configuration; use --set for explicit updates')
         access_changed = 'ACCESS_POLICY' in overrides
         merged = {**previous['config'], **overrides}
-        if not access_changed:
-            # Avoid reopening an old path while retaining its confirmed parsed ACL.
-            merged['ACCESS_POLICY'] = ''
-        c = Configuration(args.backend, overrides=merged, only=previous['selected'], privileged=privileged)
-        c.access = c.access if access_changed else previous['access']
+        if access_changed:
+            access = access_file(overrides['ACCESS_POLICY'], privileged)
+        else:
+            # Keep the confirmed parsed ACL; never reopen its former input path.
+            access = previous['access']
+        merged['ACCESS_POLICY'] = ''
+        c = Configuration.from_normalized(
+            args.backend, merged, previous['selected'], access, privileged=privileged,
+            explicit_keys=overrides.keys(),
+        )
         if args.partial:
             require(args.only is not None, '--partial requires --only')
-            selected = Configuration(args.backend, overrides=c.values, only=csvargs(args.only), privileged=privileged)
+            selected = Configuration.from_normalized(
+                args.backend, c.values, csvargs(args.only),
+                {'host': [], 'forward': [], 'containers': []}, privileged=privileged,
+                explicit_keys=overrides.keys(),
+            )
             require(set(selected.selected) <= set(previous['selected']), 'Partial update requires all objects/dependencies already managed')
             allowed = set()
             for i in selected.selected:
@@ -88,11 +101,17 @@ def configuration(args, privileged=False, previous=None):
                 allowed.update(m.get('OPTIONAL_VARS', '').split())
             require(set(overrides) <= allowed, 'Partial operation cannot change core or unrelated configuration')
         if args.remove:
-            remove = Configuration(args.backend, overrides=c.values, only=splitlist(args.remove), privileged=privileged)
+            remove = Configuration.from_normalized(
+                args.backend, c.values, splitlist(args.remove),
+                {'host': [], 'forward': [], 'containers': []}, privileged=privileged,
+                explicit_keys=overrides.keys(),
+            )
             remaining = set(previous['selected']) - set(remove.selected)
             require(remaining, 'Use disable to remove the entire suite')
-            c = Configuration(args.backend, overrides=c.values, only=sorted(remaining), privileged=privileged)
-            c.access = c.access if access_changed else previous['access']
+            c = Configuration.from_normalized(
+                args.backend, c.values, sorted(remaining), c.access, privileged=privileged,
+                explicit_keys=overrides.keys(),
+            )
             require(all(g['service'] in c.names for g in c.access['containers']), 'Remove container grants before removing their service')
         return c
     require(not args.partial and not args.remove, 'Partial/removal needs a confirmed policy')

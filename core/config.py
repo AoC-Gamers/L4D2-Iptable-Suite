@@ -85,7 +85,7 @@ def metadata(backend):
 
 
 CORE_DEFAULTS = {
-    'PROFILE': 'host-minimal', 'TYPECHAIN': '0', 'MODULES_ONLY': '', 'MODULES_EXCLUDE': '',
+    'PROFILE': 'host-minimal', 'MODULES_ONLY': '', 'MODULES_EXCLUDE': '',
     'FAMILY_POLICY': 'dual', 'NF_TABLE_NAME': 'firewall_main', 'NF_TABLE_FAMILY': 'inet',
     'HOST_SERVICES': 'true', 'ROUTED_POLICY': 'drop', 'CONTAINER_POLICY': 'off',
     'DOCKER_BACKEND': 'auto', 'IPTABLES_FRONTEND': 'auto', 'ACCESS_POLICY': '', 'PRIVILEGED_BYPASS': 'false',
@@ -141,7 +141,10 @@ def access_file(path, privileged=False):
         p = ROOT / p
     if privileged:
         trusted(p)
-    data = json.loads(p.read_text())
+    return validate_access(json.loads(p.read_text()))
+
+
+def validate_access(data):
     require(isinstance(data, dict) and set(data) <= {'host', 'forward', 'containers'}, 'Invalid access policy sections')
     for section in ('host', 'forward', 'containers'):
         data.setdefault(section, [])
@@ -179,15 +182,18 @@ def access_file(path, privileged=False):
 
 
 class Configuration:
-    def __init__(self, backend, path=None, overrides=None, only=None, skip=None, profiles=None, privileged=False):
+    def __init__(self, backend, path=None, overrides=None, only=None, skip=None, profiles=None,
+                 privileged=False, normalized=False, access_data=None, explicit_keys=None):
         self.backend = backend
         self.catalog = metadata(backend)
         if path and privileged:
             trusted(path)
         supplied = assignments(Path(path).read_text()) if path else {}
         supplied.update(overrides or {})
-        self.explicit = set(supplied)
+        input_keys = set(supplied)
+        self.explicit = set(input_keys if explicit_keys is None else explicit_keys)
         known = set(CORE_DEFAULTS)
+        known.add('TYPECHAIN')  # Accepted only at the user-input boundary.
         # Both engines share the accepted vocabulary. Unsupported options are rejected below.
         for be in ('iptables', 'nftables'):
             for m in metadata(be).values():
@@ -198,13 +204,19 @@ class Configuration:
         self.values = dict(CORE_DEFAULTS)
         self.values.update(supplied)
         v = self.values
-        if 'TYPECHAIN' in supplied:
+        if normalized:
+            require('TYPECHAIN' not in supplied, 'Normalized configuration cannot contain TYPECHAIN')
+            require(not supplied.get('ACCESS_POLICY'), 'Normalized configuration stores parsed access grants, not an ACCESS_POLICY path')
+            require(access_data is not None, 'Normalized configuration requires its parsed access policy')
+        elif 'TYPECHAIN' in supplied:
             require(v['TYPECHAIN'] in ('0', '1', '2'), 'TYPECHAIN must be 0/1/2')
             translated = {'HOST_SERVICES': 'false' if v['TYPECHAIN'] == '1' else 'true',
                           'CONTAINER_POLICY': 'off' if v['TYPECHAIN'] == '0' else 'restrict'}
             for k, value in translated.items():
                 require(k not in supplied or v[k] == value, f"Ambiguous TYPECHAIN/{k}; remove TYPECHAIN")
                 v[k] = value
+            supplied.pop('TYPECHAIN')
+            v.pop('TYPECHAIN', None)
         aliases = {}
         for ident, m in self.catalog.items():
             for a in [ident, *m.get('ALIASES', '').split()]:
@@ -248,7 +260,7 @@ class Configuration:
                 for k, value in peer[alternate]['defaults'].items():
                     v.setdefault(k, value)
             for k, value in self.catalog[ident]['defaults'].items():
-                if k not in v:
+                if k != 'TYPECHAIN' and k not in v:
                     v[k] = value
         # Derived optional defaults preserve intentionally empty values.
         for suffix in ('SRC_RATE', 'SRC_BURST', 'GLOBAL_RATE', 'GLOBAL_BURST'):
@@ -256,6 +268,8 @@ class Configuration:
                 v.setdefault('SOURCETV_UDP_NEW_' + suffix, v['UDP_NEW_' + suffix])
         for ident in self.selected:
             for k in self.catalog[ident].get('REQUIRED_VARS', '').split():
+                if k == 'TYPECHAIN':  # Render adapter supplies this per target.
+                    continue
                 require(v.get(k, '') != '', f'{ident} requires nonempty {k}')
         if self.names & GAME:
             for key, value in {'NFT_UDP_NEW_METER_TIMEOUT':'5s','NFT_UDP_EST_METER_TIMEOUT':'5s','NFT_A2S_METER_TIMEOUT':'5s','NFT_LOGIN_METER_TIMEOUT':'1s'}.items():
@@ -263,7 +277,10 @@ class Configuration:
         if 'http_https_protect' in self.names:
             v.setdefault('NFT_HTTP_HTTPS_METER_TIMEOUT','5m')
         self.validate()
-        self.access = access_file(v['ACCESS_POLICY'], privileged)
+        self.access = validate_access(access_data) if normalized else access_file(v['ACCESS_POLICY'], privileged)
+        # ACCESS_POLICY is an input path. Persist the parsed ACL separately so
+        # later partial operations never reopen a mutable file.
+        v['ACCESS_POLICY'] = ''
         require(not self.access['containers'] or v['CONTAINER_POLICY'] == 'restrict', 'Container grants require CONTAINER_POLICY=restrict')
         require(not self.access['forward'] or v['ROUTED_POLICY'] == 'drop', 'Forward grants require ROUTED_POLICY=drop')
         if v['FAMILY_POLICY'] != 'dual':
@@ -277,6 +294,14 @@ class Configuration:
                 trusted(p)
         self.validate_geo(privileged)
         self.resolve_dns()
+
+    @classmethod
+    def from_normalized(cls, backend, config, selected, access, privileged=False, explicit_keys=None):
+        """Revalidate canonical state without interpreting legacy input again."""
+        values = dict(config)
+        values['ACCESS_POLICY'] = ''
+        return cls(backend, overrides=values, only=selected, privileged=privileged,
+                   normalized=True, access_data=access, explicit_keys=explicit_keys)
 
     def validate(self):
         v = self.values

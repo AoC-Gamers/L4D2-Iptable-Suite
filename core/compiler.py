@@ -435,7 +435,7 @@ class Compiler:
             result = {'backend': self.c.backend, 'objects': objects}
         else:
             result = {'backend': self.c.backend, 'families': {str(f): tables for f, tables in self.ip.items()}, 'hooks': [list(h) for h in sorted(set(self.hooks))]}
-        result.update({'config': self.v, 'selected': self.c.selected, 'access': self.c.access, 'schema': 1})
+        result.update({'config': self.v, 'selected': self.c.selected, 'access': self.c.access, 'schema': 2})
         return result
 
 
