@@ -22,6 +22,8 @@ jobs:
       - run: python3 -I tests/test_transactions.py
       - run: python3 -I tests/test_configuration_audit.py
       - run: python3 -I tests/test_policy_audit.py
+      - run: python3 -I tests/vm/test_transactions_harness.py
+      - run: python3 -I tests/vm/test_runner.py
       - run: bash tests/watcher-audit.sh
       - run: bash tests/http-https-protect.sh && bash tests/public-ip-watch.sh
   generation:

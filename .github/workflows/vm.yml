@@ -1,0 +1,26 @@
+name: Disposable QEMU validation
+on: [push, pull_request, workflow_dispatch]
+permissions:
+  contents: read
+jobs:
+  qemu:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 240
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check runner without starting QEMU
+        run: python3 -I tests/vm/test_runner.py
+      - name: Install host QEMU and seed-image tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y genisoimage openssh-client openssl qemu-system-x86 qemu-utils
+      - name: Run full validation in a disposable QEMU guest
+        run: python3 -I tests/vm/run.py --artifacts-dir tmp/vm-runner-artifacts
+      - name: Upload sanitized VM logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: qemu-validation-logs
+          path: tmp/vm-runner-artifacts/**
+          if-no-files-found: error
+          retention-days: 14
