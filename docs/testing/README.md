@@ -72,6 +72,12 @@ contra el firewall del anfitrión para sortearlo.
 exclusión de archivos y opt-in mediante herramientas simuladas; no prueba el
 kernel. El mismo ensayo figura entre los unitarios de CI y de la VM.
 
+La [entrega de tablas heredadas](../migration/legacy-handover.md) se prueba con
+`test_legacy.py` (mocks), `legacy-flows.py` (kernel/tráfico bajo el wrapper) y
+`tests/vm/legacy_handover.py` (timer systemd después de cerrar la sesión aplicadora,
+SSH autenticado nuevo y restauración exacta en QEMU). El proceso aislado no
+sustituye al timer de producción.
+
 CI separa unidades, generación, kernel, tráfico y QEMU. La matriz obligatoria falla
 ante dependencias ausentes o códigos no cero, incluido 77: nunca SKIP=PASS.
 Una combinación no soportada se rechaza/excluye expresamente del contrato, no

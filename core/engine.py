@@ -96,7 +96,7 @@ def compatibility(previous, live, accept_version_change=False):
             'previous': previous['versions'], 'current': live['versions'], 'frontend': frontend}
 
 
-def preflight(policy, previous, live, accept_version_change=False):
+def preflight(policy, previous, live, accept_version_change=False, legacy_owned=()):
     require(not previous or previous['backend'] == policy['backend'], 'Backend change requires disabling old suite and an explicit migration')
     if policy['backend'] == 'nftables' and not policy.get('disabled'):
         require(not any(obj.get('family') == 'inet' and obj.get('name') == BOOT_GUARD_TABLE
@@ -130,6 +130,7 @@ def preflight(policy, previous, live, accept_version_change=False):
         require(live['docker'] not in ('iptables', 'mixed'), 'Native nft routed grants with Docker iptables may encounter FORWARD DROP; use iptables suite or migrate Docker explicitly')
     if policy['backend'] == 'nftables':
         registered = {(x['family'], x['name']) for x in (previous or {}).get('objects', [])}
+        registered.update(legacy_owned)
         for obj in policy['objects']:
             key = (obj['family'], obj['name'])
             require(key not in live['tables'] or key in registered, f"Object not owned: {key}; explicit legacy migration required")

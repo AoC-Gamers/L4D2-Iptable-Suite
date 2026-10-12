@@ -583,6 +583,7 @@ def unit_cases() -> list[tuple[str, str]]:
         ('python3 -I tests/test_h2.py', UNIT_USER),
         ('python3 -I tests/test_boot.py', UNIT_USER),
         ('python3 -I tests/test_isolated_runner.py', UNIT_USER),
+        ('python3 -I tests/test_legacy.py', UNIT_USER),
         ('python3 -I tests/vm/test_transactions_harness.py', UNIT_USER),
         ('python3 -I tests/vm/test_boot_harness.py', UNIT_USER),
         ('python3 -I tests/vm/test_boot_cleanup.py', UNIT_USER),
@@ -619,6 +620,7 @@ def run_tests(guest: Guest, logger: Log) -> None:
             ('Docker topology', 'tests/docker-topology-flows.py'),
             ('normalized state lifecycle', 'tests/h2-flows.py'),
             ('early barrier packets', 'tests/boot-flows.py'),
+            ('legacy handover recovery', 'tests/legacy-flows.py'),
         ):
             command = f'cd {INSTALL_ROOT} && env SUITE_TEST_FRONTEND={frontend} bash tests/isolated-run.sh --root-net {script}'
             # Integration includes real watchdog expiry, kernel writes and
@@ -644,6 +646,21 @@ def run_tests(guest: Guest, logger: Log) -> None:
         guest.run_guest(case, command, timeout=900)
 
     logger.write('PASS complete kernel, client, GeoIP and Docker matrices')
+
+
+def run_legacy_handover(guest: Guest, logger: Log) -> None:
+    for phase in ('arm', 'probe', 'verify'):
+        # Each call opens a separate authenticated SSH session. The arm session
+        # exits before the real systemd timer restores the reviewed legacy table.
+        logger.write(f'START legacy systemd handover {phase}')
+        script = ('exec sudo -n env SSH_CONNECTION="$SSH_CONNECTION" '
+                  f'/usr/bin/python3 -I {INSTALL_ROOT}/tests/vm/legacy_handover.py {phase}')
+        result = guest.ssh(script, label=f'legacy systemd handover {phase}', timeout=150)
+        guest.save_output(f'legacy systemd handover {phase}', result.stdout, result.stderr)
+        payload = json.loads(result.stdout.decode().splitlines()[-1])
+        if payload != {'phase': phase, 'passed': True}:
+            raise RunnerError(f'Unexpected legacy handover result: {phase}')
+        logger.write(f'PASS legacy systemd handover {phase}')
 
 
 def run_transactions(guest: Guest, logger: Log) -> None:
@@ -907,6 +924,7 @@ def main(argv: list[str] | None = None) -> int:
             '&& docker --version && dockerd --version',
             timeout=60,
         )
+        run_legacy_handover(guest, logger)
         run_tests(guest, logger)
         run_transactions(guest, logger)
         run_boot_closure(guest, logger, args.probe_port, args.udp_probe_port)

@@ -39,7 +39,7 @@ def parser():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument('--state-dir', default=str(DEFAULT_STATE))
     p.add_argument('--backend', choices=('iptables', 'nftables'), default='nftables')
-    p.add_argument('operation', nargs='?', default='apply', choices=('validate', 'generate', 'plan', 'check', 'apply', 'confirm', 'rollback', 'disable', 'save', 'load', 'status', 'doctor', 'diagnose', 'boot-prepare', 'boot-guard', 'boot-restore', 'boot-disarm', 'ready', '_watch', '_detach'))
+    p.add_argument('operation', nargs='?', default='apply', choices=('validate', 'generate', 'plan', 'check', 'apply', 'confirm', 'rollback', 'disable', 'save', 'load', 'status', 'doctor', 'diagnose', 'legacy-inventory', 'boot-prepare', 'boot-guard', 'boot-restore', 'boot-disarm', 'ready', '_watch', '_detach'))
     p.add_argument('--env-file')
     p.add_argument('--set', action='append', default=[], metavar='KEY=VALUE')
     p.add_argument('--only', action='append')
@@ -58,6 +58,10 @@ def parser():
     p.add_argument('--against', help='JSON candidate to compare in offline plan')
     p.add_argument('--accept-version-change', action='store_true', help='Explicit maintenance acceptance of unevaluated iptables version, never frontend changes')
     p.add_argument('--recovery-file', help='Root-owned scoped SSH recovery grants for boot-prepare; absent means console recovery')
+    p.add_argument('--legacy-table', help='Explicit inet table for passive legacy-inventory')
+    p.add_argument('--legacy-manifest', help='Reviewed root-owned legacy inventory for check/apply handover')
+    p.add_argument('--acknowledge-legacy-ownership', action='store_true',
+                   help='Operator attests exclusive suite ownership of every object in the reviewed table')
     return p
 
 
@@ -173,6 +177,12 @@ def main(argv=None):
     require(2 <= args.timeout <= 3600, 'Timeout must be 2..3600 seconds')
     require(not args.accept_version_change or args.operation in ('check', 'apply', 'load'), 'Version acceptance is only available during check/apply/load maintenance')
     require(not args.recovery_file or args.operation == 'boot-prepare', '--recovery-file is only accepted by boot-prepare')
+    require(not args.legacy_table or args.operation == 'legacy-inventory', '--legacy-table requires legacy-inventory')
+    require(not args.legacy_manifest or (args.operation in ('check', 'apply') and
+            args.acknowledge_legacy_ownership and not args.partial and not args.remove and not args.local),
+            'Legacy manifest requires check/apply, explicit ownership acknowledgement and timed rollback')
+    require(not args.acknowledge_legacy_ownership or args.legacy_manifest,
+            'Ownership acknowledgement requires a legacy manifest')
     if os.geteuid() == 0:
         # All Python code and shell helpers are part of the root trust boundary.
         for p in [ROOT, ROOT / 'core', *(ROOT / 'core').glob('*.py')]:
@@ -185,6 +195,15 @@ def main(argv=None):
             print('Logical validation and generation OK; kernel and traffic NOT checked.')
         else:
             show(policy, args)
+        return
+    if args.operation == 'legacy-inventory':
+        from core import legacy
+        require(os.geteuid() == 0 and args.backend == 'nftables' and args.legacy_table,
+                'legacy-inventory requires root, nftables and an explicit --legacy-table')
+        require(not args.env_file and not args.set and not args.partial and not args.remove and
+                args.only is None and args.skip is None and args.profile is None,
+                'legacy-inventory does not load policy configuration or state')
+        print(json.dumps(legacy.inventory(args.legacy_table), sort_keys=True, indent=2))
         return
     if args.operation == 'diagnose':
         require(os.geteuid() == 0, 'Passive kernel diagnosis requires root')
@@ -264,7 +283,15 @@ def main(argv=None):
             candidate = generate(configuration(args, privileged=True, previous=previous))
         if args.operation == 'check':
             live = engine.inspect(candidate['backend'], candidate['config'].get('IPTABLES_FRONTEND', 'auto'))
-            engine.preflight(candidate, previous, live, accept_version_change=args.accept_version_change)
+            legacy_owned = ()
+            if args.legacy_manifest:
+                from core import legacy
+                require(not store.get('boot-policy'), 'Legacy handover cannot replace a prepared boot policy')
+                manifest = legacy.load(args.legacy_manifest)
+                legacy.prepare(candidate, previous, manifest, live)
+                legacy_owned = (('inet', manifest['name']),)
+            engine.preflight(candidate, previous, live, accept_version_change=args.accept_version_change,
+                             legacy_owned=legacy_owned)
             if candidate['backend'] == 'iptables':
                 candidate['hooks'] = engine.actual_hooks(candidate, live)
             engine.check(engine.prepare(candidate, [previous, candidate], live))
@@ -273,7 +300,12 @@ def main(argv=None):
         if args.partial or args.remove:
             live = engine.inspect(candidate['backend'], candidate['config'].get('IPTABLES_FRONTEND', 'auto'))
             engine.require_owned_present(previous, live)
-        token = store.apply_locked(candidate, args.timeout, args.watchdog, args.local, args.verify_with, args.accept_version_change)
+        manifest = None
+        if args.legacy_manifest:
+            from core import legacy
+            manifest = legacy.load(args.legacy_manifest)
+        token = store.apply_locked(candidate, args.timeout, args.watchdog, args.local, args.verify_with, args.accept_version_change,
+                                   legacy_manifest=manifest)
         if token:
             print('Applied with timed rollback. Test a NEW administrative connection, then run:')
             print(f'./{candidate["backend"]}.rules.sh confirm --token {token} --admin-verified')

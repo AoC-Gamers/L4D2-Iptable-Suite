@@ -17,7 +17,7 @@ los pasos operativos. Los ejemplos de configuración están en [`config/`](../co
 | Desarrollar y verificar | [Arquitectura](architecture/README.md), [catálogo de módulos](architecture/modules.md), [pruebas](testing/README.md), [VM](testing/vm.md) |
 | Diagnosticar compatibilidad | [Consulta pasiva y comprobaciones](testing/diagnostics.md), [matriz de motores](firewall/backends.md) |
 | Revisar aceptación | [Seguridad](security/README.md), [aprobación](security/approval.md), [límites y pendientes](security/limitations.md) |
-| Migrar | [Configuración/estado/firewall](migration/README.md), [mapa de rutas documentales](migration/documentation-map.md) |
+| Migrar | [Configuración/estado/firewall](migration/README.md), [entrega de tabla heredada](migration/legacy-handover.md), [mapa de rutas documentales](migration/documentation-map.md) |
 
 Para contribuir: [CONTRIBUTING](../CONTRIBUTING.md). Para agentes:
 [instrucciones raíz](../AGENTS.md) y [convenciones documentales](AGENTS.md).

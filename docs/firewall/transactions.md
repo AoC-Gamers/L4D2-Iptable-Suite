@@ -90,6 +90,9 @@ nftables reemplaza exclusivamente las tablas registradas mediante **un** archivo
 `nft -c -f -` antes de `nft -f -`. La eliminación de la versión previa y creación
 de la nueva están dentro de la misma transacción. No se hace `flush ruleset`.
 No se adoptan tablas preexistentes por su nombre: una tabla sin registro causa error.
+La excepción opt-in es una [entrega heredada explícita](../migration/legacy-handover.md)
+con manifiesto revisado, propiedad exclusiva acreditada y rollback independiente;
+no amplía la aplicación ordinaria ni importa layouts ambiguos.
 `NF_TABLE_NAME` se respeta; las tablas NAT derivan de ese nombre (`_nat4`/`_nat6`).
 
 iptables usa cadenas `L4S_…` deterministas y una regla con comentario

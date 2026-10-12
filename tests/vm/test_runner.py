@@ -25,6 +25,18 @@ class MemoryLog:
 
 
 class RunnerTests(unittest.TestCase):
+    def test_legacy_handover_uses_separate_authenticated_sessions_before_bootstrap(self):
+        guest = MagicMock()
+        guest.ssh.side_effect = [subprocess.CompletedProcess([], 0,
+            json.dumps({'phase': phase, 'passed': True}).encode(), b'')
+            for phase in ('arm', 'probe', 'verify')]
+        runner.run_legacy_handover(guest, MemoryLog())
+        self.assertEqual(guest.ssh.call_count, 3)
+        for call, phase in zip(guest.ssh.call_args_list, ('arm', 'probe', 'verify')):
+            self.assertIn('env SSH_CONNECTION="$SSH_CONNECTION"', call.args[0])
+            self.assertTrue(call.args[0].endswith('legacy_handover.py ' + phase))
+        guest.tx.assert_not_called()
+
     def test_slirp_handshake_without_application_bytes_is_not_exposure(self):
         connection = MagicMock()
         connection.__enter__.return_value = connection
@@ -181,6 +193,7 @@ class RunnerTests(unittest.TestCase):
             'python3 -I tests/test_h2.py',
             'python3 -I tests/test_boot.py',
             'python3 -I tests/test_isolated_runner.py',
+            'python3 -I tests/test_legacy.py',
             'python3 -I tests/vm/test_transactions_harness.py',
             'python3 -I tests/vm/test_boot_harness.py',
             'python3 -I tests/vm/test_boot_cleanup.py',

@@ -25,7 +25,7 @@ if [[ "$SUITE_TEST_ACCEPT_VERSION_CHANGE" == 1 ]]; then
 fi
 test_script="${1:-tests/integration.py}"
 [[ "$#" -le 1 ]] || { echo 'Expected one test script' >&2; exit 2; }
-case "$test_script" in tests/integration.py|tests/check-engine.py|tests/transaction-flows.py|tests/policy-flows.py|tests/docker-topology-flows.py|tests/h2-flows.py|tests/boot-flows.py) ;; *) exit 2 ;; esac
+case "$test_script" in tests/integration.py|tests/check-engine.py|tests/transaction-flows.py|tests/policy-flows.py|tests/docker-topology-flows.py|tests/h2-flows.py|tests/boot-flows.py|tests/legacy-flows.py) ;; *) exit 2 ;; esac
 staging="$(mktemp -d)"
 trap 'rm -rf "$staging"' EXIT
 mkdir "$staging/repo"

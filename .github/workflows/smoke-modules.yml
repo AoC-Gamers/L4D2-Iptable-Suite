@@ -26,6 +26,7 @@ jobs:
       - run: python3 -I tests/test_h2.py
       - run: python3 -I tests/test_boot.py
       - run: python3 -I tests/test_isolated_runner.py
+      - run: python3 -I tests/test_legacy.py
       - run: python3 -I tests/vm/test_transactions_harness.py
       - run: python3 -I tests/vm/test_boot_harness.py
       - run: python3 -I tests/vm/test_boot_cleanup.py
@@ -72,3 +73,5 @@ jobs:
         run: sudo env SUITE_TEST_FRONTEND=${{ matrix.frontend }} bash tests/isolated-run.sh --root-net tests/h2-flows.py
       - name: Early barrier IPv4/IPv6 packets and rollback to empty
         run: sudo env SUITE_TEST_FRONTEND=${{ matrix.frontend }} bash tests/isolated-run.sh --root-net tests/boot-flows.py
+      - name: Explicit legacy handover and recovery
+        run: sudo env SUITE_TEST_FRONTEND=${{ matrix.frontend }} bash tests/isolated-run.sh --root-net tests/legacy-flows.py

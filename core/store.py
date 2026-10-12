@@ -152,7 +152,7 @@ class Store:
         boot.record_installed(self, pending['candidate'])
         self.delete('pending')
 
-    def apply_locked(self, candidate, timeout=120, watchdog='systemd', local=False, verifier=None, accept_version_change=False):
+    def apply_locked(self, candidate, timeout=120, watchdog='systemd', local=False, verifier=None, accept_version_change=False, legacy_manifest=None):
         from . import boot
         # A journal must remain readable by recovery before the first kernel
         # write; reject malformed compiler/state bundles at this boundary too.
@@ -162,7 +162,16 @@ class Store:
         previous = self.get('current')
         live = engine.inspect(candidate['backend'], candidate['config'].get('IPTABLES_FRONTEND', 'auto'))
         boot.require_scope(self, candidate)
-        engine.preflight(candidate, previous, live, accept_version_change=accept_version_change)
+        legacy_snapshot = None
+        legacy_owned = ()
+        if legacy_manifest is not None:
+            from . import legacy
+            require(not local, 'Legacy handover requires independent timed rollback')
+            require(not self.get('boot-policy'), 'Legacy handover cannot replace a prepared boot policy')
+            legacy_snapshot = legacy.prepare(candidate, previous, legacy_manifest, live)
+            legacy_owned = (('inet', legacy_manifest['name']),)
+        engine.preflight(candidate, previous, live, accept_version_change=accept_version_change,
+                         legacy_owned=legacy_owned)
         if candidate['backend'] == 'iptables':
             # Persist the resolved frontend so an alternatives change cannot send
             # the independent rollback to a different Netfilter implementation.
@@ -174,18 +183,25 @@ class Store:
                     if decision['decision'] == 'unchanged' and previous and previous.get('compatibility')
                     else decision)
             candidate['versions'] = live['versions']
-        snap = engine.snapshot(previous, live)
+        snap = legacy_snapshot if legacy_manifest is not None else engine.snapshot(previous, live)
         tx = engine.prepare(None if candidate.get('disabled') else candidate, [previous, candidate], live)
+        if legacy_manifest is not None:
+            legacy.pin_transaction(tx, legacy_manifest)
         engine.check(tx)  # Nothing active changes before every table/family has checked.
         token = secrets.token_hex(16)
         deadline = time.time() + timeout
         monotonic_deadline = time.monotonic() + timeout
         tx.deadline = monotonic_deadline
-        self.put('pending', {'token': token, 'deadline': deadline, 'deadline_monotonic': monotonic_deadline, 'boot_id': Path('/proc/sys/kernel/random/boot_id').read_text().strip(), 'previous': previous, 'snapshot': snap, 'candidate': candidate})
+        pending = {'token': token, 'deadline': deadline, 'deadline_monotonic': monotonic_deadline, 'boot_id': Path('/proc/sys/kernel/random/boot_id').read_text().strip(), 'previous': previous, 'snapshot': snap, 'candidate': candidate}
+        if legacy_manifest is not None:
+            pending['legacy_manifest'] = legacy_manifest
+        self.put('pending', pending)
         execution_started = False
         try:
             if not local:
                 self.arm(token, timeout, watchdog)
+            if legacy_manifest is not None:
+                legacy.verify(legacy_manifest)
             boot.invalidate(self)
             execution_started = True
             engine.execute(tx)

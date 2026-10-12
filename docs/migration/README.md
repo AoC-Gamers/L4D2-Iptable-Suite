@@ -1,7 +1,10 @@
 # Migración desde aeabda7
 
-No ejecutar el nuevo flujo directamente sobre un firewall antiguo remoto. Conservar
+No ejecutar el flujo ordinario directamente sobre un firewall antiguo remoto. Conservar
 una consola fuera de banda y hacer primero un ensayo en VM con la política real.
+Para una tabla `inet` de filtrado íntegramente propia, existe una
+[entrega explícita con reversión temporizada](legacy-handover.md), con alcance
+restringido, manifiesto revisado y sus propios requisitos de recuperación.
 No se atribuye propiedad a objetos preexistentes sólo por llamarse `firewall_main`,
 `SSHfilter` o `UDP_GAME_NEW_LIMIT`; el primer despliegue los rechaza antes de modificar.
 
