@@ -20,6 +20,7 @@ _spec = importlib.util.spec_from_file_location('integration', ROOT / 'tests/inte
 integration = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(integration)
 from core.fw import main
+from core.config import PolicyError
 
 
 STATE = Path(os.environ['SUITE_TEST_STATE'])
@@ -145,6 +146,20 @@ class H2KernelFlows(unittest.TestCase):
                         self.assertEqual(len(current['access']['containers']), 2)
                         self.assert_traffic(backend, host_services)
 
+                        # Removing a module still referenced by the confirmed
+                        # ACL must fail before any rules or durable state move.
+                        current_path = STATE / 'current.json'
+                        pending_path = STATE / 'pending.json'
+                        current_before = current_path.read_bytes()
+                        pending_before = pending_path.read_bytes() if pending_path.exists() else None
+                        rules_before = self.fixture.rules(backend)
+                        with self.assertRaisesRegex(PolicyError, 'Remove container grants before removing their service'):
+                            self.invoke(backend, 'apply', '--remove', 'http_https_protect', '--local')
+                        self.assertEqual(current_path.read_bytes(), current_before)
+                        self.assertEqual(pending_path.read_bytes() if pending_path.exists() else None,
+                                         pending_before)
+                        self.assertEqual(self.fixture.rules(backend), rules_before)
+
                         self.invoke(backend, 'save')
                         persisted = self.fixture.store.get('persisted')
                         self.assertEqual(persisted['schema'], 2)
@@ -208,6 +223,20 @@ class H2KernelFlows(unittest.TestCase):
                         self.invoke(backend, 'save')
                         self.assertEqual(self.fixture.store.get('persisted')['schema'], 2)
                         self.assert_traffic(backend, host_services, ssh=False)
+
+                        # A coherent ACL update removes the HTTP grant before
+                        # removing the only remaining owner of that service.
+                        empty_acl = STATE / f'h2-empty-access-{backend}-{host_services}.json'
+                        empty_acl.write_text(json.dumps({'containers': []}))
+                        empty_acl.chmod(0o600)
+                        self.apply(backend, host_services, empty_acl)
+                        self.invoke(backend, 'apply', '--remove', 'http_https_protect',
+                                    '--set', f'ACCESS_POLICY={empty_acl}', '--local')
+                        final = self.fixture.store.get('current')
+                        self.assertEqual(final['selected'],
+                                         ['nf_tcp_ssh' if backend == 'nftables' else 'ip_tcp_ssh'])
+                        self.assertEqual(final['access']['containers'], [])
+                        self.assertIsNone(self.fixture.store.get('pending'))
                     finally:
                         self.fixture.disable()
                         if self.docker:

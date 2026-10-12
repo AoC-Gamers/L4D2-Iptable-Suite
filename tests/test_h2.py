@@ -1,7 +1,10 @@
 #!/usr/bin/python3
 """H2 normalized-state regressions; no kernel or host state access."""
 import json
+import os
 from pathlib import Path
+import select
+import signal
 import sys
 import tempfile
 import unittest
@@ -205,6 +208,100 @@ class H2Tests(unittest.TestCase):
             self.assertEqual(in_pending['snapshot'], snapshot)
             self.assertEqual(pending_path.read_text(), raw_pending)
             self.assertEqual(round_trip['config']['HOST_SERVICES'], 'false')
+
+    def test_interrupted_schema_migration_preserves_original_file_and_pending_snapshot(self):
+        """Tests process/filesystem atomicity only; it does not exercise kernel state."""
+        with tempfile.TemporaryDirectory() as d:
+            state = Path(d)
+            store = object.__new__(Store)
+            store.path = state
+            common = {
+                'schema': 1, 'backend': 'nftables', 'selected': ['nf_tcp_ssh'],
+                'config': {'TYPECHAIN': '0', 'HOST_SERVICES': 'false',
+                           'CONTAINER_POLICY': 'restrict', 'ROUTED_POLICY': 'drop',
+                           'ACCESS_POLICY': '/must/not/be/reopened', 'BYPASS_SOURCE_DOMAINS': ''},
+                'access': {'host': [], 'forward': [], 'containers': []},
+                'objects': [],
+            }
+            original_current = json.dumps(common, sort_keys=True).encode() + b'\n'
+            snapshot = {'kernel': {'sentinel': ['preserve', 7]}}
+            pending = {
+                'token': 'fixture-token', 'previous': common, 'candidate': common,
+                'snapshot': snapshot,
+            }
+            original_pending = json.dumps(pending, sort_keys=True).encode() + b'\n'
+            (state / 'current.json').write_bytes(original_current)
+            (state / 'pending.json').write_bytes(original_pending)
+
+            ready_r, ready_w = os.pipe()
+            gate_r, gate_w = os.pipe()
+            child_pid = os.fork()
+            reaped = False
+            try:
+                if child_pid == 0:
+                    os.close(ready_r)
+                    os.close(gate_w)
+                    try:
+                        import core.store as child_store_module
+                        real_replace = os.replace
+
+                        def pause_before_current_replace(source, destination):
+                            if Path(destination) == state / 'current.json':
+                                os.write(ready_w, b'R')
+                                os.read(gate_r, 1)
+                            return real_replace(source, destination)
+
+                        child_store_module.os.replace = pause_before_current_replace
+                        child_store = object.__new__(Store)
+                        child_store.path = state
+                        with patch('core.store.trusted'):
+                            migrated = child_store.get('current')
+                            child_store.put('current', migrated)
+                        os._exit(0)
+                    except BaseException:
+                        try:
+                            os.write(ready_w, b'E')
+                        finally:
+                            os._exit(2)
+
+                os.close(ready_w)
+                os.close(gate_r)
+                ready, _, _ = select.select([ready_r], [], [], 5)
+                self.assertTrue(ready, 'child did not pause before atomic replace')
+                self.assertEqual(os.read(ready_r, 1), b'R', 'child migration failed before replace barrier')
+                os.kill(child_pid, signal.SIGKILL)
+                _, status = os.waitpid(child_pid, 0)
+                reaped = True
+                self.assertTrue(os.WIFSIGNALED(status))
+                self.assertEqual(os.WTERMSIG(status), signal.SIGKILL)
+
+                self.assertEqual((state / 'current.json').read_bytes(), original_current)
+                self.assertEqual((state / 'pending.json').read_bytes(), original_pending)
+                with patch('core.store.trusted'):
+                    migrated_current = store.get('current')
+                    migrated_pending = store.get('pending')
+                self.assertEqual(migrated_current['schema'], 2)
+                self.assertNotIn('TYPECHAIN', migrated_current['config'])
+                self.assertEqual(migrated_pending['previous']['schema'], 2)
+                self.assertEqual(migrated_pending['candidate']['schema'], 2)
+                self.assertEqual(migrated_pending['snapshot'], snapshot)
+                self.assertEqual((state / 'current.json').read_bytes(), original_current,
+                                 'subsequent in-memory reads must not rewrite current either')
+            finally:
+                for fd in (ready_r, ready_w, gate_r, gate_w):
+                    try:
+                        os.close(fd)
+                    except OSError:
+                        pass
+                if child_pid > 0 and not reaped:
+                    try:
+                        os.kill(child_pid, signal.SIGKILL)
+                    except ProcessLookupError:
+                        pass
+                    try:
+                        os.waitpid(child_pid, 0)
+                    except ChildProcessError:
+                        pass
 
     def test_normalized_state_never_resolves_dns_or_reopens_policy_file(self):
         access = {'host': [], 'forward': [], 'containers': []}
