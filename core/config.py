@@ -224,7 +224,9 @@ class Configuration:
         selection = only if only is not None else splitlist(v['MODULES_ONLY'])
         chosen_profiles = profiles if profiles is not None else splitlist(v['PROFILE'])
         selected = resolve(selection)
-        if not selection:
+        # An explicit empty CLI selection means core-only. An absent CLI
+        # selection with MODULES_ONLY unset/empty retains profile fallback.
+        if only is None and not selection:
             require(chosen_profiles, 'Specify a profile or explicit module list')
             for profile in chosen_profiles:
                 require(profile in PROFILES, f"Unknown profile: {profile}")

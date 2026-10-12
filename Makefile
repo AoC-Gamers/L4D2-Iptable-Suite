@@ -34,7 +34,7 @@ help:
 
 .PHONY: geoip-update
 geoip-update:
-	cd $(ROOT_DIR) && $(COMPOSE) -f $(GEOIP_UPDATER_COMPOSE) run --rm geoip-updater
+	cd $(ROOT_DIR) && HOST_UID="$$(stat -c '%u' .)" HOST_GID="$$(stat -c '%g' .)" $(COMPOSE) -f $(GEOIP_UPDATER_COMPOSE) run --rm geoip-updater
 
 .PHONY: geoip-apply
 geoip-apply:
@@ -59,7 +59,7 @@ geoip-check:
 	cd $(ROOT_DIR) && bash -n scripts/geoip/update_geo_country_sets.sh
 	cd $(ROOT_DIR) && bash -n modules/nf/nf_15_geo_country_filter.sh
 	cd $(ROOT_DIR) && python3 -m py_compile scripts/geoip/check_geo_policy_ip.py
-	cd $(ROOT_DIR) && $(COMPOSE) -f $(GEOIP_UPDATER_COMPOSE) config >/tmp/geoip-updater-compose.out
+	cd $(ROOT_DIR) && HOST_UID="$$(stat -c '%u' .)" HOST_GID="$$(stat -c '%g' .)" $(COMPOSE) -f $(GEOIP_UPDATER_COMPOSE) config >/tmp/geoip-updater-compose.out
 
 .PHONY: geoip-check-ip
 geoip-check-ip:

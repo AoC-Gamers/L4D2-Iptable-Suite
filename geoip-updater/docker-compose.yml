@@ -5,6 +5,10 @@ services:
       dockerfile: geoip-updater/Dockerfile
     container_name: geoip-updater
     restart: "no"
+    # The updater writes into the bind-mounted checkout. The Make target sets
+    # these to that checkout's numeric owner; direct Compose users can export
+    # HOST_UID/HOST_GID or pass geoip-updater/.env with Compose --env-file.
+    user: "${HOST_UID:?Set HOST_UID to the bind-mount owner UID}:${HOST_GID:?Set HOST_GID to the bind-mount owner GID}"
     env_file:
       - .env
     volumes:

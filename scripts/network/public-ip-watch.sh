@@ -253,7 +253,7 @@ done
 
 # Private root-owned parents make the following shell file operations safe from
 # unprivileged symlink replacement. A shared sticky /tmp parent is insufficient.
-if [[ "$EUID" == 0 && "$MODE" == run ]]; then
+if [[ "$EUID" == 0 && "$MODE" != check ]]; then
     for state_path in "$STATE_FILE" "$LOCK_FILE"; do
         mkdir -p "$(dirname "$state_path")"
         /usr/bin/python3 -I "$CONFIG_READER" "$(dirname "$state_path")" --trusted-path --private-directory
@@ -261,6 +261,19 @@ if [[ "$EUID" == 0 && "$MODE" == run ]]; then
             /usr/bin/python3 -I "$CONFIG_READER" "$state_path" --trusted-path
         fi
     done
+fi
+
+# Serialize observation, comparison, reload, hook, and state update together.
+# In particular, read STATE_FILE only after this lock is held so a second
+# process cannot act on an IP value captured before the first process updates it.
+if [ "$MODE" != "check" ]; then
+    lock_dir="$(dirname "$LOCK_FILE")"
+    mkdir -p "$lock_dir"
+    exec 9>"$LOCK_FILE"
+    if ! "$FLOCK_BIN" -n 9; then
+        log_message INFO "Another instance is already running; skipping"
+        exit 0
+    fi
 fi
 
 current_ip="$(discover_public_ip)" || {
@@ -279,14 +292,6 @@ previous_ip="$(read_saved_ip)"
 
 if [ "$MODE" = "check" ]; then
     log_message INFO "Check complete: public=$current_ip saved=${previous_ip:-unset}"
-    exit 0
-fi
-
-lock_dir="$(dirname "$LOCK_FILE")"
-mkdir -p "$lock_dir"
-exec 9>"$LOCK_FILE"
-if ! "$FLOCK_BIN" -n 9; then
-    log_message INFO "Another instance is already running; skipping"
     exit 0
 fi
 

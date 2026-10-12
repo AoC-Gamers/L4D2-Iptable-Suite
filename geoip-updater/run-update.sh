@@ -10,6 +10,15 @@ GEOIPUPDATE_EDITION_IDS="${GEOIPUPDATE_EDITION_IDS:-${MAXMIND_EDITION_ID:-GeoLit
 MAXMIND_DOWNLOAD_URL="${MAXMIND_DOWNLOAD_URL:-}"
 KEEP_ARCHIVE="${KEEP_ARCHIVE:-false}"
 
+# This job writes generated files into the bind-mounted checkout. Fail before
+# downloading anything if Compose did not start us as that mount's owner.
+workspace_owner="$(stat -c '%u:%g' "$WORKSPACE_ROOT")"
+process_owner="$(id -u):$(id -g)"
+if [[ "$process_owner" != "$workspace_owner" ]]; then
+    echo "ERROR: updater must run as bind-mount owner $workspace_owner (current $process_owner); set HOST_UID/HOST_GID" >&2
+    exit 2
+fi
+
 pick_csv_edition() {
     local editions="$1"
     local item trimmed
