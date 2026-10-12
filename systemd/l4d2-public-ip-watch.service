@@ -1,6 +1,6 @@
 [Unit]
 Description=Detect public IPv4 changes and refresh L4D2 nftables
-Documentation=file:/opt/l4d2-firewall/docs/public-ip-watch.md
+Documentation=file:/opt/l4d2-firewall/docs/automation/public-ip-watch.md
 Wants=network-online.target
 After=network-online.target l4d2-firewall.service
 

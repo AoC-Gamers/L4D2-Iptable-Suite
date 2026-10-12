@@ -2,7 +2,7 @@
 """Guest-side QEMU integration checks for the production transaction path.
 
 Run only in explicit phases from the VM orchestrator; see
-docs/security/vm-transactions.md. This intentionally uses the installed suite
+docs/testing/transactions.md. This intentionally uses the installed suite
 and its production state directory.
 """
 import hashlib

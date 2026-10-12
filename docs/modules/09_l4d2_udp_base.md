@@ -1,7 +1,3 @@
-# `l4d2_udp_base` — estado UDP de juego
+# Ficha trasladada
 
-Este módulo controla UDP NEW/ESTABLISHED para `L4D2_GAMESERVER_UDP_PORTS` y `L4D2_SOURCETV_UDP_PORTS`. ICMP pertenece a las reglas base del core. Seleccionarlo requiere también `l4d2_packet_validation` y `l4d2_a2s_filters`; los puertos GameServer y SourceTV no pueden solaparse. Defaults de NEW: 8/24 por origen/puerto y 240/960 global por puerto; SourceTV hereda esos límites salvo override. `ENABLE_UDP_BASELINE_LOGS` es `false` por defecto.
-
-Con `ENABLE_UDP_NEW_FFFFFFFF_BYPASS=true`, el bypass temprano solo cubre paquetes con clasificador downstream habilitado: A2S 54/55/56; 71 solo en puertos GameServer para el subfiltro connect/reserve; y firmas extra de `STEAM_GROUP_SIGNATURES` con `ENABLE_STEAM_GROUP_FILTER=true`. Las demás firmas permanecen en el control NEW genérico. SourceTV no recibe el clasificador 71 de connect/reserve.
-
-`STEAM_GROUP_SIGNATURES=69` es un default de compatibilidad del proyecto, no una afirmación de especificación oficial de Steam Group. El filtro de paquetes grandes es opt-in. El umbral conserva la escala histórica de IPv4 restando 20 antes de compararlo con la longitud UDP: el valor `1024` compara longitud UDP `>=1004`; no compara la longitud IP real. Detalle en [migración](../security/migration.md). El tráfico L4D2/SourceTV de [resultados](../security/results.md) usa payloads sintéticos; no se probó un cliente real.
+Consulta el [catálogo canónico](../architecture/modules.md#l4d2-udp-base) y su guía de funcionalidad.

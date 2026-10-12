@@ -1,6 +1,6 @@
 [Unit]
 Description=Restore and verify the required suite firewall policy
-Documentation=file:/opt/l4d2-firewall/docs/security/boot-protection.md
+Documentation=file:/opt/l4d2-firewall/docs/boot/README.md
 Requires=l4d2-firewall-guard.service
 After=l4d2-firewall-guard.service
 Before=l4d2-firewall-ready.service

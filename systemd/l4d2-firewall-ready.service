@@ -1,6 +1,6 @@
 [Unit]
 Description=Verify suite policy availability in this boot
-Documentation=file:/opt/l4d2-firewall/docs/security/boot-protection.md
+Documentation=file:/opt/l4d2-firewall/docs/boot/README.md
 Requires=l4d2-firewall.service
 After=l4d2-firewall.service
 

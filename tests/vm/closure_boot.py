@@ -3,7 +3,7 @@
 
 Every mutating phase requires the QEMU attestation marker and a root-owned
 installation at /opt/l4d2-firewall. The host runner, not this script, controls
-QEMU startup, SSH and reboot boundaries. See docs/security/closure-h3-testing.md.
+QEMU startup, SSH and reboot boundaries. See docs/testing/boot.md.
 """
 from __future__ import annotations
 

@@ -18,7 +18,7 @@ Usage: ipp.sh [--backend iptables|nftables] OPERATION [options]
   apply --partial --only MODULES --set KEY=VALUE
   confirm --token TOKEN --admin-verified
   rollback
-See docs/security/operations.md. Global firewall cleanup is not provided.
+See docs/firewall/transactions.md. Global firewall cleanup is not provided.
 EOF
     exit 0
 fi

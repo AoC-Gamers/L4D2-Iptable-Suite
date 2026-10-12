@@ -1,6 +1,6 @@
 [Unit]
 Description=Install the suite early boot barrier
-Documentation=file:/opt/l4d2-firewall/docs/security/boot-protection.md
+Documentation=file:/opt/l4d2-firewall/docs/boot/README.md
 DefaultDependencies=no
 After=local-fs.target nftables.service
 # Do not pull in another firewall manager. If enabled, its initial load must

@@ -1,58 +1,18 @@
 # L4D2 Iptable Suite
 
-Firewall modular para servicios del host, publicaciones de contenedores y gateways
-OpenVPN. Conserva dos motores: **iptables**, con frontends legacy o nft, y
-**nftables nativo**. El núcleo compone la política y administra sus propios objetos;
-los módulos aportan los controles de cada servicio.
+Suite modular de políticas de red para servicios del host, publicaciones Docker,
+servidores L4D2/web y gateways OpenVPN. Ofrece **iptables** (frontends legacy o
+nft) y **nftables nativo**, con configuración declarativa, generación previa,
+objetos propios, confirmación remota y reversión temporizada.
 
-**Instalaciones anteriores:** leer [la migración](docs/security/migration.md).
-La selección vacía ya no activa todos los módulos, el forwarding se descarta por
-defecto y las redes VPN no reciben acceso completo. Reglas heredadas requieren
-identificación y retirada selectiva por el operador antes de adoptar el nuevo flujo.
+El núcleo administra la composición, propiedad y aplicación; los módulos describen
+controles de servicios. No instala esos servicios, no administra Docker y no
+recupera capacidad de un enlace saturado. El módulo web limita tráfico de red;
+las peticiones HTTP deben limitarse en el proxy o aplicación.
 
-## Cómo funciona
+## Primera revisión sin privilegios
 
-```text
-Configuración declarativa → perfiles/módulos → validación → candidata
-→ comprobación del motor → journal + timer → aplicación → conexión nueva → confirmación
-                                                     └→ expiración/fallo → reversión
-```
-
-`iptables.rules.sh` y `nftables.rules.sh` eligen motor; `ipp.sh` gestiona el mismo
-estado y escritor, con nftables por defecto. Sin operación explícita los entrypoints
-de motor aplican reglas; `ipp.sh` sin argumentos sólo muestra ayuda.
-
-| Operación | Resultado |
-|---|---|
-| `validate` | Valida configuración, selección y generación; no consulta el kernel |
-| `generate` | Emite un bundle JSON con reglas concretas y objetos administrados |
-| `plan` / `--dry-run` | Muestra módulos, familias, permisos y reglas; `--against` añade diferencias |
-| `check` | Comprueba la candidata con el motor sin aplicarla; requiere root |
-| `apply` | Comprueba y aplica con reversión temporizada; requiere confirmar |
-| `confirm` / `rollback` | Confirma un cambio pendiente o restaura sus objetos previos |
-| `save` / `load` / `disable` | Guarda, reaplica o retira exclusivamente la política propia |
-| `diagnose` | Consulta motor y recorrido Docker sin abrir el journal ni modificar reglas |
-| `boot-prepare` / `boot-guard` / `boot-restore` / `ready` / `boot-disarm` | Prepara y opera la barrera temprana opt-in y comprueba disponibilidad del kernel |
-
-Las operaciones ordinarias procesan primero los cambios pendientes vencidos;
-por eso `check`, `status` y `doctor` pueden ejecutar su rollback antes de continuar.
-La candidata de `check` no se aplica. `diagnose` es una consulta pasiva privilegiada;
-las operaciones lógicas funcionan sin root. Las operaciones de barrera tienen un
-flujo separado: `ready` comprueba disponibilidad sin recuperar el journal y
-`boot-restore` arma primero la barrera y después procesa la recuperación.
-
-Los comandos privilegiados comparten bloqueo. nftables sustituye las tablas propias
-en una transacción; iptables confirma por tabla/familia y puede tener un intervalo
-de versiones mixtas hasta la recuperación. Las cadenas compartidas mantienen sus
-reglas y políticas, y Docker no se reinicia. El rollback sólo restaura objetos de
-la suite; no recupera conexiones ni estado conntrack.
-
-## Configurar y revisar sin privilegios
-
-Se necesita Python 3.10+ y Bash para validar/generar. El archivo usa `KEY=VALUE`
-declarativo; no se ejecuta como shell. Precedencia: CLI > archivo > defaults.
-`--env-file` evita cargar el `.env` local implícito. Una configuración desconocida
-o incompatible falla antes de aplicar. Ver [configuración y permisos](docs/configuration.md).
+Desde la raíz del checkout, como usuario **sin root**, con Bash y Python 3.10+:
 
 ```sh
 ./nftables.rules.sh validate --env-file config/profiles/web.conf
@@ -61,94 +21,48 @@ o incompatible falla antes de aplicar. Ver [configuración y permisos](docs/conf
 ./iptables.rules.sh validate --env-file config/profiles/web.conf
 ```
 
-| Perfil | Servicios seleccionados | Decisiones necesarias |
-|---|---|---|
-| [host-minimal](config/profiles/host-minimal.conf) | SSH + núcleo | Adaptar puerto y orígenes administrativos del ejemplo |
-| [web](config/profiles/web.conf) | SSH + HTTP/HTTPS TCP | UDP/443 necesita autorización independiente |
-| [games](config/profiles/games.conf) | SSH + validaciones/A2S/UDP L4D2 | Juego doble pila en nftables; iptables exige bloqueo IPv6 explícito |
-| [vpn-gateway](config/profiles/vpn-gateway.conf) | SSH + OpenVPN servidor | Adaptar interfaces, redes y permisos de reenvío |
+Son validación lógica y generación: no comprueban kernel ni tráfico. `generate`
+escribe el JSON en `candidate.json` mediante la redirección; `plan` muestra reglas
+y diferencias respecto de ese archivo. Los valores del ejemplo son ficticios y
+no descubren interfaces, rutas ni accesos administrativos del destino.
+`--env-file` evita leer el `.env` privado implícito.
 
-Los perfiles se combinan con `--profile web --profile games`; eso selecciona sus
-módulos, no carga automáticamente los archivos de ejemplo ni crea servicios.
-Una lista `MODULES_ONLY` vacía usa el perfil configurado (default `host-minimal`).
-La selección CLI `--only ''` pide únicamente el núcleo.
+Los entrypoints de motor **aplican** si se invocan sin operación. Escribe siempre
+la operación explícita. `ipp.sh` sin argumentos muestra ayuda. Los targets
+`make firewall-nft` y `make firewall-ip` también aplican y cargan configuración
+implícita: no son comandos de diagnóstico ni parte de este inicio rápido.
 
-`HOST_SERVICES`, `CONTAINER_POLICY` y `ROUTED_POLICY` son independientes. Los
-[grants de host/reenvío](config/access.example.json) y
-[grants de contenedores](config/containers.example.json) delimitan origen, destino,
-interfaces, protocolo y puertos. Para Docker también distinguen IP/puerto público
-original y destino/puerto interno. NAT modifica direcciones; los permisos de filtro
-se declaran por separado.
+## Elegir el recorrido
 
-## Aplicar y persistir
+| Necesidad | Guía canónica |
+|---|---|
+| Primer despliegue y requisitos | [Inicio](docs/getting-started/README.md) e [instalación](docs/getting-started/installation.md) |
+| Configurar servicios y familias | [Configuración](docs/configuration/README.md), [perfiles](docs/configuration/profiles.md), [permisos](docs/configuration/access-policy.md) |
+| SSH, web y juego | [Administración](docs/administration/README.md), [web](docs/web/README.md), [L4D2/SourceTV](docs/l4d2/README.md) |
+| Contenedores o gateway | [Docker](docs/docker/README.md), [OpenVPN](docs/vpn/README.md) |
+| Aplicar, confirmar y recuperar | [Transacciones](docs/firewall/transactions.md), [persistencia](docs/firewall/persistence.md), [arranque opt-in](docs/boot/README.md) |
+| Instalar sobre versiones anteriores | [Migración funcional](docs/migration/README.md) |
+| Desarrollar y probar | [Arquitectura](docs/architecture/README.md), [pruebas](docs/testing/README.md), [CONTRIBUTING](CONTRIBUTING.md) |
+| Ver el alcance demostrado | [Motores](docs/firewall/backends.md), [aprobación](docs/security/approval.md), [limitaciones](docs/security/limitations.md) |
 
-Desplegar primero código revisado en una ruta root sin escritura de grupo/otros,
-por ejemplo `/opt/l4d2-firewall`, y configuración en `/etc/l4d2-firewall`. El checkout
-de un usuario no cumple el límite de confianza de root. No se instalan paquetes ni
-se cambian permisos automáticamente. La [guía operativa](docs/operations-guide.md)
-describe preparación, comprobación y recuperación.
+La aplicación privilegiada exige instalación confiable, consola de recuperación,
+comprobación previa y prueba de una conexión administrativa **nueva** antes de
+confirmar. Sigue [la instalación](docs/getting-started/installation.md); no
+apliques desde el checkout editable del usuario. Guardar una política no activa
+la protección de arranque: unidades y dependencias son opt-in.
 
-Ejemplo para el **host de destino**, después del ensayo en una VM desechable:
+## Estado del alcance revisado
 
-```sh
-sudo /opt/l4d2-firewall/nftables.rules.sh apply --env-file /etc/l4d2-firewall/web.conf --timeout 120
-# Abrir y comprobar una conexión administrativa NUEVA desde otra máquina.
-sudo /opt/l4d2-firewall/nftables.rules.sh confirm --token TOKEN --admin-verified
-sudo /opt/l4d2-firewall/ipp.sh save
-```
+> Aprobado con observaciones dentro del alcance implementado y probado.
+> La aceptación operativa de cada despliegue requiere validar su configuración,
+> versiones, servicios e integración de arranque.
 
-El timer systemd se arma antes del primer cambio y sobrevive al proceso/sesión
-aplicadora. Sin confirmación, revierte. La automatización puede confirmar mediante
-un verificador externo root con `--verify-with`. `--local` es una decisión explícita
-para consola/arranque, sin watchdog remoto.
-
-`save` conserva la política confirmada en `/var/lib/l4d2-firewall/persisted.json`.
-La protección de arranque no se activa por guardar: `boot-prepare` exige política
-aplicada, confirmada, guardada y `ready` en el boot actual. Las unidades de guardia,
-restauración y readiness y los drop-ins de servicios, sockets y Docker son opt-in;
-la suite no descubre ni protege automáticamente todos los consumidores. La barrera
-temprana usa nftables incluso con política iptables-legacy. Revisa el
-[procedimiento H3](docs/security/closure-h3.md), en especial el orden de `ExecStop`
-Docker para `live-restore`, antes de habilitarlo. No se reemplazan
-`/etc/nftables.conf` ni los archivos de persistencia de iptables de otros gestores.
-
-## Capacidades y evidencia
-
-La [matriz de motores y Docker](docs/security/capabilities.md) distingue lo soportado,
-lo rechazado y lo comprobado. Entre las restricciones actuales:
-
-- Juego iptables: IPv4; `ipv4-block-ipv6` bloquea servicios/reenvío IPv6 y puede
-  cortar retornos IPv6 salientes. No desactiva IPv6 en el sistema.
-- GeoIP: nftables e IPv4; con política dual exige `GEO_IPV6_POLICY=deny`.
-- Suite iptables con Docker nftables: combinación rechazada.
-- Clientes L4D2/SourceTV reales, PMTU de VPN, algunas variantes VPN y carga sostenida:
-  pruebas pendientes. Los [resultados](docs/security/results.md) detallan el riesgo.
-
-El [cierre H1–H3](docs/security/closure-plan-results.md), aceptado el 12 de octubre
-de 2026 UTC, registra 118 casos Python unitarios/harness, 20 comprobaciones
-kernel y 58 métodos de integración/regresión. La VM pasó cinco combinaciones
-Docker, OpenVPN TLS, SSH nuevo, timer de producción y cuatro reboots. H3 probó
-arranque fallido/válido, socket protegido y Docker live-restore con sondas TCP/UDP
-en una combinación concreta. Los paquetes de juego son sintéticos; el informe
-distingue los límites del muestreo y las versiones/combinaciones no ensayadas.
-CI separa lógica, generación, kernel, tráfico y VM; un fallo de dependencias o
-privilegios no se contabiliza como aprobación. Comandos reproducibles:
-[validación](docs/ai-compat-check.md) y [runner VM](docs/security/vm-runner.md).
-
-El módulo web limita tráfico/conexiones de red; los límites de peticiones pertenecen
-al proxy o aplicación. Las reglas locales no recuperan un enlace saturado.
-
-## Documentación
-
-- [Índice de documentación](docs/README.md).
-- [Configuración y perfiles](docs/configuration.md), [catálogo de módulos](docs/modules/README.md).
-- [Arquitectura](docs/modular-loader-architecture.md) y [garantías transaccionales](docs/security/operations.md).
-- [Persistencia y operaciones selectivas](docs/ipp.md).
-- [Cierre y límites de protección de arranque H3](docs/security/closure-h3.md).
-- [Resultados del plan H1–H3](docs/security/closure-plan-results.md).
-- [Watcher de IP pública](docs/public-ip-watch.md) y [actualizador GeoIP](geoip-updater/README.md).
-- [Auditoría, evidencia y pendientes](docs/operational-audit.md).
-- [Analizadores de logs](log-summary/docs/log-summary-container.md): configuración separada del firewall.
+La decisión corresponde al commit `93096dea2d7854a4d580a0b4922d5d1426c8149e`,
+12 de octubre de 2026. El [registro de aprobación](docs/security/approval.md)
+separa pruebas unitarias, motor, tráfico, VM y pendientes. No aprueba automáticamente
+otros commits o despliegues. El [índice documental](docs/README.md) organiza todas
+las funcionalidades; la [evidencia histórica](docs/archive/audits/README.md) conserva
+fechas, intentos fallidos y límites de cada ensayo.
 
 ## Créditos
 

@@ -1,25 +1,25 @@
-# Documentación del funcionamiento actual
+# Documentación de la suite
 
-Estas guías describen el núcleo transaccional y los dos motores actuales. Para
-instalaciones anteriores, empezar por la migración. Los informes de auditoría
-conservan resultados fechados; los comandos operativos están en las guías de uso.
+Empieza por tu objetivo. Las guías vigentes explican el comportamiento del núcleo
+actual; los informes fechados tienen su propio archivo y no sustituyen los pasos
+operativos. Los ejemplos de configuración están en [`config/`](../config/) y
+[`example.env`](../example.env), sin datos reales ni secretos.
 
-| Necesidad | Guía |
+| Objetivo | Recorrido |
 |---|---|
-| Comenzar sin privilegios | [README principal](../README.md) |
-| Elegir perfiles, familias y permisos | [Configuración](configuration.md) |
-| Preparar instalación, aplicar y confirmar | [Guía operativa](operations-guide.md) |
-| Entender transacciones y rollback | [Operación del núcleo](security/operations.md) |
-| Guardar, restaurar y retirar objetos propios | [ipp.sh](ipp.md) |
-| Proteger servicios durante el arranque | [Guía de protección](security/boot-protection.md), [cierre H3 y evidencia](security/closure-h3.md) |
-| Migrar reglas y opciones anteriores | [Migración](security/migration.md) |
-| Comparar motores, IPv6 y Docker | [Capacidades](security/capabilities.md) |
-| Revisar o desarrollar módulos | [Arquitectura](modular-loader-architecture.md), [catálogo](modules/README.md) |
-| Automatizar IP pública y GeoIP | [Watcher](public-ip-watch.md), [GeoIP](../geoip-updater/README.md) |
-| Ejecutar pruebas | [Validación](ai-compat-check.md), [VM desechable](security/vm-runner.md) |
-| Consultar evidencia y pendientes | [Auditoría](operational-audit.md), [resultados históricos](security/results.md), [cierre H1–H3](security/closure-plan-results.md), [issues](security/iterative-audit.md) |
+| Primer despliegue | [Comenzar](getting-started/README.md) → [instalar y verificar](getting-started/installation.md) |
+| Elegir permisos | [Configuración](configuration/README.md) → [perfiles](configuration/profiles.md) → [ACL](configuration/access-policy.md) → [referencia de variables](configuration/reference.md) |
+| Proteger servicios | [SSH](administration/README.md), [web](web/README.md), [L4D2 y SourceTV](l4d2/README.md), [consultas Source](l4d2/source-queries.md) |
+| Integrar redes | [Docker](docker/README.md), [VPN servidor/site-to-site](vpn/README.md) |
+| Aplicar o recuperar | [Flujo de firewall](firewall/README.md), [transacciones](firewall/transactions.md), [persistencia y retirada](firewall/persistence.md) |
+| Proteger el arranque | [Guardia y readiness](boot/README.md), [recuperación](boot/recovery.md) |
+| Automatizar o analizar | [Automatización](automation/README.md), [IP pública](automation/public-ip-watch.md), [GeoIP](automation/geoip.md), [observabilidad](observability/README.md) |
+| Desarrollar y verificar | [Arquitectura](architecture/README.md), [catálogo de módulos](architecture/modules.md), [pruebas](testing/README.md), [VM](testing/vm.md) |
+| Diagnosticar compatibilidad | [Consulta pasiva y comprobaciones](testing/diagnostics.md), [matriz de motores](firewall/backends.md) |
+| Revisar aceptación | [Seguridad](security/README.md), [aprobación](security/approval.md), [límites](security/limitations.md), [archivo histórico](archive/audits/README.md) |
+| Migrar | [Configuración/estado/firewall](migration/README.md), [mapa de rutas documentales](migration/documentation-map.md) |
 
-Los ejemplos están en [`config/`](../config/) y [`example.env`](../example.env).
-Sus direcciones/interfaces deben adaptarse al destino. El
-[análisis de logs](../log-summary/docs/log-summary-container.md) tiene configuración
-separada; sus variables no pertenecen al archivo del firewall.
+Para contribuir: [CONTRIBUTING](../CONTRIBUTING.md). Para agentes:
+[instrucciones raíz](../AGENTS.md) y [convenciones documentales](AGENTS.md).
+
+[README del proyecto](../README.md) · [Informe de reorganización documental](migration/documentation-review.md).
