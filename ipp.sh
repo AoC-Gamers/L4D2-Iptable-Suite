@@ -5,7 +5,12 @@ script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 if [[ $# -eq 0 ]]; then
     cat <<'EOF'
 Usage: ipp.sh [--backend iptables|nftables] OPERATION [options]
-  status / doctor                  inspect registered policy and environment
+  status / doctor                  inspect state/environment (may recover expired changes)
+  diagnose                         passive kernel/topology diagnosis, no journal writes
+  ready                            verify current-boot installed policy and kernel objects
+  boot-prepare [--recovery-file PATH]
+  boot-guard / boot-restore         opt-in early protection and verified restoration
+  boot-disarm --local               explicit console removal of owned boot barrier
   save                             save confirmed suite policy only
   load                             reload saved suite policy with timed rollback
   disable                          remove registered suite objects only

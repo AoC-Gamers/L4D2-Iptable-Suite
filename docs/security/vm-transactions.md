@@ -17,7 +17,7 @@ Every phase refuses to proceed unless all of these hold:
   `/run` is volatile, so recreate this marker after every reboot before invoking
   the post-reboot phase.
 - The trusted suite is installed at `/opt/l4d2-firewall`, and the loaded
-  `l4d2-firewall.service` runs its `core/fw.py load --local` entrypoint.
+  `l4d2-firewall.service` runs its `core/fw.py boot-restore` con la barrera preparada y recuperación SSH acotada entrypoint.
 - The production state has no `current.json`, `pending.json`, or `persisted.json`
   before `bootstrap`. A non-empty state is a hard failure; the harness does not
   remove or overwrite it.

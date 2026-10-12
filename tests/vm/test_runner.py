@@ -7,7 +7,7 @@ import subprocess
 import tempfile
 import types
 import unittest
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 
 RUNNER_PATH = Path(__file__).with_name('run.py')
@@ -25,6 +25,33 @@ class MemoryLog:
 
 
 class RunnerTests(unittest.TestCase):
+    def test_slirp_handshake_without_application_bytes_is_not_exposure(self):
+        connection = MagicMock()
+        connection.__enter__.return_value = connection
+        connection.recv.side_effect = runner.socket.timeout()
+        with patch.object(runner.socket, 'create_connection', return_value=connection):
+            self.assertIsNone(runner.external_tcp_response(22464))
+        connection.recv.side_effect = [b'fixture-response', b'']
+        with patch.object(runner.socket, 'create_connection', return_value=connection):
+            self.assertEqual(runner.external_tcp_response(22464), b'fixture-response')
+
+    def test_probe_summary_measures_real_gaps_and_protocol_coverage(self):
+        samples = [
+            {'protocol': 'tcp', 'started_monotonic': 10.0, 'duration_seconds': 0.4,
+             'stage': 'docker-restart', 'exposed': False},
+            {'protocol': 'udp', 'started_monotonic': 10.4, 'duration_seconds': 0.5,
+             'stage': 'docker-restart', 'exposed': False},
+            {'protocol': 'tcp', 'started_monotonic': 11.0, 'duration_seconds': 0.4,
+             'stage': 'failed-reboot', 'exposed': False},
+            {'protocol': 'udp', 'started_monotonic': 11.4, 'duration_seconds': 0.5,
+             'stage': 'failed-reboot', 'exposed': True},
+        ]
+        summary = runner.external_probe_summary(samples)
+        self.assertEqual(summary['tcp']['max_start_gap_seconds'], 1.0)
+        self.assertEqual(summary['udp']['max_duration_seconds'], 0.5)
+        self.assertEqual(summary['udp']['exposed'], 1)
+        self.assertEqual(summary['tcp']['stages'], ['docker-restart', 'failed-reboot'])
+
     def guest(self):
         with patch.object(runner, 'executable', side_effect=lambda name: name):
             return runner.Guest(key=Path('/tmp/key'), known_hosts=Path('/tmp/known'), port=22462, log=MemoryLog())
@@ -84,6 +111,8 @@ class RunnerTests(unittest.TestCase):
                 command, _ = runner.qemu_arguments(args, base, overlay, seed, root, 22463)
             rendered = ' '.join(command)
             self.assertIn('hostfwd=tcp:127.0.0.1:22463-:22', rendered)
+            self.assertIn('hostfwd=tcp:127.0.0.1:22464-:18482', rendered)
+            self.assertIn('hostfwd=udp:127.0.0.1:22465-:18483', rendered)
             self.assertIn(f'file={overlay},if=virtio,format=qcow2', rendered)
             self.assertNotIn(str(base), rendered)
             self.assertNotRegex(rendered, r'\b(?:tap|bridge|socket)=')
@@ -145,7 +174,11 @@ class RunnerTests(unittest.TestCase):
             'python3 -I tests/test_transactions.py',
             'python3 -I tests/test_configuration_audit.py',
             'python3 -I tests/test_policy_audit.py',
+            'python3 -I tests/test_docker_topology.py',
+            'python3 -I tests/test_h2.py',
+            'python3 -I tests/test_boot.py',
             'python3 -I tests/vm/test_transactions_harness.py',
+            'python3 -I tests/vm/test_boot_harness.py',
             'bash tests/watcher-audit.sh',
             'bash tests/http-https-protect.sh',
             'bash tests/public-ip-watch.sh',

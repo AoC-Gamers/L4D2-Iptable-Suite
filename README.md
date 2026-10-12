@@ -31,11 +31,15 @@ de motor aplican reglas; `ipp.sh` sin argumentos sólo muestra ayuda.
 | `apply` | Comprueba y aplica con reversión temporizada; requiere confirmar |
 | `confirm` / `rollback` | Confirma un cambio pendiente o restaura sus objetos previos |
 | `save` / `load` / `disable` | Guarda, reaplica o retira exclusivamente la política propia |
+| `diagnose` | Consulta motor y recorrido Docker sin abrir el journal ni modificar reglas |
+| `boot-prepare` / `boot-guard` / `boot-restore` / `ready` / `boot-disarm` | Prepara y opera la barrera temprana opt-in y comprueba disponibilidad del kernel |
 
-Los comandos privilegiados recuperan primero cualquier cambio pendiente vencido;
+Las operaciones ordinarias procesan primero los cambios pendientes vencidos;
 por eso `check`, `status` y `doctor` pueden ejecutar su rollback antes de continuar.
-La candidata de `check` no se aplica. Para revisión estrictamente pasiva usar las
-operaciones lógicas sin root y consultas directas de lectura del motor.
+La candidata de `check` no se aplica. `diagnose` es una consulta pasiva privilegiada;
+las operaciones lógicas funcionan sin root. Las operaciones de barrera tienen un
+flujo separado: `ready` comprueba disponibilidad sin recuperar el journal y
+`boot-restore` arma primero la barrera y después procesa la recuperación.
 
 Los comandos privilegiados comparten bloqueo. nftables sustituye las tablas propias
 en una transacción; iptables confirma por tabla/familia y puede tener un intervalo
@@ -99,8 +103,13 @@ un verificador externo root con `--verify-with`. `--local` es una decisión expl
 para consola/arranque, sin watchdog remoto.
 
 `save` conserva la política confirmada en `/var/lib/l4d2-firewall/persisted.json`.
-La [unidad de arranque](systemd/l4d2-firewall.service) se instala/habilita
-explícitamente y necesita adaptación de orden si depende de Docker. No se reemplazan
+La protección de arranque no se activa por guardar: `boot-prepare` exige política
+aplicada, confirmada, guardada y `ready` en el boot actual. Las unidades de guardia,
+restauración y readiness y los drop-ins de servicios, sockets y Docker son opt-in;
+la suite no descubre ni protege automáticamente todos los consumidores. La barrera
+temprana usa nftables incluso con política iptables-legacy. Revisa el
+[procedimiento H3](docs/security/closure-h3.md), en especial el orden de `ExecStop`
+Docker para `live-restore`, antes de habilitarlo. No se reemplazan
 `/etc/nftables.conf` ni los archivos de persistencia de iptables de otros gestores.
 
 ## Capacidades y evidencia
@@ -115,11 +124,13 @@ lo rechazado y lo comprobado. Entre las restricciones actuales:
 - Clientes L4D2/SourceTV reales, PMTU de VPN, algunas variantes VPN y carga sostenida:
   pruebas pendientes. Los [resultados](docs/security/results.md) detallan el riesgo.
 
-La ejecución local aceptada del 11 de octubre de 2026 incluye 54 unitarias, 20 comprobaciones kernel,
-46 casos de integración/regresión y una VM completa con cinco combinaciones Docker,
-OpenVPN TLS, SSH nuevo, timer de producción y dos reinicios. Los paquetes de juego
-son sintéticos. CI separa lógica, generación, kernel, tráfico y VM; un fallo de
-dependencias o privilegios no se contabiliza como aprobación. Comandos reproducibles:
+La ejecución local aceptada del 11 de octubre de 2026 registró 54 unitarias, 20
+comprobaciones kernel, 46 casos de integración/regresión y una VM con cinco
+combinaciones Docker, OpenVPN TLS, SSH nuevo, timer de producción y dos reinicios.
+Los paquetes de juego son sintéticos. Esa evidencia es anterior a la barrera H3:
+su integración de arranque/reinicio en VM sigue pendiente y no se declara aprobada.
+CI separa lógica, generación, kernel, tráfico y VM; un fallo de dependencias o
+privilegios no se contabiliza como aprobación. Comandos reproducibles:
 [validación](docs/ai-compat-check.md) y [runner VM](docs/security/vm-runner.md).
 
 El módulo web limita tráfico/conexiones de red; los límites de peticiones pertenecen
@@ -131,6 +142,7 @@ al proxy o aplicación. Las reglas locales no recuperan un enlace saturado.
 - [Configuración y perfiles](docs/configuration.md), [catálogo de módulos](docs/modules/README.md).
 - [Arquitectura](docs/modular-loader-architecture.md) y [garantías transaccionales](docs/security/operations.md).
 - [Persistencia y operaciones selectivas](docs/ipp.md).
+- [Cierre y límites de protección de arranque H3](docs/security/closure-h3.md).
 - [Watcher de IP pública](docs/public-ip-watch.md) y [actualizador GeoIP](geoip-updater/README.md).
 - [Auditoría, evidencia y pendientes](docs/operational-audit.md).
 - [Analizadores de logs](log-summary/docs/log-summary-container.md): configuración separada del firewall.

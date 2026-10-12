@@ -153,7 +153,7 @@ class H2KernelFlows(unittest.TestCase):
                         current_before = current_path.read_bytes()
                         pending_before = pending_path.read_bytes() if pending_path.exists() else None
                         rules_before = self.fixture.rules(backend)
-                        with self.assertRaisesRegex(PolicyError, 'Remove container grants before removing their service'):
+                        with self.assertRaisesRegex(PolicyError, 'Container service http_https_protect must be selected'):
                             self.invoke(backend, 'apply', '--remove', 'http_https_protect', '--local')
                         self.assertEqual(current_path.read_bytes(), current_before)
                         self.assertEqual(pending_path.read_bytes() if pending_path.exists() else None,

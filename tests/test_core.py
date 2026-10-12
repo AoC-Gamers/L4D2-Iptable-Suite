@@ -65,7 +65,7 @@ class ConfigurationTests(unittest.TestCase):
             Configuration('nftables', overrides={'SSH_PORT':''})
 
     def test_security_options_rejected(self):
-        for v in ({'SSH_DOCKER':'2222'}, {'BYPASS_SOURCE_IPS':'192.0.2.1'}, {'NF_TABLE_NAME':'x;flush ruleset'}, {'NF_TABLE_FAMILY':'ip'}, {'DOCKER_CHAIN_AUTORECOVER':'true'}, {'ENABLE_MALFORMED_FILTER':'maybe'}, {'SSH_PORT':'99999'}, {'SSH_RATE':'0/second'}, {'LOG_PREFIX_SSH_ABUSE':'"; drop'}, {'OVPNSRV_INTERFACE':'tun+'}):
+        for v in ({'SSH_DOCKER':'2222'}, {'BYPASS_SOURCE_IPS':'192.0.2.1'}, {'NF_TABLE_NAME':'x;flush ruleset'}, {'NF_TABLE_NAME':'l4d2_boot_guard'}, {'NF_TABLE_FAMILY':'ip'}, {'DOCKER_CHAIN_AUTORECOVER':'true'}, {'ENABLE_MALFORMED_FILTER':'maybe'}, {'SSH_PORT':'99999'}, {'SSH_RATE':'0/second'}, {'LOG_PREFIX_SSH_ABUSE':'"; drop'}, {'OVPNSRV_INTERFACE':'tun+'}):
             with self.subTest(v=v), self.assertRaises(PolicyError):
                 Configuration('nftables', overrides=v)
 

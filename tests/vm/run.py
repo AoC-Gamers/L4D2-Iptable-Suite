@@ -3,7 +3,7 @@
 
 The host runner only owns its QEMU child process. Guest firewalls, systemd, and
 Docker are changed only inside the freshly-created QEMU overlay. Networking is
-QEMU user-mode networking with one SSH forward bound to loopback.
+QEMU user-mode networking with SSH and probe forwards bound to loopback.
 """
 from __future__ import annotations
 
@@ -21,6 +21,7 @@ import subprocess
 import sys
 import tarfile
 import tempfile
+import threading
 import time
 import urllib.request
 import uuid
@@ -285,7 +286,7 @@ def qemu_arguments(args, base: Path, overlay: Path, seed: Path, work: Path, port
     command += [
         '-drive', f'file={overlay},if=virtio,format=qcow2',
         '-drive', f'file={seed},if=virtio,format=raw,readonly=on',
-        '-netdev', f'user,id=net0,hostfwd=tcp:127.0.0.1:{port}-:22',
+        '-netdev', f'user,id=net0,hostfwd=tcp:127.0.0.1:{port}-:22,hostfwd=tcp:127.0.0.1:{getattr(args, "probe_port", 22464)}-:18482,hostfwd=udp:127.0.0.1:{getattr(args, "udp_probe_port", 22465)}-:18483',
         '-device', 'virtio-net-pci,netdev=net0,romfile=',
     ]
     qemu_env = os.environ.copy()
@@ -450,7 +451,7 @@ class Guest:
             f'sudo -n tar --no-same-owner -xzf {shlex.quote(remote)} -C {INSTALL_ROOT}; '
             f'sudo -n find {INSTALL_ROOT} -type d -exec chmod go-w {{}} +; '
             f'sudo -n find {INSTALL_ROOT} -type f -exec chmod go-w {{}} +; '
-            f'sudo -n install -o root -g root -m 0644 {INSTALL_ROOT}/systemd/l4d2-firewall.service /etc/systemd/system/l4d2-firewall.service; '
+            f'sudo -n install -o root -g root -m 0644 {INSTALL_ROOT}/systemd/l4d2-firewall*.service /etc/systemd/system/; '
             'sudo -n systemctl daemon-reload; '
             f'cd {INSTALL_ROOT} && sudo -n git init -q && sudo -n git add -A; '
             f'sudo -n /usr/bin/python3 -I -c "import sys;sys.path.insert(0,\'{INSTALL_ROOT}\');from core.config import trusted;trusted(\'{INSTALL_ROOT}\')"; '
@@ -550,6 +551,14 @@ def check_port_available(port: int) -> None:
             raise RunnerError(f'Loopback SSH forwarding port 127.0.0.1:{port} is unavailable: {exc}') from exc
 
 
+def check_udp_port_available(port: int) -> None:
+    with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
+        try:
+            sock.bind(('127.0.0.1', port))
+        except OSError as exc:
+            raise RunnerError(f'Loopback UDP probe port 127.0.0.1:{port} is unavailable: {exc}') from exc
+
+
 def copy_serial(path: Path, artifacts: Path, guest: Guest | None = None) -> None:
     if path.is_file():
         output = path.read_text(encoding='utf-8', errors='replace')
@@ -568,7 +577,11 @@ def unit_cases() -> list[tuple[str, str]]:
         ('python3 -I tests/test_transactions.py', UNIT_USER),
         ('python3 -I tests/test_configuration_audit.py', UNIT_USER),
         ('python3 -I tests/test_policy_audit.py', UNIT_USER),
+        ('python3 -I tests/test_docker_topology.py', UNIT_USER),
+        ('python3 -I tests/test_h2.py', UNIT_USER),
+        ('python3 -I tests/test_boot.py', UNIT_USER),
         ('python3 -I tests/vm/test_transactions_harness.py', UNIT_USER),
+        ('python3 -I tests/vm/test_boot_harness.py', UNIT_USER),
         ('bash tests/watcher-audit.sh', UNIT_USER),
         ('bash tests/http-https-protect.sh', UNIT_USER),
         ('bash tests/public-ip-watch.sh', UNIT_USER),
@@ -599,6 +612,9 @@ def run_tests(guest: Guest, logger: Log) -> None:
             ('integration', 'tests/integration.py'),
             ('transaction', 'tests/transaction-flows.py'),
             ('policy', 'tests/policy-flows.py'),
+            ('Docker topology', 'tests/docker-topology-flows.py'),
+            ('normalized state lifecycle', 'tests/h2-flows.py'),
+            ('early barrier packets', 'tests/boot-flows.py'),
         ):
             command = f'cd {INSTALL_ROOT} && env SUITE_TEST_FRONTEND={frontend} bash tests/isolated-run.sh --root-net {script}'
             guest.run_guest(f'{name} frontend={frontend}', command, timeout=600)
@@ -655,6 +671,149 @@ def run_transactions(guest: Guest, logger: Log) -> None:
     logger.write('PASS production transaction lifecycle, deadlines, SSH reconnection, SIGKILL and both reboots')
 
 
+
+def external_probe(port):
+    try:
+        with socket.create_connection(('127.0.0.1', port), timeout=0.4) as connection:
+            connection.settimeout(0.4)
+            connection.sendall(b'GET / HTTP/1.0\r\nHost: probe\r\n\r\n')
+            response = b''
+            while len(response) < 8192:
+                chunk = connection.recv(8192)
+                if not chunk:
+                    break
+                response += chunk
+            return b'H3-CONTAINER' in response
+    except OSError:
+        return False
+
+
+def external_tcp_response(port):
+    try:
+        connection = socket.create_connection(('127.0.0.1', port), timeout=0.4)
+    except OSError:
+        return None
+    response = bytearray()
+    with connection:
+        try:
+            connection.settimeout(0.4)
+            connection.sendall(b'GET / HTTP/1.0\r\nHost: probe\r\n\r\n')
+            while len(response) < 8192:
+                chunk = connection.recv(8192)
+                if not chunk:
+                    break
+                response.extend(chunk)
+        except OSError:
+            # SLIRP can complete a hostfwd handshake locally while the guest
+            # drops traffic. Only bytes received from the fixture prove that
+            # its application was reached through this proxy channel.
+            pass
+    return bytes(response) or None
+
+
+def external_udp_response(port):
+    with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as connection:
+        connection.settimeout(0.5)
+        try:
+            connection.bind(('127.0.0.1', 0))
+            connection.sendto(b'h3-udp-probe', ('127.0.0.1', port))
+            response, _ = connection.recvfrom(4096)
+            return response
+        except OSError:
+            return None
+
+
+def run_boot_closure(guest: Guest, logger: Log, probe_port: int, udp_probe_port: int) -> None:
+    stage = {'name': 'setup'}
+    def phase(name, timeout=240):
+        stage['name'] = name
+        command = ('sudo -n env SSH_CONNECTION="$SSH_CONNECTION" '
+                   f'/usr/bin/timeout --foreground --kill-after=15 {timeout}s '
+                   f'/usr/bin/python3 -I {INSTALL_ROOT}/tests/vm/closure_boot.py ' + shlex.quote(name))
+        logger.write('START boot closure ' + name)
+        result = guest.ssh(command, label='boot closure ' + name, timeout=timeout + 30)
+        guest.save_output('boot closure ' + name, result.stdout, result.stderr)
+        output = result.stdout.decode(errors='replace')
+        logger.write('PASS boot closure ' + name)
+        try:
+            payload = json.loads(output.strip().splitlines()[-1])
+        except (IndexError, json.JSONDecodeError) as exc:
+            raise RunnerError('Boot closure phase did not return JSON: ' + name) from exc
+        if payload.get('phase') != name:
+            raise RunnerError('Unexpected boot closure phase: ' + name)
+    for name in ('bootstrap', 'stage-guard', 'verify-ready', 'failure-cases', 'calibrate-probe'):
+        phase(name)
+    if not any(external_probe(probe_port) for _ in range(5)):
+        raise RunnerError('External TCP positive control could not reach the actual container')
+    if not any(external_udp_response(udp_probe_port) == b'H3-UDP' for _ in range(5)):
+        raise RunnerError('External UDP positive control could not reach the actual container')
+    phase('restrict-probe')
+    if external_tcp_response(probe_port) is not None or external_udp_response(udp_probe_port) is not None:
+        raise RunnerError('Restricted external TCP/UDP source still reached the container')
+    stop = threading.Event()
+    samples = []
+    def monitor():
+        while not stop.is_set():
+            for protocol, probe, port in (('tcp', external_tcp_response, probe_port),
+                                          ('udp', external_udp_response, udp_probe_port)):
+                started = time.monotonic()
+                sample = {'utc': dt.datetime.now(dt.timezone.utc).isoformat(),
+                          'protocol': protocol, 'stage': stage['name'],
+                          'started_monotonic': started}
+                sample['exposed'] = probe(port) is not None
+                sample['duration_seconds'] = time.monotonic() - started
+                samples.append(sample)
+            stop.wait(0.05)
+    worker = threading.Thread(target=monitor, name='external-container-probe', daemon=True)
+    worker.start()
+    try:
+        phase('docker-restart')
+        phase('pre-failed-reboot')
+        stage['name'] = 'failed-reboot'
+        guest.reboot('unsupported persisted-schema fail-closed reboot', timeout=300)
+        phase('post-failed-reboot', timeout=360)
+        phase('pre-reboot')
+        stage['name'] = 'valid-reboot'
+        guest.reboot('valid early barrier and Docker live-restore reboot', timeout=300)
+        phase('post-reboot', timeout=360)
+    finally:
+        stop.set()
+        worker.join(timeout=2)
+        path = logger.path.parent / 'external-probes.json'
+        path.write_text(json.dumps(samples, indent=2) + '\n')
+        path.chmod(0o600)
+        summary = external_probe_summary(samples)
+        summary_path = logger.path.parent / 'external-probe-summary.json'
+        summary_path.write_text(json.dumps(summary, indent=2) + '\n')
+        summary_path.chmod(0o600)
+    if not samples or any(sample['exposed'] for sample in samples):
+        raise RunnerError('Unauthorized TCP/UDP container response during boot/Docker transition; see external-probes.json')
+    if not {'tcp', 'udp'} <= {sample['protocol'] for sample in samples}:
+        raise RunnerError('External TCP/UDP transition monitor did not sample both protocols')
+    for protocol, values in summary.items():
+        if values['max_start_gap_seconds'] > 3:
+            raise RunnerError(f'External {protocol} probe gap exceeded the declared 3-second sampling bound')
+        if not {'docker-restart', 'failed-reboot', 'valid-reboot'} <= set(values['stages']):
+            raise RunnerError(f'External {protocol} probe missed a required transition')
+    logger.write(f'PASS external probes: {len(samples)} TCP/UDP attempts, no unauthorized response')
+    phase('cleanup')
+    logger.write('PASS early boot barrier, kernel readiness, restoration failures and Docker restart/reboot')
+
+
+def external_probe_summary(samples):
+    result = {}
+    for protocol in ('tcp', 'udp'):
+        rows = [row for row in samples if row['protocol'] == protocol]
+        result[protocol] = {
+            'attempts': len(rows), 'exposed': sum(row['exposed'] for row in rows),
+            'max_start_gap_seconds': max((b['started_monotonic'] - a['started_monotonic']
+                                         for a, b in zip(rows, rows[1:])), default=0),
+            'max_duration_seconds': max((row['duration_seconds'] for row in rows), default=0),
+            'stages': sorted({row['stage'] for row in rows}),
+        }
+    return result
+
+
 def parse_args(argv: list[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--image', type=Path, help='cached Noble cloud image; SHA-256 is still verified')
@@ -662,6 +821,9 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
                         help='cached Docker 29.8.2 static archive; SHA-256 is still verified')
     parser.add_argument('--ssh-port', '--port', dest='ssh_port', type=int, default=22462,
                         help='127.0.0.1-only guest SSH forward (default 22462)')
+    parser.add_argument('--probe-port', type=int, default=22464, help='loopback-only external container probe forward')
+    parser.add_argument('--udp-probe-port', type=int, default=22465,
+                        help='loopback-only external UDP container probe forward')
     parser.add_argument('--boot-timeout', type=int, default=900, help='maximum seconds for cloud-init and SSH readiness')
     parser.add_argument('--memory', type=int, default=4096, help='guest memory in MiB')
     parser.add_argument('--cpus', type=int, default=4, help='guest vCPU count')
@@ -677,8 +839,10 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
 
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(sys.argv[1:] if argv is None else argv)
-    if not 1024 <= args.ssh_port <= 65535 or args.memory < 2048 or args.cpus < 1:
-        raise RunnerError('SSH port must be 1024-65535, memory at least 2048 MiB, and CPUs positive')
+    if (not all(1024 <= port <= 65535 for port in (args.ssh_port, args.probe_port, args.udp_probe_port))
+            or len({args.ssh_port, args.probe_port, args.udp_probe_port}) != 3
+            or args.memory < 2048 or args.cpus < 1):
+        raise RunnerError('SSH/TCP/UDP loopback ports must be distinct and 1024-65535; memory at least 2048 MiB and CPUs positive')
     args.artifacts_dir = args.artifacts_dir.expanduser().resolve()
     args.work_root = args.work_root.expanduser().resolve()
     args.artifacts_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
@@ -695,6 +859,8 @@ def main(argv: list[str] | None = None) -> int:
     success = False
     try:
         check_port_available(args.ssh_port)
+        check_port_available(args.probe_port)
+        check_udp_port_available(args.udp_probe_port)
         for dependency in ('qemu-img', 'genisoimage', 'ssh', 'scp', 'ssh-keygen'):
             executable(dependency)
         image = (require_file(args.image.expanduser(), IMAGE_SHA256, 'Ubuntu Noble cloud image')
@@ -736,6 +902,7 @@ def main(argv: list[str] | None = None) -> int:
         )
         run_tests(guest, logger)
         run_transactions(guest, logger)
+        run_boot_closure(guest, logger, args.probe_port, args.udp_probe_port)
         logger.write('PASS runner completed all required validation cases; no SKIP case accepted')
         success = True
     except BaseException as exc:

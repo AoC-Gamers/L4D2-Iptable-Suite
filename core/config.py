@@ -9,6 +9,7 @@ import shlex
 import stat
 
 ROOT = Path(__file__).resolve().parents[1]
+BOOT_GUARD_TABLE = 'l4d2_boot_guard'
 
 
 class PolicyError(Exception):
@@ -313,6 +314,8 @@ class Configuration:
         require(v['FAMILY_POLICY'] in ('dual', 'ipv4-block-ipv6'), 'FAMILY_POLICY must be dual or ipv4-block-ipv6')
         require(v['NF_TABLE_FAMILY'] == 'inet', 'Only NF_TABLE_FAMILY=inet supported')
         require(bool(re.fullmatch(r'[A-Za-z][A-Za-z0-9_]{0,30}', v['NF_TABLE_NAME'])), 'Invalid table name')
+        require(v['NF_TABLE_NAME'] != BOOT_GUARD_TABLE,
+                f'NF_TABLE_NAME={BOOT_GUARD_TABLE} is reserved for the boot guard')
         require(v['ROUTED_POLICY'] in ('drop', 'unmanaged'), 'Invalid routed policy')
         require(v['CONTAINER_POLICY'] in ('off', 'restrict'), 'Invalid container policy')
         require(v['IPTABLES_FRONTEND'] in ('auto', 'legacy', 'nft'), 'IPTABLES_FRONTEND must be auto/legacy/nft')

@@ -39,7 +39,7 @@ def parser():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument('--state-dir', default=str(DEFAULT_STATE))
     p.add_argument('--backend', choices=('iptables', 'nftables'), default='nftables')
-    p.add_argument('operation', nargs='?', default='apply', choices=('validate', 'generate', 'plan', 'check', 'apply', 'confirm', 'rollback', 'disable', 'save', 'load', 'status', 'doctor', '_watch', '_detach'))
+    p.add_argument('operation', nargs='?', default='apply', choices=('validate', 'generate', 'plan', 'check', 'apply', 'confirm', 'rollback', 'disable', 'save', 'load', 'status', 'doctor', 'diagnose', 'boot-prepare', 'boot-guard', 'boot-restore', 'boot-disarm', 'ready', '_watch', '_detach'))
     p.add_argument('--env-file')
     p.add_argument('--set', action='append', default=[], metavar='KEY=VALUE')
     p.add_argument('--only', action='append')
@@ -56,6 +56,8 @@ def parser():
     p.add_argument('--partial', action='store_true', help='Recompose selected modules on top of the confirmed policy')
     p.add_argument('--remove', help='Recompose without these modules (dependencies must still be satisfied)')
     p.add_argument('--against', help='JSON candidate to compare in offline plan')
+    p.add_argument('--accept-version-change', action='store_true', help='Explicit maintenance acceptance of unevaluated iptables version, never frontend changes')
+    p.add_argument('--recovery-file', help='Root-owned scoped SSH recovery grants for boot-prepare; absent means console recovery')
     return p
 
 
@@ -164,10 +166,13 @@ def show(policy, args):
 
 
 def main(argv=None):
+    from core import boot
     args = parser().parse_args(argv)
     if args.dry_run:
         args.operation = 'plan'
     require(2 <= args.timeout <= 3600, 'Timeout must be 2..3600 seconds')
+    require(not args.accept_version_change or args.operation in ('check', 'apply', 'load'), 'Version acceptance is only available during check/apply/load maintenance')
+    require(not args.recovery_file or args.operation == 'boot-prepare', '--recovery-file is only accepted by boot-prepare')
     if os.geteuid() == 0:
         # All Python code and shell helpers are part of the root trust boundary.
         for p in [ROOT, ROOT / 'core', *(ROOT / 'core').glob('*.py')]:
@@ -181,6 +186,18 @@ def main(argv=None):
         else:
             show(policy, args)
         return
+    if args.operation == 'diagnose':
+        require(os.geteuid() == 0, 'Passive kernel diagnosis requires root')
+        require(not args.env_file and not args.partial and not args.remove and args.only is None and args.skip is None and args.profile is None, 'diagnose does not load policy configuration or state')
+        frontend = 'auto'
+        for pair in args.set:
+            require(pair in ('IPTABLES_FRONTEND=auto', 'IPTABLES_FRONTEND=nft', 'IPTABLES_FRONTEND=legacy'), 'diagnose only accepts IPTABLES_FRONTEND')
+            frontend = pair.split('=', 1)[1]
+        live = engine.inspect(args.backend, frontend)
+        print(json.dumps({'versions': live['versions'], 'frontend': live['frontend'], 'docker': live['docker'],
+                          'docker_forward': engine.docker_forward_diagnostic(live)}, indent=2))
+        return
+    require(not args.accept_version_change or args.operation in ('check', 'apply', 'load'), 'Version acceptance is only available during check/apply/load maintenance')
     store = Store(args.state_dir)
     if args.operation == '_detach':
         require(args.token, 'Watchdog needs token')
@@ -191,6 +208,23 @@ def main(argv=None):
         store.watch(args.token)
         return
     with store.lock():
+        if args.operation in ('boot-prepare', 'boot-guard', 'boot-restore', 'boot-disarm', 'ready'):
+            require(not args.accept_version_change and not args.env_file and not args.set and not args.partial and not args.remove
+                    and args.only is None and args.skip is None and args.profile is None,
+                    'Boot operations use the prepared confirmed policy, not configuration overrides')
+            if args.operation == 'boot-prepare':
+                result = boot.prepare(store, args.recovery_file)
+            elif args.operation == 'boot-guard':
+                result = boot.guard(store)
+            elif args.operation == 'boot-restore':
+                result = boot.restore(store)
+            elif args.operation == 'boot-disarm':
+                require(args.local, 'boot-disarm requires explicit --local console maintenance; disable protected units first')
+                result = boot.disarm(store)
+            else:
+                result = boot.verify(store)
+            print(json.dumps(result, sort_keys=True))
+            return
         if args.operation == 'rollback':
             print('Restored previous suite objects.' if store.rollback_locked(args.token) else 'No matching pending change.')
             return
@@ -215,7 +249,9 @@ def main(argv=None):
         previous = store.get('current')
         if args.operation == 'save':
             require(previous and not store.get('pending'), 'Save requires a confirmed policy')
+            boot.require_scope(store, previous)
             store.put('persisted', previous)
+            boot.saved(store, previous)
             print('Saved suite policy to', store.path / 'persisted.json', '(system firewall files untouched)')
             return
         if args.operation == 'load':
@@ -228,7 +264,7 @@ def main(argv=None):
             candidate = generate(configuration(args, privileged=True, previous=previous))
         if args.operation == 'check':
             live = engine.inspect(candidate['backend'], candidate['config'].get('IPTABLES_FRONTEND', 'auto'))
-            engine.preflight(candidate, previous, live)
+            engine.preflight(candidate, previous, live, accept_version_change=args.accept_version_change)
             if candidate['backend'] == 'iptables':
                 candidate['hooks'] = engine.actual_hooks(candidate, live)
             engine.check(engine.prepare(candidate, [previous, candidate], live))
@@ -237,7 +273,7 @@ def main(argv=None):
         if args.partial or args.remove:
             live = engine.inspect(candidate['backend'], candidate['config'].get('IPTABLES_FRONTEND', 'auto'))
             engine.require_owned_present(previous, live)
-        token = store.apply_locked(candidate, args.timeout, args.watchdog, args.local, args.verify_with)
+        token = store.apply_locked(candidate, args.timeout, args.watchdog, args.local, args.verify_with, args.accept_version_change)
         if token:
             print('Applied with timed rollback. Test a NEW administrative connection, then run:')
             print(f'./{candidate["backend"]}.rules.sh confirm --token {token} --admin-verified')

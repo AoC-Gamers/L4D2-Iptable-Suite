@@ -16,8 +16,8 @@ genera por ejecución y se borra con los archivos temporales. No se guardan
 credenciales reales ni tokens de confirmación en los logs.
 
 La única conectividad del guest usa el backend `user` de QEMU (SLIRP), con un
-forward SSH enlazado exclusivamente a `127.0.0.1`. No crea bridges, TAPs,
-sockets Docker del host ni forwards de otros servicios. Usa KVM cuando
+forward SSH y sondas TCP/UDP enlazadas exclusivamente a `127.0.0.1`. No crea bridges,
+TAPs ni sockets Docker del host. Usa KVM cuando
 `/dev/kvm` es accesible; de lo contrario cae a TCG. Los dos modos tienen un
 timeout de arranque acotado.
 
@@ -35,8 +35,8 @@ shell de login es `nologin`. Antes de cada prueba un guard comprueba que no es
 root y que `sudo -n true` falla. El runner valida el user-data con
 `cloud-init schema --system` antes de esperar que termine cloud-init, siguiendo
 el [schema oficial de cloud-init](https://raw.githubusercontent.com/canonical/cloud-init/main/cloudinit/config/schemas/schema-cloud-config-v1.json).
-El runner instala la unidad de
-arranque del firewall y una unidad guard que recrea el marcador root-owned
+El runner instala las tres unidades de protección/restauración/readiness del
+firewall y una unidad de prueba separada que recrea el marcador root-owned
 `0600` después de cada reboot. El disco QCOW2 de trabajo tiene 12 GiB virtuales.
 Los runners requieren acceso de red para descargar imagen, Docker y paquetes
 apt; los casos GeoIP y Docker no acceden a servicios externos durante sus
@@ -85,6 +85,20 @@ committed terminado con SIGKILL, expiración del timer tras pérdida de sesión,
 reboot y restore systemd de nftables; repite el reboot/restore con
 iptables-legacy y limpia el estado de prueba. Cada reboot cambia exclusivamente
 el guest QEMU que este proceso lanzó.
+
+Después ejecuta [el cierre H3](closure-h3-testing.md): barrera temprana,
+readiness con política real, fallos de persistencia/binario, SIGKILL antes de
+rollback a vacío, socket protegido y Docker con `restart=always`/`live-restore`.
+Las sondas externas se calibran contra una respuesta del contenedor antes de
+retirar su autorización y observar reinicio del daemon y reboot. Los timestamps
+quedan en `external-probes.json`; `external-probe-summary.json` registra el
+intervalo máximo y la duración por protocolo. El runner exige muestras TCP y
+UDP durante cada transición y falla si el intervalo entre inicios de sondas
+del mismo protocolo supera tres segundos. Las sondas se ejecutan en serie:
+la pausa de 50 ms se añade a sus timeouts y no define su cadencia. Se exige
+respuesta de aplicación: un handshake TCP de SLIRP no demuestra que el
+contenedor recibió tráfico. Este muestreo no prueba ausencia de exposición
+de duración arbitrariamente pequeña.
 
 ## CI y evidencia
 

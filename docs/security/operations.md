@@ -27,8 +27,10 @@ Sin baseline no se puede afirmar qué objetos desaparecerán del firewall activo
 Los comandos privilegiados toman el lock y recuperan primero cualquier journal
 vencido. Por ello `check`, `status` y `doctor` pueden ejecutar rollback de un
 cambio anterior expirado; no son observación estrictamente pasiva. Para una
-auditoría pasiva usar las operaciones lógicas sin root y consultas directas de
-lectura del motor. La candidata de `check` no se aplica.
+auditoría pasiva usar `diagnose` (root, sin abrir ni recuperar el journal), las
+operaciones lógicas sin root o consultas directas de lectura del motor.
+`diagnose --backend iptables --set IPTABLES_FRONTEND=legacy` muestra también
+el recorrido estructural hacia Docker por familia. La candidata de `check` no se aplica.
 
 Las siguientes operaciones necesitan privilegios. Probar primero en VM o
 namespace desechable, nunca sobre el firewall que mantiene acceso al repositorio:
@@ -136,11 +138,13 @@ de desarrollo. La suite no cambia propietarios ni permisos automáticamente.
 `ipp.sh save` conserva sólo la política confirmada en
 `/var/lib/l4d2-firewall/persisted.json`; `ipp.sh load` la comprueba y reaplica mediante
 el mismo lock/journal/timer. No toca `/etc/nftables.conf`, `/etc/iptables/rules.v4`,
-`rules.v6` ni unidades de otros administradores. `systemd/l4d2-firewall.service`
-es un ejemplo de integración de arranque: instalarlo y habilitarlo explícitamente
-en el host de destino. No tiene limpieza ExecStop. Con contenedores, ordenar la
-restauración después de Docker y antes de publicar servicios; la configuración de
-arranque general no presupone que Docker esté presente. Si falta integración, falla.
+`rules.v6` ni unidades de otros administradores. La integración de arranque con
+barrera temprana es opt-in y requiere preparar un manifiesto explícito. Sus unidades
+no se instalan ni habilitan automáticamente, y los servicios/socket protegidos
+requieren drop-ins individuales. La suite no intenta adivinar qué servicios deben
+esperar. Con Docker, revisa la unidad instalada y el orden de cada `ExecStop` antes
+de adaptar el ejemplo; el drop-in debe rearmar la barrera antes de detener el daemon.
+El procedimiento, el alcance y los límites están en [protección de arranque](boot-protection.md).
 
 ```sh
 sudo ./ipp.sh save
@@ -151,6 +155,15 @@ sudo ./ipp.sh apply --remove http_https_protect
 sudo ./ipp.sh apply --remove http_https_protect --set ACCESS_POLICY=/etc/l4d2-firewall/remaining.json
 sudo ./ipp.sh disable
 ```
+
+La barrera H3 usa `boot-prepare` tras aplicar, confirmar, guardar y comprobar con
+`ready` la política en el kernel de este arranque. `boot-guard` la instala;
+`boot-restore` restaura la persistencia y solo la retira tras verificar; `ready`
+comprueba boot ID, digest y objetos administrados. La tabla nftables temprana con
+prioridad `-310` también requiere `nft` cuando la política usa iptables-legacy.
+Para `disable` o cambiar el alcance de un manifiesto preparado, detén primero los
+consumidores y ejecuta desde consola `boot-disarm --local`. Sin opt-in no se añade
+la barrera temprana. Los ensayos VM de arranque H3 siguen pendientes.
 
 Especificar `--backend iptables` al operar ese motor. Operaciones parciales requieren
 una política confirmada y módulos/dependencias existentes. Se recompone una candidata

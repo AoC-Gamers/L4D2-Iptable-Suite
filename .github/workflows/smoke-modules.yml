@@ -22,7 +22,11 @@ jobs:
       - run: python3 -I tests/test_transactions.py
       - run: python3 -I tests/test_configuration_audit.py
       - run: python3 -I tests/test_policy_audit.py
+      - run: python3 -I tests/test_docker_topology.py
+      - run: python3 -I tests/test_h2.py
+      - run: python3 -I tests/test_boot.py
       - run: python3 -I tests/vm/test_transactions_harness.py
+      - run: python3 -I tests/vm/test_boot_harness.py
       - run: python3 -I tests/vm/test_runner.py
       - run: bash tests/watcher-audit.sh
       - run: bash tests/http-https-protect.sh && bash tests/public-ip-watch.sh
@@ -60,3 +64,9 @@ jobs:
         run: sudo env SUITE_TEST_FRONTEND=${{ matrix.frontend }} bash tests/isolated-run.sh --root-net tests/transaction-flows.py
       - name: Policy capacity and scope regressions with real traffic
         run: sudo env SUITE_TEST_FRONTEND=${{ matrix.frontend }} bash tests/isolated-run.sh --root-net tests/policy-flows.py
+      - name: Docker hook topology with real engines
+        run: sudo env SUITE_TEST_FRONTEND=${{ matrix.frontend }} bash tests/isolated-run.sh --root-net tests/docker-topology-flows.py
+      - name: Normalized state full lifecycle and traffic
+        run: sudo env SUITE_TEST_FRONTEND=${{ matrix.frontend }} bash tests/isolated-run.sh --root-net tests/h2-flows.py
+      - name: Early barrier IPv4/IPv6 packets and rollback to empty
+        run: sudo env SUITE_TEST_FRONTEND=${{ matrix.frontend }} bash tests/isolated-run.sh --root-net tests/boot-flows.py

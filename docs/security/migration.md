@@ -43,6 +43,10 @@ No se atribuye propiedad a objetos preexistentes sólo por llamarse `firewall_ma
 10. NAT y alias VPN se conservan con validación, pero no abren INPUT/FORWARD. Interfaz
     VPN Docker heredada y logs VPN heredados se rechazan; túneles en host + grants y
     contadores son la migración disponible. No se añaden protocolos VPN.
+    `l4d2_boot_guard` es una tabla `inet` reservada; no la elijas como `NF_TABLE_NAME`.
+    Si una política nftables registrada antigua ya usa ese nombre, desactívala o
+    aplícala con un nombre de tabla distinto mientras el registro actual todavía
+    permite retirar con seguridad la tabla anterior.
 11. Generar, revisar diferencias y comprobar candidata en VM. Sustituir la versión
     antigua sólo desde consola/mantenimiento, retirando exclusivamente reglas/objetos
     cuya propiedad se haya demostrado. No se entrega borrado automático del layout
@@ -79,3 +83,37 @@ El updater GeoIP en Compose requiere `HOST_UID`/`HOST_GID` del dueño del checko
 `make geoip-update` y `make geoip-check` los calculan automáticamente. Para Compose
 directo, exportarlos o pasarlos mediante `--env-file`; el `env_file` del servicio
 no suministra interpolación Compose. La identidad incorrecta falla antes de descargar.
+
+## Barrera H3 y reversión de versión
+
+La barrera de arranque H3 no se activa por instalar el código ni por `save`.
+Prepárala explícitamente después de aplicar y confirmar la política, guardarla y
+comprobar `ready` en el kernel del arranque actual. Luego instala/habilita las
+unidades guard/restore y readiness para cada consumidor protegido. Para Docker,
+inspecciona la unidad existente antes de instalar el ejemplo: el guard de
+`ExecStop` debe ejecutarse antes de detener el daemon para cubrir `live-restore`;
+preserva y ensaya los comandos existentes en el orden correcto. Ver la
+[guía de protección de arranque](boot-protection.md).
+
+El modo por defecto no habilita esa barrera ni las unidades opt-in. Antes de
+ejecutar `disable` o cambiar el alcance de una barrera ya preparada, detén los
+servicios/socket consumidores y desde consola ejecuta `boot-disarm --local`.
+Después aplica/confirmar/guardar, comprueba `ready`, vuelve a preparar y reactiva
+los consumidores antes de reactivar la integración.
+
+El bundle confirmado ahora se escribe como `schema=2`. No hagas rollback de
+código a una versión antigua dejando en su lugar `current.json`, `persisted.json`
+o journal `pending.json` en schema 2. Esa versión antigua puede interpretarlos
+incorrectamente o no comprenderlos, y un estado de readiness de la nueva versión
+no prueba que el binario antiguo restauró la política. Trata código y estado como
+un conjunto: conserva por separado una copia segura anterior del código y de los
+archivos de estado compatibles; para volver atrás, detén los consumidores,
+mantén la protección si está armada y restaura el conjunto anterior desde consola.
+No edites ni conviertas el journal pendiente a mano.
+
+La compatibilidad automática de iptables solo se evaluó para 1.8.10. Otras
+versiones requieren mantenimiento explícito con `--accept-version-change` en
+`check`, `apply` o `load`; la opción nunca autoriza un cambio de frontend ni una
+mezcla IPv4/IPv6. Una versión no revisada en `boot-restore` deja la barrera activa.
+Las pruebas VM de la nueva barrera H3 aún no se han completado; no extrapoles a
+ella los reinicios probados para la política anterior.

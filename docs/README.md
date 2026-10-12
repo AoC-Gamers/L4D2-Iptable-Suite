@@ -11,6 +11,7 @@ conservan resultados fechados; los comandos operativos están en las guías de u
 | Preparar instalación, aplicar y confirmar | [Guía operativa](operations-guide.md) |
 | Entender transacciones y rollback | [Operación del núcleo](security/operations.md) |
 | Guardar, restaurar y retirar objetos propios | [ipp.sh](ipp.md) |
+| Proteger servicios durante el arranque | [Guía de protección](security/boot-protection.md), [cierre H3 y evidencia](security/closure-h3.md) |
 | Migrar reglas y opciones anteriores | [Migración](security/migration.md) |
 | Comparar motores, IPv6 y Docker | [Capacidades](security/capabilities.md) |
 | Revisar o desarrollar módulos | [Arquitectura](modular-loader-architecture.md), [catálogo](modules/README.md) |

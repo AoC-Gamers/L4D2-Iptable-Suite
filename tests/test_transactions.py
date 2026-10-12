@@ -98,6 +98,18 @@ class TransactionTests(unittest.TestCase):
                 execute.assert_not_called()
                 self.assertIsNone(s.get('pending'))
 
+    def test_malformed_candidate_fails_before_inspection_or_journal_write(self):
+        with tempfile.TemporaryDirectory() as d:
+            s = object.__new__(Store)
+            s.path = Path(d)
+            malformed = {'schema': 2, 'backend': 'nftables', 'config': {'TYPECHAIN': '0'}}
+            with patch.object(engine, 'inspect') as inspect, patch.object(engine, 'execute') as execute:
+                with self.assertRaisesRegex(PolicyError, 'must not contain TYPECHAIN'):
+                    s.apply_locked(malformed, local=True)
+                inspect.assert_not_called()
+                execute.assert_not_called()
+                self.assertFalse(list(Path(d).glob('*.json')))
+
     def test_apply_deadline_passed_during_execution_restores(self):
         with tempfile.TemporaryDirectory() as d:
             s = object.__new__(Store)

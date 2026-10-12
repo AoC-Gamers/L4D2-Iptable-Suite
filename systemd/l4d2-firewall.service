@@ -1,18 +1,18 @@
 [Unit]
-Description=Restore the confirmed suite firewall policy
-Documentation=file:/opt/l4d2-firewall/docs/security/operations.md
-DefaultDependencies=no
-After=local-fs.target
-Before=network-pre.target
-Wants=network-pre.target
-ConditionPathExists=/var/lib/l4d2-firewall/persisted.json
+Description=Restore and verify the required suite firewall policy
+Documentation=file:/opt/l4d2-firewall/docs/security/boot-protection.md
+Requires=l4d2-firewall-guard.service
+After=l4d2-firewall-guard.service
+Before=l4d2-firewall-ready.service
+# No ConditionPathExists: missing persistence is an activation failure.
+# Docker deployments explicitly install examples/l4d2-firewall.service.d/10-docker.conf.
 
 [Service]
 Type=oneshot
 RemainAfterExit=yes
 UMask=0077
-ExecStart=/usr/bin/python3 -I /opt/l4d2-firewall/core/fw.py load --local
-# There is deliberately no ExecStop cleanup or shared firewall-service restart.
+ExecStart=/usr/bin/python3 -I /opt/l4d2-firewall/core/fw.py boot-restore
+# No ExecStop cleanup. A failed restore keeps the independent barrier.
 
 [Install]
 WantedBy=multi-user.target

@@ -67,7 +67,7 @@ def safe_guest():
     if running.returncode not in (0, 1):
         fail(f'systemd is unavailable: {running.stdout.strip()} {running.stderr.strip()}')
     unit = run(['systemctl', 'show', '--property=ExecStart', '--value', UNIT], check=False)
-    if unit.returncode or '/opt/l4d2-firewall/core/fw.py' not in unit.stdout or 'load --local' not in unit.stdout:
+    if unit.returncode or '/opt/l4d2-firewall/core/fw.py' not in unit.stdout or 'boot-restore' not in unit.stdout:
         fail(f'{UNIT} is not the expected production restore unit: {unit.stdout.strip()} {unit.stderr.strip()}')
 
 
@@ -441,6 +441,19 @@ def verify_abandoned_rollback():
                       'restored_digest': canonical_digest(current)}))
 
 
+def prepare_boot():
+    path = Path('/var/lib/l4d2-firewall/vm-recovery.json')
+    path.write_text(json.dumps([{'source': '10.0.2.2/32', 'destination': '10.0.2.15/32', 'input': 'enp0s2', 'ports': '22'}]))
+    path.chmod(0o600)
+    # Discover the guest uplink; this file is only a disposable VM fixture.
+    link = run(['ip', '-j', 'route', 'get', '10.0.2.2']).stdout
+    interface = json.loads(link)[0]['dev']
+    rows = json.loads(path.read_text()); rows[0]['input'] = interface
+    path.write_text(json.dumps(rows))
+    cli('boot-prepare', '--recovery-file', str(path))
+    run(['systemctl', 'enable', 'l4d2-firewall-guard.service', UNIT])
+
+
 def prepare_reboot():
     s = store()
     with s.lock():
@@ -449,7 +462,7 @@ def prepare_reboot():
         if manifest.get('phase') != 'abandoned-session-rolled-back' or not current or s.get('pending'):
             fail('Reboot test requires completed rollback test and a confirmed policy')
     cli('save')
-    run(['systemctl', 'enable', UNIT])
+    prepare_boot()
     with s.lock():
         current = s.get('current')
         persisted = s.get('persisted')
@@ -488,8 +501,9 @@ def cleanup():
         manifest = read_manifest(s)
         if manifest.get('phase') != 'post-reboot-verified' or s.get('pending'):
             fail('Cleanup requires a verified reboot and no pending transaction')
+    cli('boot-disarm', '--local')
     cli('--backend', 'nftables', 'disable', '--local')
-    run(['systemctl', 'disable', UNIT])
+    run(['systemctl', 'disable', 'l4d2-firewall-guard.service', UNIT])
     with s.lock():
         s.delete('persisted')
         s.put(MANIFEST, {'phase': 'nft-cleaned'})
@@ -531,7 +545,7 @@ def prepare_reboot_legacy():
         if manifest.get('phase') != 'legacy-bootstrapped' or not current or s.get('pending'):
             fail('Legacy reboot test requires a clean confirmed iptables-legacy policy')
     cli('save')
-    run(['systemctl', 'enable', UNIT])
+    prepare_boot()
     with s.lock():
         current = s.get('current')
         persisted = s.get('persisted')
@@ -581,6 +595,7 @@ def cleanup_legacy():
         if not current or current.get('backend') != 'iptables':
             fail('Legacy cleanup has no registered current policy')
     foreign_before = foreign_iptables_signature(current)
+    cli('boot-disarm', '--local')
     cli('--backend', 'iptables', 'disable', '--local')
     from core import engine
     live_after = engine.inspect('iptables', 'legacy')
@@ -595,7 +610,7 @@ def cleanup_legacy():
     foreign_after = foreign_iptables_signature(current)
     if foreign_after != foreign_before:
         fail(f'Legacy cleanup changed foreign iptables state: before={foreign_before!r}, after={foreign_after!r}')
-    run(['systemctl', 'disable', UNIT])
+    run(['systemctl', 'disable', 'l4d2-firewall-guard.service', UNIT])
     with s.lock():
         s.delete('persisted')
         s.delete(MANIFEST)

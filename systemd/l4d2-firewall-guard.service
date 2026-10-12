@@ -1,0 +1,19 @@
+[Unit]
+Description=Install the suite early boot barrier
+Documentation=file:/opt/l4d2-firewall/docs/security/boot-protection.md
+DefaultDependencies=no
+After=local-fs.target nftables.service
+# Do not pull in another firewall manager. If enabled, its initial load must
+# finish before our independent barrier; later external flushes are unsupported.
+Before=network-pre.target docker.service l4d2-firewall.service
+Wants=network-pre.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+UMask=0077
+ExecStart=/usr/bin/python3 -I /opt/l4d2-firewall/core/fw.py boot-guard
+# No ExecStop: stopping this unit must never remove the barrier.
+
+[Install]
+WantedBy=multi-user.target

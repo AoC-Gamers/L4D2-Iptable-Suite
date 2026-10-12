@@ -8,9 +8,9 @@ import secrets
 import subprocess
 import sys
 import time
-from .config import ROOT, require, trusted, isolated_userns, isolated_network
+from .config import ROOT, PolicyError, require, trusted, isolated_userns, isolated_network
 from . import engine
-from .schema import canonical_for_storage, migrate_record
+from .schema import canonical_for_storage, migrate_record, migrate_policy
 
 DEFAULT_STATE = Path('/var/lib/l4d2-firewall')
 
@@ -108,6 +108,7 @@ class Store:
         os.waitpid(first, 0)
 
     def rollback_locked(self, token=None, expired_only=False):
+        from . import boot
         pending = self.get('pending')
         if not pending:
             return False
@@ -118,6 +119,7 @@ class Store:
         live = engine.inspect(pending['candidate']['backend'], pending['candidate']['config'].get('IPTABLES_FRONTEND', 'auto'))
         tx = engine.prepare(pending['snapshot'], [pending['previous'], pending['candidate']], live)
         engine.check(tx)
+        boot.invalidate(self)
         engine.execute(tx)
         if pending['previous']:
             self.put('current', pending['previous'])
@@ -125,9 +127,17 @@ class Store:
             self.delete('current')
         self.put('last-rollback', {'token': pending['token'], 'at': time.time()})
         self.delete('pending')
+        if pending['previous']:
+            try:
+                boot.record_installed(self, pending['previous'])
+            except (PolicyError, OSError, ValueError, subprocess.SubprocessError):
+                # A snapshot from an empty boot is not an installed policy.
+                # Recovery still succeeds, but consumers remain unavailable.
+                boot.invalidate(self)
         return True
 
     def confirm_locked(self, token):
+        from . import boot
         pending = self.get('pending')
         require(pending and secrets.compare_digest(token, pending['token']), 'Unknown pending confirmation token')
         if remaining(pending) <= 0:
@@ -139,19 +149,30 @@ class Store:
             self.delete('current')
         else:
             self.put('current', pending['candidate'])
+        boot.record_installed(self, pending['candidate'])
         self.delete('pending')
 
-    def apply_locked(self, candidate, timeout=120, watchdog='systemd', local=False, verifier=None):
+    def apply_locked(self, candidate, timeout=120, watchdog='systemd', local=False, verifier=None, accept_version_change=False):
+        from . import boot
+        # A journal must remain readable by recovery before the first kernel
+        # write; reject malformed compiler/state bundles at this boundary too.
+        candidate = migrate_policy(candidate)
         self.rollback_locked(expired_only=True)
         require(not self.get('pending'), 'Unconfirmed change pending; confirm or rollback first')
         previous = self.get('current')
         live = engine.inspect(candidate['backend'], candidate['config'].get('IPTABLES_FRONTEND', 'auto'))
-        engine.preflight(candidate, previous, live)
+        boot.require_scope(self, candidate)
+        engine.preflight(candidate, previous, live, accept_version_change=accept_version_change)
         if candidate['backend'] == 'iptables':
             # Persist the resolved frontend so an alternatives change cannot send
             # the independent rollback to a different Netfilter implementation.
             candidate['config']['IPTABLES_FRONTEND'] = live['frontend']
             candidate['hooks'] = engine.actual_hooks(candidate, live)
+            if not candidate.get('disabled'):
+                decision = engine.compatibility(previous, live, accept_version_change)
+                candidate['compatibility'] = (previous['compatibility']
+                    if decision['decision'] == 'unchanged' and previous and previous.get('compatibility')
+                    else decision)
             candidate['versions'] = live['versions']
         snap = engine.snapshot(previous, live)
         tx = engine.prepare(None if candidate.get('disabled') else candidate, [previous, candidate], live)
@@ -165,6 +186,7 @@ class Store:
         try:
             if not local:
                 self.arm(token, timeout, watchdog)
+            boot.invalidate(self)
             execution_started = True
             engine.execute(tx)
             if remaining(self.get('pending')) <= 0:

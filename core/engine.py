@@ -1,9 +1,10 @@
 """Engine I/O: only registered suite objects and exact integration rules."""
 import json
+import re
 import shlex
 import subprocess
 import time
-from .config import PolicyError, require
+from .config import BOOT_GUARD_TABLE, PolicyError, require
 
 SAFE_ENV = {'PATH': '/usr/sbin:/usr/bin:/sbin:/bin', 'LANG': 'C'}
 
@@ -57,8 +58,50 @@ def inspect(backend, frontend='auto'):
             'nft_version': command(['nft', '--version']).stdout.strip()}
 
 
-def preflight(policy, previous, live):
+SUPPORTED_IPTABLES_VERSIONS = {'1.8.10'}
+
+
+def version_identity(versions):
+    identities = set()
+    for family, name in (('4', 'iptables'), ('6', 'ip6tables')):
+        value = versions.get(family, '')
+        match = re.fullmatch(re.escape(name) + r' v([0-9]+\.[0-9]+\.[0-9]+)[^()\n]* \((nf_tables|legacy)\)[^\n]*', value)
+        require(match, f'Compatibility: unknown IPv{family} iptables version identity')
+        identities.add((match[1], 'nft' if match[2] == 'nf_tables' else 'legacy'))
+    require(len(identities) == 1, 'Compatibility: IPv4/IPv6 versions or frontends differ')
+    return next(iter(identities))
+
+
+def compatibility(previous, live, accept_version_change=False):
+    new_version, frontend = version_identity(live['versions'])
+    require(live.get('frontend', frontend) == frontend, 'Compatibility: inconsistent effective frontend')
+    if not previous or not previous.get('versions'):
+        require(new_version in SUPPORTED_IPTABLES_VERSIONS or accept_version_change,
+                'Compatibility: iptables version not evaluated; use explicit --accept-version-change maintenance flow')
+        return {'decision': 'evaluated-version' if new_version in SUPPORTED_IPTABLES_VERSIONS else 'operator-maintenance',
+                'previous': None, 'current': live['versions'], 'frontend': frontend}
+    old_version, old_frontend = version_identity(previous['versions'])
+    pinned = previous.get('config', {}).get('IPTABLES_FRONTEND', old_frontend)
+    require(frontend == old_frontend == pinned, 'iptables frontend changed; explicit migration required')
+    equal = previous['versions'] == live['versions']
+    acceptance = previous.get('compatibility', {})
+    accepted = (acceptance.get('decision') == 'operator-maintenance'
+                and acceptance.get('current') == live['versions']
+                and acceptance.get('frontend') == frontend)
+    known_equal = equal and (new_version in SUPPORTED_IPTABLES_VERSIONS or accepted)
+    evaluated = old_version in SUPPORTED_IPTABLES_VERSIONS and new_version in SUPPORTED_IPTABLES_VERSIONS
+    require(known_equal or evaluated or accept_version_change,
+            'iptables backend/version changed and transition is not evaluated; use --accept-version-change explicitly in maintenance')
+    return {'decision': 'unchanged' if known_equal else 'evaluated-version' if evaluated else 'operator-maintenance',
+            'previous': previous['versions'], 'current': live['versions'], 'frontend': frontend}
+
+
+def preflight(policy, previous, live, accept_version_change=False):
     require(not previous or previous['backend'] == policy['backend'], 'Backend change requires disabling old suite and an explicit migration')
+    if policy['backend'] == 'nftables' and not policy.get('disabled'):
+        require(not any(obj.get('family') == 'inet' and obj.get('name') == BOOT_GUARD_TABLE
+                        for obj in policy.get('objects', [])),
+                f'nftables table inet {BOOT_GUARD_TABLE} is reserved for the boot guard')
     v = policy['config']
     if previous and policy['backend'] == 'iptables':
         if policy.get('disabled'):
@@ -71,7 +114,9 @@ def preflight(policy, previous, live):
             require(expected in ('nft', 'legacy') and live.get('frontend') == expected,
                     'iptables frontend changed; refusing to disable through a different engine')
         else:
-            require(previous.get('versions', live['versions']) == live['versions'], 'iptables backend/version changed; migrate explicitly')
+            compatibility(previous, live, accept_version_change)
+    if not previous and policy['backend'] == 'iptables' and not policy.get('disabled'):
+        compatibility(None, live, accept_version_change)
     if policy['access']['containers'] and not policy.get('disabled'):
         docker = live['docker']
         require(docker != 'none', 'No Docker integration objects detected; start/configure Docker separately before applying')

@@ -50,7 +50,7 @@ a las demás reglas. No confundir ese modo con protección del reenvío por la s
 
 | Suite / Docker | Integración y estado |
 |---|---|
-| iptables / Docker iptables en el mismo frontend | Hook propio en DOCKER-USER. Se exige cadena y salto de FORWARD existentes. Daemon Docker 29.8.2 real: DNAT/retorno TCP IPv4/IPv6, UDP independiente, egreso explícito y conservación; frontends nft y legacy. |
+| iptables / Docker iptables en el mismo frontend | Hook propio en DOCKER-USER. Se exige por familia un salto incondicional único y primero de FORWARD a DOCKER-USER, y el hook propio único y primero allí. Daemon Docker 29.8.2 real: DNAT/retorno TCP IPv4/IPv6, UDP independiente, egreso explícito y conservación; frontends nft y legacy. |
 | nftables / Docker iptables | Tabla propia, forward prioridad -5; DROP previo a Docker. Daemon Docker 29.8.2 real (frontend nft y legacy): DNAT/retorno TCP IPv4/IPv6 y UDP independiente; permisos deben corresponder a publicaciones que Docker permita. Grants nativos de reenvío se rechazan por posible FORWARD DROP de Docker. |
 | nftables / Docker nftables | Tabla propia antes de las cadenas de Docker. Daemon Docker 29.8.2 real: DNAT/retorno TCP IPv4/IPv6, UDP independiente, egreso explícito y conservación. No se modifica docker-bridges. |
 | iptables / Docker nftables | Rechazado explícitamente. Migrar motor o elegir nftables. |
@@ -58,8 +58,10 @@ a las demás reglas. No confundir ese modo con protección del reenvío por la s
 | Docker en otro frontend legacy/nft distinto al elegido | No se presume integración. Si no aparecen los objetos requeridos en el frontend seleccionado, falla antes de aplicar. Usar doctor y revisar alternativas/daemon manualmente. |
 
 `IPTABLES_FRONTEND=auto|nft|legacy` selecciona binarios, sin cambiar alternativas del
-sistema. El registro conserva versiones: un cambio de frontend/versión activo no se
-acepta silenciosamente. `doctor` informa los binarios efectivos y objetos detectados.
+sistema. El registro conserva versiones: un cambio de frontend se rechaza. Solo
+iptables/ip6tables 1.8.10 está evaluado; diferencias de proveedor dentro de esa
+identidad se admiten. Otras versiones requieren `--accept-version-change`
+explícito durante check/apply/load de mantenimiento. `doctor` informa los binarios efectivos y objetos detectados.
 La aplicación resuelve `auto` y conserva el frontend concreto en el journal, la
 política y la persistencia; rollback no vuelve a resolver alternativas del sistema.
 IPv4/IPv6 con frontends distintos se rechazan para la suite iptables.
@@ -76,7 +78,11 @@ estado DNAT, IP pública original y puertos públicos/internos. TCP/443 no autor
 UDP/443; QUIC requiere grant independiente (`service=allowlist_ports` y módulo
 seleccionado). Para juego se requiere `role=gameserver|sourcetv` y el grupo de tres
 módulos de juego; cada publicación usa sus puertos internos para controles.
-No hay reinicios ni reparación automática de redes Docker.
+La aplicación ordinaria no reinicia ni repara redes Docker. La integración de
+arranque opt-in utiliza la [barrera y readiness H3](boot-protection.md); requiere
+instalación explícita de unidades/drop-ins y pruebas en la topología destino.
+Las pruebas Docker de esta tabla cubren permisos en régimen normal; el informe
+[cierre H3](closure-h3.md) delimita por separado reinicios y arranque.
 
 ## Fuentes oficiales consultadas
 

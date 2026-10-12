@@ -6,7 +6,7 @@ import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from core import engine
-from core.config import PolicyError
+from core.config import BOOT_GUARD_TABLE, PolicyError
 
 
 def save(rules4='', rules6=''):
@@ -21,6 +21,23 @@ def topology(rules4='', rules6=''):
 
 class DockerTopologyTests(unittest.TestCase):
     valid = '-A FORWARD -m comment --comment docker-hook -j DOCKER-USER\n-A FORWARD -m conntrack --ctstate DNAT -j ACCEPT'
+
+    def test_nft_load_cannot_claim_boot_guard_table_but_disable_can_retire_it(self):
+        reserved = {'family': 'inet', 'name': BOOT_GUARD_TABLE, 'text': ''}
+        active = {
+            'backend': 'nftables', 'config': {}, 'disabled': False,
+            'access': {'containers': [], 'forward': []}, 'objects': [reserved],
+        }
+        live = {'docker': 'none', 'tables': [{'family': 'inet', 'name': BOOT_GUARD_TABLE}]}
+        with self.assertRaisesRegex(PolicyError, 'reserved for the boot guard'):
+            engine.preflight(active, None, live)
+
+        previous = {'backend': 'nftables', 'objects': [reserved]}
+        engine.preflight({**active, 'disabled': True}, previous, live)
+
+        migrated = {**active, 'config': {'NF_TABLE_NAME': 'firewall_next'},
+                    'objects': [{'family': 'inet', 'name': 'firewall_next', 'text': ''}]}
+        engine.preflight(migrated, previous, live)
 
     def test_unique_unconditional_first_jump_per_family(self):
         report = topology(self.valid, '-A FORWARD --jump=DOCKER-USER')
@@ -105,7 +122,8 @@ class DockerTopologyTests(unittest.TestCase):
                                                         'iprules': {'4': '', '6': ''}})
 
         previous = {
-            'backend': 'iptables', 'versions': {'4': 'ip', '6': 'ip6'},
+            'backend': 'iptables', 'versions': dict(disabled_previous['versions']),
+            'config': {'IPTABLES_FRONTEND': 'nft'},
             'families': {'4': {'filter': {'L4S_DOCKER': {}}}, '6': {'filter': {'L4S_DOCKER': {}}}},
             'hooks': [['filter', 'DOCKER-USER', 'L4S_DOCKER']],
         }
