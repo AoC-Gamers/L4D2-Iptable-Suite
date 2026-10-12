@@ -2,6 +2,8 @@
 """Pure logical tests. These do not claim kernel or traffic validation."""
 import json
 import os
+import shlex
+import shutil
 from pathlib import Path
 import sys
 import tempfile
@@ -76,16 +78,17 @@ class ConfigurationTests(unittest.TestCase):
 
     def test_unselected_module_never_executes(self):
         # A disabled module's executable top-level code is never sourced.
-        m = ROOT / 'modules/nf/nf_10_whitelist.sh'
-        marker = ROOT / 'tmp/disabled-executed'
-        previous = m.read_text()
-        try:
-            m.write_text(previous + '\ntouch ' + str(marker) + '\n')
-            generate(Configuration('nftables', profiles=['web']))
+        # Mutating the checkout races with other test processes and can leave
+        # executable sentinel code behind. Discover a private module copy.
+        with tempfile.TemporaryDirectory() as directory:
+            fixture = Path(directory)
+            shutil.copytree(ROOT / 'modules', fixture / 'modules')
+            m = fixture / 'modules/nf/nf_10_whitelist.sh'
+            marker = fixture / 'disabled-executed'
+            m.write_text(m.read_text() + '\ntouch ' + shlex.quote(str(marker)) + '\n')
+            with patch('core.config.ROOT', fixture):
+                generate(Configuration('nftables', profiles=['web']))
             self.assertFalse(marker.exists())
-        finally:
-            m.write_text(previous)
-            marker.unlink(missing_ok=True)
 
     def test_dns_closed_on_failure_or_unexpected_answer(self):
         v = {'BYPASS_SOURCE_DOMAINS':'admin.example', 'PRIVILEGED_BYPASS':'true', 'DNS_ALLOWED_CIDRS':'192.0.2.0/24'}
