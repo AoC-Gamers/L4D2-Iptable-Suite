@@ -115,6 +115,66 @@ iptables 1.8.11 para todos los flujos ni acredita una migración productiva remo
 Los errores intermedios corregidos del arnés no se cuentan como nuevos defectos
 de la política del producto. No hubo un nuevo run de CI remoto en este cierre.
 
+## Entrega heredada y nueva validación del 2026-10-12
+
+La [entrega explícita](../migration/legacy-handover.md) añade una migración
+acotada de una tabla `inet` propia: manifiesto revisado, comprobación de candidata
+y snapshot, transacción única, bloqueo/journal comunes y watchdog independiente.
+El rechazo ordinario de tablas sin registro ya era correcto y se conserva.
+
+| Hallazgo del bloque | Resultado y regresión |
+|---|---|
+| Borrar por handle conserva conjuntos en la caché de evaluación de nft e impide cambiar capacidades | Confirmado y corregido en `core/legacy.py`: `delete` por handle seguido de `destroy` por nombre en el mismo lote. Capacidad 65535→8192 y handle obsoleto probados contra kernel; un handle inválido conserva la tabla de reemplazo |
+| Bootstrap H3 unitario consulta rutas reales cuando ya existe el estado root `0700` | Confirmado y corregido en `tests/vm/test_boot_harness.py`: fixture temporal para constantes derivadas de STATE y unidades; regresión de todas las rutas inspeccionadas |
+| Prueba de módulo deshabilitado modifica fuentes compartidos y deja código tras ejecuciones simultáneas | Confirmado y corregido en `tests/test_core.py`: catálogo de módulos privado por prueba, sin modificar el checkout |
+
+Son **tres defectos corregidos durante este bloque**, además del flujo de migración.
+Los commits funcionales son `520a0ca` y `49128a8`; `7ee3280` aísla la prueba de
+módulo deshabilitado y `1a73761` añade comprobación real de la CLI `check`.
+
+El run QEMU/KVM **`20261012T221315Z-30ceac7f`** terminó con código 0, sin SKIP.
+Sus 184 fuentes empaquetados se cotejaron byte a byte contra
+`0b56de79e089d1e32939f45189286a716b264d65`; SHA-256 del archivo:
+`87dde3f4d103c62f9971cfad416a8d73f4b42f4eea94e5365c8f14262c949e68`.
+Se aprobaron **112 métodos unitarios** como usuario sin privilegios,
+**20 comprobaciones de motor**, **70 métodos kernel/tráfico** entre ambos
+frontends, cinco combinaciones Docker, clientes OpenVPN, GeoIP offline, entrega
+heredada con timer systemd/SSH nuevo y **cuatro reboots exclusivamente del guest**.
+Versiones: Ubuntu Noble `20260926`, kernel `6.8.0-142-generic`, Python 3.12,
+systemd `255.4-1ubuntu8.17`, nftables 1.0.9, iptables 1.8.10 (nft/legacy),
+OpenVPN 2.6.19 y Docker 29.8.2. Logs locales sanitizados:
+`tmp/vm-runner-artifacts/20261012T221315Z-30ceac7f/`.
+
+H3 registró **328 intentos: 164 TCP y 164 UDP**, sin respuestas de aplicación no
+autorizadas; gaps máximos de inicio `0.952194309 s` y `0.952269390 s`.
+Conserva el límite de muestreo y la única combinación de arranque H3 descritos
+arriba. Los dos runs anteriores interrumpido/fallido no acreditan la matriz completa.
+
+Los únicos cambios de código posteriores a ese archivo QEMU son las dos pruebas
+de `7ee3280`/`1a73761`; producto, unidades y reglas son idénticos. La primera pasó
+sus 21 métodos localmente con Python 3.12.3; la segunda pasó los seis métodos de
+`legacy-flows.py` en namespaces usuario/red/mount, `/run` privado y Debian 13,
+kernel `6.12.107+deb13-amd64`, Python 3.13.5, nftables 1.1.3 e iptables 1.8.11/nft.
+Una candidata del destino con copia de su tabla heredada también pasó aplicación,
+expiración/restauración, confirmación, idempotencia y tráfico sintético dual en
+ese aislamiento. ShellCheck 0.9.0 y sintaxis Bash de los scripts versionados,
+generación y checks documentales pasaron localmente.
+
+En el destino se instaló `1a73761` en `/opt`, root-owned, mediante Git y se
+comprobó con nftables 1.1.3 antes de aplicar. La entrega se confirmó desde SSH
+autenticado nuevo por un salto externo y el host de respaldo, con timer de 600 s;
+la política quedó guardada y `ready` verificó el kernel. Cinco tablas Docker
+ajenas conservaron su huella y el daemon mantuvo PID/inicio; configuración y
+persistencia global no cambiaron. Una consulta A2S al servidor activo respondió
+antes/después desde el origen privilegiado: acredita ese recorrido, no los
+limitadores públicos. No hubo reboot ni reinicio de servicios del anfitrión.
+
+**Pendiente operativo:** la integración de arranque nueva no se habilitó en ese
+destino; su servicio nftables conserva la persistencia anterior. Guardar la nueva
+política no cambia ese comportamiento. El watcher carece de verificador externo
+configurado y rechaza recargas desatendidas. Las comprobaciones aisladas no
+acreditan cada cliente real, carga sostenida ni toda ruta externa del destino.
+
 ## Condiciones y nueva revisión
 
 Lee [limitaciones vigentes](limitations.md) antes de aceptar un destino. En especial:
