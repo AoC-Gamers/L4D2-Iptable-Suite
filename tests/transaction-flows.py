@@ -17,6 +17,8 @@ from core.store import Store
 assert os.readlink('/proc/self/ns/net') != os.environ['SUITE_HOST_NETNS'], 'Host network forbidden'
 STATE = Path(os.environ['SUITE_TEST_STATE'])
 FRONTEND = os.environ.get('SUITE_TEST_FRONTEND', 'auto')
+ACCEPT_VERSION_CHANGE = os.environ.get('SUITE_TEST_ACCEPT_VERSION_CHANGE') == '1'
+VERSION_ARGS = ['--accept-version-change'] if ACCEPT_VERSION_CHANGE else []
 
 
 def run(*argv):
@@ -55,7 +57,7 @@ class TransactionFlowTests(unittest.TestCase):
         for backend in ('nftables', 'iptables'):
             candidate = self.candidate(backend)
             with self.store.lock():
-                self.store.apply_locked(candidate, local=True)
+                self.store.apply_locked(candidate, local=True, accept_version_change=ACCEPT_VERSION_CHANGE)
                 current = self.store.get('current')
                 live = engine.inspect(backend, current['config'].get('IPTABLES_FRONTEND', 'auto'))
                 self.assert_frontend(current, live)
@@ -93,7 +95,7 @@ class TransactionFlowTests(unittest.TestCase):
         for backend in ('nftables', 'iptables'):
             candidate = self.candidate(backend)
             with self.store.lock():
-                self.store.apply_locked(candidate, local=True)
+                self.store.apply_locked(candidate, local=True, accept_version_change=ACCEPT_VERSION_CHANGE)
                 current = self.store.get('current')
                 live = engine.inspect(backend, current['config'].get('IPTABLES_FRONTEND', 'auto'))
                 self.assert_frontend(current, live)
@@ -112,7 +114,7 @@ class TransactionFlowTests(unittest.TestCase):
                         for table, chains in tables.items():
                             for chain in chains:
                                 self.assertNotIn(chain, parsed.get(table, {}).get('chains', {}))
-            main(['--state-dir', str(STATE), '--backend', backend, 'load', '--local'])
+            main(['--state-dir', str(STATE), '--backend', backend, 'load', '--local', *VERSION_ARGS])
             restored = self.store.get('current')
             self.assertIsNotNone(restored)
             if backend == 'nftables':

@@ -22,6 +22,8 @@ from core import engine
 assert os.readlink('/proc/self/ns/net') != os.environ['SUITE_HOST_NETNS'], 'Host network forbidden'
 STATE = Path(os.environ['SUITE_TEST_STATE'])
 FRONTEND = os.environ.get('SUITE_TEST_FRONTEND','auto')
+ACCEPT_VERSION_CHANGE = os.environ.get('SUITE_TEST_ACCEPT_VERSION_CHANGE') == '1'
+VERSION_ARGS = ['--accept-version-change'] if ACCEPT_VERSION_CHANGE else []
 # The confirmation budget includes kernel writes, not just operator response.
 # TCG guests can spend several seconds applying dual-stack legacy transactions.
 CONFIRM_TIMEOUT = 120
@@ -190,7 +192,7 @@ while True:
     def apply(self, backend, profile='web', **values):
         p = generate(self.config(backend, profile, **values))
         with self.store.lock():
-            self.store.apply_locked(p,local=True)
+            self.store.apply_locked(p,local=True,accept_version_change=ACCEPT_VERSION_CHANGE)
         return p
 
     def disable(self):
@@ -369,7 +371,7 @@ with s.lock():s.apply_locked(p,timeout={EXPIRY_TIMEOUT},watchdog='process')
             self.apply(backend)
             with self.store.lock():self.store.put('persisted',self.store.get('current'))
             self.disable()
-            main(['--state-dir',str(STATE),'--backend',backend,'load','--local'])
+            main(['--state-dir',str(STATE),'--backend',backend,'load','--local',*VERSION_ARGS])
             self.assertTrue(self.peer.tcp(18080))
             main(['--state-dir',str(STATE),'--backend',backend,'apply','--remove','http_https_protect','--local'])
             self.assertFalse(self.peer.tcp(18080))

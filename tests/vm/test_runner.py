@@ -180,6 +180,7 @@ class RunnerTests(unittest.TestCase):
             'python3 -I tests/test_docker_topology.py',
             'python3 -I tests/test_h2.py',
             'python3 -I tests/test_boot.py',
+            'python3 -I tests/test_isolated_runner.py',
             'python3 -I tests/vm/test_transactions_harness.py',
             'python3 -I tests/vm/test_boot_harness.py',
             'python3 -I tests/vm/test_boot_cleanup.py',

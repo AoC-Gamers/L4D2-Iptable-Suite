@@ -25,6 +25,7 @@ jobs:
       - run: python3 -I tests/test_docker_topology.py
       - run: python3 -I tests/test_h2.py
       - run: python3 -I tests/test_boot.py
+      - run: python3 -I tests/test_isolated_runner.py
       - run: python3 -I tests/vm/test_transactions_harness.py
       - run: python3 -I tests/vm/test_boot_harness.py
       - run: python3 -I tests/vm/test_boot_cleanup.py

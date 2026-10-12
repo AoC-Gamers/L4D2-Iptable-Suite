@@ -1,17 +1,30 @@
 #!/bin/bash
 # Creates a disposable user+network namespace. Never enters the host network.
 set -euo pipefail
+# Tests import core before its CLI trust check; never create group-writable caches.
+umask 077
 project_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 for dependency in unshare mount nft iptables ip6tables ip iptables-restore python3; do
     command -v "$dependency" >/dev/null || { echo "Required dependency missing: $dependency" >&2; exit 1; }
 done
 namespace_args=(--user --map-root-user --net --mount --fork)
-if [[ "${1:-}" == --root-net ]]; then
-    [[ "$(id -u)" == 0 ]] || { echo '--root-net requires root in a disposable container/VM' >&2; exit 1; }
-    namespace_args=(--net --mount --fork)
+SUITE_TEST_ACCEPT_VERSION_CHANGE=0
+while [[ "${1:-}" == --* ]]; do
+    case "$1" in
+        --root-net)
+            [[ "$(id -u)" == 0 ]] || { echo '--root-net requires root in a disposable container/VM' >&2; exit 1; }
+            namespace_args=(--net --mount --fork) ;;
+        --accept-version-change) SUITE_TEST_ACCEPT_VERSION_CHANGE=1 ;;
+        *) echo "Unknown test option: $1" >&2; exit 2 ;;
+    esac
     shift
+done
+export SUITE_TEST_ACCEPT_VERSION_CHANGE
+if [[ "$SUITE_TEST_ACCEPT_VERSION_CHANGE" == 1 ]]; then
+    echo 'TEST ONLY: explicit iptables version acceptance; production support matrix unchanged.' >&2
 fi
 test_script="${1:-tests/integration.py}"
+[[ "$#" -le 1 ]] || { echo 'Expected one test script' >&2; exit 2; }
 case "$test_script" in tests/integration.py|tests/check-engine.py|tests/transaction-flows.py|tests/policy-flows.py|tests/docker-topology-flows.py|tests/h2-flows.py|tests/boot-flows.py) ;; *) exit 2 ;; esac
 staging="$(mktemp -d)"
 trap 'rm -rf "$staging"' EXIT
@@ -21,9 +34,7 @@ git -c safe.directory="$project_root" -C "$project_root" ls-files -z | while IFS
     mkdir -p "$staging/repo/$(dirname "$file")"
     cp "$project_root/$file" "$staging/repo/$file"
 done
-# Include the new files before their first commit as well.
-cp -r "$project_root/core" "$staging/repo/"
-cp -r "$project_root/tests" "$staging/repo/"
+# git ls-files includes staged additions, without ignored caches or private fixtures.
 chmod -R go-w "$staging"
 SUITE_HOST_NETNS="$(readlink /proc/self/ns/net)"
 SUITE_HOST_RUN="$(stat -Lc '%d:%i' /run)"
@@ -38,5 +49,5 @@ unshare "${namespace_args[@]}" bash -c '
     ip link set lo up
     cd "$1/repo"
     export SUITE_TEST_STATE="$1/state"
-    exec python3 -I "$2"
+    exec python3 -I -B "$2"
 ' _ "$staging" "$test_script"

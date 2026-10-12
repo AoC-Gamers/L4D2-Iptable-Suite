@@ -42,7 +42,8 @@ class PolicyFlowTests(unittest.TestCase):
     def apply(self, backend, selected, **overrides):
         candidate = generate(self.configuration(backend, selected, **overrides))
         with self.fixture.store.lock():
-            self.fixture.store.apply_locked(candidate, local=True)
+            self.fixture.store.apply_locked(candidate, local=True,
+                                            accept_version_change=integration.ACCEPT_VERSION_CHANGE)
         return candidate
 
     def add_source_addresses(self):

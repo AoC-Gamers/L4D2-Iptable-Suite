@@ -73,7 +73,9 @@ class H2KernelFlows(unittest.TestCase):
         ]}
 
     def invoke(self, backend, operation, *args):
-        return main(['--state-dir', str(STATE), '--backend', backend, operation, *args])
+        version_args = integration.VERSION_ARGS if operation in ('check', 'apply', 'load') else []
+        return main(['--state-dir', str(STATE), '--backend', backend, operation, *args,
+                     *version_args])
 
     def apply(self, backend, host_services, access_path, *args, local=True):
         options = [

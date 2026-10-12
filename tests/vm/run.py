@@ -582,6 +582,7 @@ def unit_cases() -> list[tuple[str, str]]:
         ('python3 -I tests/test_docker_topology.py', UNIT_USER),
         ('python3 -I tests/test_h2.py', UNIT_USER),
         ('python3 -I tests/test_boot.py', UNIT_USER),
+        ('python3 -I tests/test_isolated_runner.py', UNIT_USER),
         ('python3 -I tests/vm/test_transactions_harness.py', UNIT_USER),
         ('python3 -I tests/vm/test_boot_harness.py', UNIT_USER),
         ('python3 -I tests/vm/test_boot_cleanup.py', UNIT_USER),

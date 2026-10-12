@@ -15,6 +15,7 @@ i = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(i)
 from core import boot
 from core.config import PolicyError
+from core.fw import main
 
 
 def udp(peer, payload, family):
@@ -77,6 +78,24 @@ class BootFlows(unittest.TestCase):
                         self.assertIsNone(s.get('current'))
                         self.assertTrue(boot.guard_present())
                     self.assertFalse(f.peer.tcp(18080))
+                    with s.lock():
+                        live = i.engine.inspect(backend, i.FRONTEND)
+                        if (backend == 'iptables' and
+                                i.engine.version_identity(live['versions'])[0] not in
+                                i.engine.SUPPORTED_IPTABLES_VERSIONS):
+                            # Empty rollback discarded the current acceptance. Boot must
+                            # keep its guard until an operator explicitly accepts load.
+                            with self.assertRaisesRegex(PolicyError, 'version not evaluated'):
+                                boot.restore(s)
+                            self.assertIsNone(s.get('current'))
+                            self.assertTrue(boot.guard_present())
+                            needs_maintenance = True
+                        else:
+                            needs_maintenance = False
+                    if needs_maintenance:
+                        self.assertTrue(i.ACCEPT_VERSION_CHANGE, 'Explicit test version acceptance required')
+                        main(['--state-dir', str(i.STATE), '--backend', backend, 'load',
+                              '--local', *i.VERSION_ARGS])
                     with s.lock():
                         boot.restore(s)
                         self.assertTrue(boot.verify(s)['ready'])
