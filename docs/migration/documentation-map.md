@@ -11,7 +11,8 @@ dejan de resolver; actualiza bookmarks y enlaces externos desde el
 Este cambio parte de `1a47636` en `docs/feature-based-documentation`. No elimina
 entrypoints ejecutables, componentes de logs/GeoIP, capturas ni pruebas. No cambia
 políticas, valores de configuración, persistencia o comportamiento del firewall.
-Los dos workflows con cambios locales previos de Node 24 permanecen separados.
+La actualización de los dos workflows a Node 24 se versiona por separado de la
+integración documental.
 
 ## Evaluación del archivo retirado
 

@@ -43,6 +43,23 @@ acredita compatibilidad. Informa versión/commit/comando/aislamiento/resultados 
 pruebas no ejecutadas. Evidencia fechada: [aprobación](../security/approval.md) y
 [límites](../security/limitations.md). Diagnóstico pasivo: [guía](diagnostics.md).
 
+## Runtime de las acciones de CI
+
+Los dos workflows usan acciones JavaScript con Node 24, fijadas por SHA:
+[checkout v7.0.1](https://github.com/actions/checkout/blob/3d3c42e5aac5ba805825da76410c181273ba90b1/action.yml)
+y [upload-artifact v7.0.2](https://github.com/actions/upload-artifact/blob/cf430e030ddbb5b0abf93d22962f4752f3646cd9/action.yml).
+Node ejecuta esas acciones; el producto y los ensayos siguen usando Bash/Python
+y los motores de Netfilter. No se necesita `setup-node` para elegir ese runtime.
+Según [checkout](https://github.com/actions/checkout/blob/3d3c42e5aac5ba805825da76410c181273ba90b1/README.md),
+Node 24 requiere Actions Runner 2.327.1 o posterior; los workflows seleccionan
+el runner alojado `ubuntu-24.04`. Revisar el requisito al cambiar de runner.
+
+La subida conserva `archive: true`, nombre `qemu-validation-logs`, directorio de
+logs saneados, error si faltan archivos y retención de 14 días. Al actualizar
+las acciones, comprobar tag/SHA y metadata oficial, validar workflows con
+Actionlint y observar el CI remoto del commit nuevo. El lint local no demuestra
+que se hayan ejecutado las acciones ni el guest QEMU.
+
 ## Regresiones conservadas
 
 Los informes retirados describían estos defectos corregidos. Se mantienen sus

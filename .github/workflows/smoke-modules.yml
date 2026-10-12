@@ -6,7 +6,7 @@ jobs:
   syntax:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1; Node 24
       - run: sudo apt-get update && sudo apt-get install -y shellcheck
       - name: ShellCheck and Bash syntax
         run: |
@@ -16,7 +16,7 @@ jobs:
   unit:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1; Node 24
       - run: python3 -I tests/test_core.py
       - run: python3 -I tests/test_geoip.py
       - run: python3 -I tests/test_transactions.py
@@ -34,7 +34,7 @@ jobs:
   generation:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1; Node 24
       - run: bash tests/generate.sh
   kernel-check:
     runs-on: ubuntu-24.04
@@ -43,7 +43,7 @@ jobs:
       matrix:
         frontend: [nft, legacy]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1; Node 24
       - run: sudo apt-get update && sudo apt-get install -y iptables nftables iproute2 util-linux
       - name: Load required modules in the disposable GitHub runner VM
         run: sudo modprobe ip6_tables && sudo modprobe ip6table_nat && sudo modprobe xt_u32
@@ -56,7 +56,7 @@ jobs:
       matrix:
         frontend: [nft, legacy]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1; Node 24
       - run: sudo apt-get update && sudo apt-get install -y iptables nftables iproute2 util-linux
       - run: sudo modprobe ip6_tables && sudo modprobe ip6table_nat && sudo modprobe xt_u32
       - name: Real traffic, rollback, concurrency and foreign-state preservation

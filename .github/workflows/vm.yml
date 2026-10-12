@@ -7,7 +7,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 240
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1; Node 24
       - name: Check runner without starting QEMU
         run: python3 -I tests/vm/test_runner.py
       - name: Install host QEMU and seed-image tools
@@ -27,9 +27,10 @@ jobs:
         run: python3 -I tests/vm/run.py --artifacts-dir tmp/vm-runner-artifacts
       - name: Upload sanitized VM logs
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2; Node 24
         with:
           name: qemu-validation-logs
           path: tmp/vm-runner-artifacts/**
           if-no-files-found: error
           retention-days: 14
+          archive: true
