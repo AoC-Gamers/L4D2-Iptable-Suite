@@ -281,12 +281,19 @@ class Compiler:
                             rule[rule.index('--hashlimit-htable-expire') + 1] = expiry
                         else:
                             rule += ['--hashlimit-htable-expire', expiry]
-                    for flag, value in (('--hashlimit-htable-max', self.v['STATE_CAPACITY']), ('--hashlimit-htable-expire', '60000')):
+                    # hashlimit defaults its bucket count from host RAM. The
+                    # kernel raises htable-max to at least htable-size, so a
+                    # configured max alone is not an effective state bound.
+                    for flag, value in (
+                        ('--hashlimit-htable-size', self.v['STATE_CAPACITY']),
+                        ('--hashlimit-htable-max', self.v['STATE_CAPACITY']),
+                    ):
                         if flag in rule:
-                            if flag == '--hashlimit-htable-max':
-                                rule[rule.index(flag) + 1] = value
+                            rule[rule.index(flag) + 1] = value
                         else:
                             rule += [flag, value]
+                    if '--hashlimit-htable-expire' not in rule:
+                        rule += ['--hashlimit-htable-expire', '60000']
                 for f in (4, 6):
                     if f == 6 and (self.c.names & GAME):
                         continue
