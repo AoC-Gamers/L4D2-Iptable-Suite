@@ -88,4 +88,9 @@ def pin_transaction(transactions, manifest):
     text = transactions[0][1]
     require(text.startswith(old), 'Missing reviewed legacy deletion')
     # Recreating a same-name table after review must not cause deletion of that object.
-    transactions[0] = ('nft', 'delete table inet handle ' + str(manifest['handle']) + '\n' + text[len(old):])
+    # nft 1.0.9/1.1.3 retains the old table's sets in its evaluation cache
+    # after deletion by handle. Destroy by name clears that cache so a same-name
+    # meter may change capacity/type. Both commands belong to ONE kernel batch;
+    # a stale handle still fails the entire batch, preserving the live table.
+    transactions[0] = ('nft', 'delete table inet handle ' + str(manifest['handle']) + '\n'
+                       'destroy table inet ' + manifest['name'] + '\n' + text[len(old):])

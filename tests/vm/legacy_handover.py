@@ -30,6 +30,7 @@ def main(phase):
  chain input {{ type filter hook input priority 0; policy drop;
   iifname "lo" accept
   ct state established,related accept
+  ip saddr 10.0.2.2 tcp dport 22 meter ssh_input_admin_under_v4 size 65535 {{ ip saddr . tcp dport timeout 1m limit rate 60/minute burst 20 packets }} accept
   ip saddr 10.0.2.2 tcp dport 22 accept
   tcp dport 64001 counter accept
  }}

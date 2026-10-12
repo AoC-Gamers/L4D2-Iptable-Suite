@@ -107,6 +107,11 @@ class BootHarnessOwnershipTests(unittest.TestCase):
             patch.object(boot, 'write_new_owned_file', side_effect=test_write_new),
             patch.object(boot, 'probe_netns_identity', side_effect=test_netns_identity),
             patch.object(boot, 'boot_id', return_value='boot-A'),
+            # Constants derived from STATE at import time do not follow its patch.
+            patch.object(boot, 'ACCESS', self.state / 'closure-h3-access.json'),
+            patch.object(boot, 'RECOVERY', self.state / 'closure-h3-recovery.json'),
+            patch.object(boot, 'PROBE_HELPER', self.state / 'closure-h3-probe.py'),
+            patch.object(boot, 'SYSTEMD_UNIT_ROOT', self.root / 'systemd'),
         ]
         for item in self.patches:
             item.start()
@@ -358,6 +363,15 @@ class BootHarnessOwnershipTests(unittest.TestCase):
         with self.assertRaises(boot.H3Error):
             boot.bootstrap_preflight()
         self.assertTrue((self.netns_dir / boot.PROBE_NETNS).exists())
+
+    def test_bootstrap_preflight_only_inspects_temporary_fixture_paths(self):
+        boot.MANIFEST.unlink()
+        inspected = []
+        with patch.object(boot, 'require_absent', side_effect=lambda path, label: inspected.append(path)), \
+                patch.object(boot, 'current_probe_identity', return_value=None):
+            boot.bootstrap_preflight()
+        self.assertEqual(len(inspected), 24)
+        self.assertTrue(all(path.is_relative_to(self.root) for path in inspected))
 
     def test_real_owned_reader_rejects_symlinks_and_unowned_uid(self):
         target = self.root / 'target'

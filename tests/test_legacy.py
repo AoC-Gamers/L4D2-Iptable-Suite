@@ -76,7 +76,7 @@ class LegacyTests(unittest.TestCase):
         manifest = self.inventory()
         tx = engine.TransactionBatch([('nft', 'delete table inet reviewed\nadd table inet reviewed\n')])
         legacy.pin_transaction(tx, manifest)
-        self.assertEqual(tx, [('nft', 'delete table inet handle 9\nadd table inet reviewed\n')])
+        self.assertEqual(tx, [('nft', 'delete table inet handle 9\ndestroy table inet reviewed\nadd table inet reviewed\n')])
         with patch('core.fw.Store') as store:
             for args in (['apply', '--legacy-manifest', '/root/review.json'],
                          ['disable', '--legacy-manifest', '/root/review.json', '--acknowledge-legacy-ownership'],

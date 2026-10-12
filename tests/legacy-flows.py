@@ -36,6 +36,7 @@ class LegacyFlows(unittest.TestCase):
  chain input { type filter hook input priority 0; policy drop;
   iifname "lo" accept
   ct state established,related accept
+  tcp dport 18081 meter http_https_input_web_under_v4 size 65535 { ip saddr . tcp dport timeout 5m limit rate 180/minute burst 360 packets } accept
   tcp dport { 22222,18081 } accept
  }
 }
@@ -131,6 +132,20 @@ with s.lock():s.apply_locked(json.loads({json.dumps(self.candidate)!r}),timeout=
         self.assertIsNone(self.store.get('pending'))
         self.assertIn('64999', i.run('nft', '-s', 'list', 'table', 'inet', 'reviewed'))
         self.assertTrue(self.f.peer.tcp(18081)); self.assertFalse(self.f.peer.tcp(18080))
+
+    def test_stale_handle_batch_cannot_delete_replacement_table(self):
+        live = engine.inspect('nftables', i.FRONTEND)
+        tx = engine.prepare(self.candidate, [self.candidate], live)
+        legacy.pin_transaction(tx, self.manifest)
+        i.run('nft', 'delete', 'table', 'inet', 'reviewed')
+        i.run('nft', '-f', '-', text='table inet reviewed {\n chain replacement { tcp dport 64999 drop; }\n}\n')
+        replacement = legacy.inventory('reviewed')
+        self.assertNotEqual(replacement['handle'], self.manifest['handle'])
+        with self.assertRaises(PolicyError):
+            engine.check(tx)
+        with self.assertRaises(PolicyError):
+            engine.execute(tx)
+        self.assertEqual(legacy.inventory('reviewed'), replacement)
 
 
 if __name__ == '__main__':

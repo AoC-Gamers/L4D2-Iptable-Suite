@@ -294,7 +294,10 @@ def main(argv=None):
                              legacy_owned=legacy_owned)
             if candidate['backend'] == 'iptables':
                 candidate['hooks'] = engine.actual_hooks(candidate, live)
-            engine.check(engine.prepare(candidate, [previous, candidate], live))
+            tx = engine.prepare(candidate, [previous, candidate], live)
+            if args.legacy_manifest:
+                legacy.pin_transaction(tx, manifest)
+            engine.check(tx)
             print('Kernel candidate check passed; traffic NOT tested.')
             return
         if args.partial or args.remove:
