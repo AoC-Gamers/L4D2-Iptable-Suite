@@ -1,5 +1,9 @@
 # Evidencia y límites de aceptación — 2026-10-11
 
+Este informe conserva la entrega anterior. El [cierre H1–H3 del 12 de octubre](closure-plan-results.md)
+amplía la evidencia con schema 2, topología Docker y barrera/readiness de arranque.
+Los conteos de esta página pertenecen a su corrida histórica.
+
 Base revisada: `aeabda7cbba25ecd94629797f5637a9a6987c147`, `main` inicialmente
 limpio. Implementación en `security/modular-safe-apply`, entregada en `develop`.
 La continuación partió de esa rama en
@@ -130,7 +134,7 @@ tráfico propio aunque su candidata sea aceptada por el kernel.
 | Clientes L4D2/SourceTV reales y descubrimiento completo | Hay paquetes A2S/login/TV sintéticos, no una sesión de jugadores ni cliente propietario. Validar con clientes/capturas representativos antes de desplegar juegos |
 | Opciones OpenVPN aún sin tráfico propio | S2S con SNAT pasó comprobación kernel, pero el cliente S2S real ensayó NAT deshabilitado. TLS/S2S legacy no se ensayó; su NAT de servidor sí pasó tráfico de integración |
 | PMTU representativo dentro de OpenVPN | La sesión TLS y los grants pasan, pero no se ensayaron tamaños/fragmentación/PMTU del túnel. Las ACL ICMP específicas requieren su propio ensayo |
-| Otras versiones de Docker y escenarios de despliegue | IPv4/IPv6 publicado pasó en cinco combinaciones con Engine 29.8.2. No certifica otras versiones, overlays o boot ordering con Docker; Swarm no está soportado por Docker nftables experimental |
+| Otras versiones de Docker y escenarios de despliegue | IPv4/IPv6 publicado pasó en cinco combinaciones con Engine 29.8.2. No certifica otras versiones u overlays; el [cierre H1–H3](closure-plan-results.md) añade boot ordering solo para una combinación concreta; Swarm no está soportado por Docker nftables experimental |
 | Exhaustión de todos los meters / logging durante horas | Hay capacidad efectiva, timeout y ráfagas reales; falta carga sostenida representativa. Los límites son por regla, no un presupuesto universal del host |
 | Imagen GeoIP específica con datos MaxMind reales | El updater completo pasó con ZIP local sintético. No valida licencias, disponibilidad de descarga externa ni datos actuales de MaxMind |
 | Atomicidad conjunta iptables | El motor hace commits por tabla/familia. Puede haber versiones mixtas hasta rollback; no restaura conexiones, conntrack, contadores ni tokens |

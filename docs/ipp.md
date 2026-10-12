@@ -81,5 +81,7 @@ y el orden real de `ExecStop`; no se copian a ciegas. Para desactivar o cambiar 
 alcance preparado, detener los consumidores y ejecutar desde consola
 `boot-disarm --local` antes de `disable` o la nueva preparación. El modo por defecto
 no instala una barrera temprana. La evidencia VM anterior cubre restauración de la
-política sin la nueva barrera; las pruebas H3 de reboot y Docker siguen pendientes.
+política. La nueva [evidencia H1–H3](security/closure-plan-results.md) prueba
+además la barrera en reboots inválido/válido y reinicio Docker con live-restore,
+en la combinación y con los límites allí registrados.
 Consulta [cierre H3](security/closure-h3.md) para el procedimiento y los límites.

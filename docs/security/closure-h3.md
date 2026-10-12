@@ -92,6 +92,15 @@ activa; revisa y acepta la transición antes del siguiente reinicio.
 
 Las pruebas unitarias H3 usan mocks para verificar identidad de arranque,
 fingerprints, ownership, recuperación y compatibilidad; no aplican reglas.
-La prueba de arranque/reinicio y la integración systemd/Docker H3 en VM siguen
-pendientes. No se afirma evidencia de reboot para esta barrera. La matriz de
-pruebas anteriores de la suite no cubre automáticamente H3.
+La corrida `20261012T053512Z-f950c62d` pasó los ensayos H3 reales: guard IPv4/IPv6
+en namespaces, fallos de restore, SIGKILL/rollback vacío, socket protegido,
+reinicio Docker y reboots inválido/válido con sondas externas TCP/UDP. El
+[informe H1–H3](closure-plan-results.md) registra versiones, logs y cadencia.
+El arranque Docker H3 cubre suite nftables con Docker iptables/frontend nft;
+no se extrapola a los otros escenarios Docker. B01–B02 siguen probados solo
+con lógica para cambios de versión/frontend, sin otros binarios reales.
+
+`check --accept-version-change` solo comprueba la candidata. Para conservar la
+aceptación de una versión no evaluada, aplicar o cargar con esa opción en
+mantenimiento, confirmar y ejecutar `save`. Un check no escribe la aceptación
+persistente ni autoriza por sí solo el siguiente arranque.

@@ -115,5 +115,11 @@ La compatibilidad automática de iptables solo se evaluó para 1.8.10. Otras
 versiones requieren mantenimiento explícito con `--accept-version-change` en
 `check`, `apply` o `load`; la opción nunca autoriza un cambio de frontend ni una
 mezcla IPv4/IPv6. Una versión no revisada en `boot-restore` deja la barrera activa.
-Las pruebas VM de la nueva barrera H3 aún no se han completado; no extrapoles a
-ella los reinicios probados para la política anterior.
+Las [pruebas VM H3](closure-plan-results.md) pasaron para las versiones y la
+combinación allí registradas. No certifican otras versiones reales de iptables
+ni el arranque de las otras combinaciones Docker; ensaya primero el destino.
+
+`check --accept-version-change` solo comprueba la candidata. Para conservar la
+aceptación de una versión no evaluada, aplicar o cargar con esa opción en
+mantenimiento, confirmar y ejecutar `save`. Un check no escribe la aceptación
+persistente ni autoriza por sí solo el siguiente arranque.

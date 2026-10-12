@@ -163,7 +163,9 @@ comprueba boot ID, digest y objetos administrados. La tabla nftables temprana co
 prioridad `-310` también requiere `nft` cuando la política usa iptables-legacy.
 Para `disable` o cambiar el alcance de un manifiesto preparado, detén primero los
 consumidores y ejecuta desde consola `boot-disarm --local`. Sin opt-in no se añade
-la barrera temprana. Los ensayos VM de arranque H3 siguen pendientes.
+la barrera temprana. Los [ensayos VM H3](closure-plan-results.md) pasaron
+con fallos de restore, reboots inválido/válido, socket y reinicio Docker; su
+matriz y límites no se extrapolan a otros destinos.
 
 Especificar `--backend iptables` al operar ese motor. Operaciones parciales requieren
 una política confirmada y módulos/dependencias existentes. Se recompone una candidata

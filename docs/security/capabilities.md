@@ -82,7 +82,10 @@ La aplicación ordinaria no reinicia ni repara redes Docker. La integración de
 arranque opt-in utiliza la [barrera y readiness H3](boot-protection.md); requiere
 instalación explícita de unidades/drop-ins y pruebas en la topología destino.
 Las pruebas Docker de esta tabla cubren permisos en régimen normal; el informe
-[cierre H3](closure-h3.md) delimita por separado reinicios y arranque.
+[cierre H3](closure-h3.md) delimita por separado reinicios y arranque. La
+[matriz aceptada H1–H3](closure-plan-results.md) prueba guard/restore/reinicio
+con suite nftables + Docker iptables/frontend nft; los otros escenarios de
+esta tabla solo tienen la evidencia Docker general indicada.
 
 ## Fuentes oficiales consultadas
 

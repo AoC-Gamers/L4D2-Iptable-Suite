@@ -124,11 +124,13 @@ lo rechazado y lo comprobado. Entre las restricciones actuales:
 - Clientes L4D2/SourceTV reales, PMTU de VPN, algunas variantes VPN y carga sostenida:
   pruebas pendientes. Los [resultados](docs/security/results.md) detallan el riesgo.
 
-La ejecución local aceptada del 11 de octubre de 2026 registró 54 unitarias, 20
-comprobaciones kernel, 46 casos de integración/regresión y una VM con cinco
-combinaciones Docker, OpenVPN TLS, SSH nuevo, timer de producción y dos reinicios.
-Los paquetes de juego son sintéticos. Esa evidencia es anterior a la barrera H3:
-su integración de arranque/reinicio en VM sigue pendiente y no se declara aprobada.
+El [cierre H1–H3](docs/security/closure-plan-results.md), aceptado el 12 de octubre
+de 2026 UTC, registra 118 casos Python unitarios/harness, 20 comprobaciones
+kernel y 58 métodos de integración/regresión. La VM pasó cinco combinaciones
+Docker, OpenVPN TLS, SSH nuevo, timer de producción y cuatro reboots. H3 probó
+arranque fallido/válido, socket protegido y Docker live-restore con sondas TCP/UDP
+en una combinación concreta. Los paquetes de juego son sintéticos; el informe
+distingue los límites del muestreo y las versiones/combinaciones no ensayadas.
 CI separa lógica, generación, kernel, tráfico y VM; un fallo de dependencias o
 privilegios no se contabiliza como aprobación. Comandos reproducibles:
 [validación](docs/ai-compat-check.md) y [runner VM](docs/security/vm-runner.md).
@@ -143,6 +145,7 @@ al proxy o aplicación. Las reglas locales no recuperan un enlace saturado.
 - [Arquitectura](docs/modular-loader-architecture.md) y [garantías transaccionales](docs/security/operations.md).
 - [Persistencia y operaciones selectivas](docs/ipp.md).
 - [Cierre y límites de protección de arranque H3](docs/security/closure-h3.md).
+- [Resultados del plan H1–H3](docs/security/closure-plan-results.md).
 - [Watcher de IP pública](docs/public-ip-watch.md) y [actualizador GeoIP](geoip-updater/README.md).
 - [Auditoría, evidencia y pendientes](docs/operational-audit.md).
 - [Analizadores de logs](log-summary/docs/log-summary-container.md): configuración separada del firewall.

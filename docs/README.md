@@ -17,7 +17,7 @@ conservan resultados fechados; los comandos operativos están en las guías de u
 | Revisar o desarrollar módulos | [Arquitectura](modular-loader-architecture.md), [catálogo](modules/README.md) |
 | Automatizar IP pública y GeoIP | [Watcher](public-ip-watch.md), [GeoIP](../geoip-updater/README.md) |
 | Ejecutar pruebas | [Validación](ai-compat-check.md), [VM desechable](security/vm-runner.md) |
-| Consultar evidencia y pendientes | [Auditoría](operational-audit.md), [resultados](security/results.md), [issues](security/iterative-audit.md) |
+| Consultar evidencia y pendientes | [Auditoría](operational-audit.md), [resultados históricos](security/results.md), [cierre H1–H3](security/closure-plan-results.md), [issues](security/iterative-audit.md) |
 
 Los ejemplos están en [`config/`](../config/) y [`example.env`](../example.env).
 Sus direcciones/interfaces deben adaptarse al destino. El

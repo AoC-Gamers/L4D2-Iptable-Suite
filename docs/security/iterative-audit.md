@@ -2,7 +2,9 @@
 
 Este registro conserva rondas históricas y sus entornos. La sección final
 [continuación con kernel propio](#continuación-con-kernel-propio) amplía la
-evidencia inicial; consultar [resultados](results.md) para los límites actuales.
+evidencia inicial. El [cierre posterior H1–H3](closure-plan-results.md) registra
+la evidencia aceptada del 12 de octubre y sus límites; los
+[resultados anteriores](results.md) conservan esta entrega histórica.
 
 Fecha: 2026-10-11. Punto de partida: `148875e272783e24cdd517d818f7f7992a24ab76`,
 rama `security/modular-safe-apply`, sin cambios locales versionados al comenzar.

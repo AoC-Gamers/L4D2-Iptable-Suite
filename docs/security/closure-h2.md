@@ -16,6 +16,11 @@ En operaciones parciales y retirada de módulos, `configuration()` usa el constr
 
 `tests/test_h2.py` cubre traducción input, precedencia de dimensiones modernas, versión desconocida, migración de solo-legacy, persistencia lógica de current/persisted/pending y conservación byte a byte del archivo pending en lectura. También ejecuta composición de `container-only` y `host + containers restrict`, partial/remove y save/load lógico para nftables e iptables. Son pruebas de configuración/estado sin acceso a Netfilter; no prueban tráfico ni ejecución real del journal.
 
+La corrida VM `20261012T053512Z-f950c62d` pasó el flujo H2 en ambos frontends
+iptables 1.8.10, nft y legacy, con cuatro subcasos por frontend. La suite
+unitaria pasó 9 casos, incluido SIGKILL antes del reemplazo persistente: este
+último acredita proceso/filesystem, no kernel. Ver [informe de cierre](closure-plan-results.md).
+
 La regresión real `tests/h2-flows.py` ejecuta la CLI pública completa, tráfico TCP
 IPv4/IPv6 y cuatro combinaciones: nftables/iptables y host activo/desactivado
 con contenedores restrict. Comprueba apply/save/load/partial/remove, rechazo de

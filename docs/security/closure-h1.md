@@ -32,6 +32,15 @@ cambios de administradores externos después del preflight.
 
 ## Regresión y evidencia
 
+La corrida VM `20261012T053512Z-f950c62d` pasó los cuatro métodos reales
+H1 en cada frontend iptables 1.8.10, nft y legacy; ambos inspeccionan IPv4/IPv6.
+La suite unitaria actual tiene 9 casos, incluida la reserva de nombre del guard.
+La matriz Docker real de cinco combinaciones pasó por separado. El
+[informe de cierre](closure-plan-results.md) registra entorno y límites.
+
+La siguiente evidencia conserva la primera ejecución sobre el kernel anfitrión
+mediante namespaces; su limitación legacy no se aplica a la nueva VM:
+
 En Linux `7.0.0-38-generic`, nftables `1.0.9` e iptables `1.8.10 (nf_tables)`:
 
 - `python3 -I tests/test_docker_topology.py`: **8/8 PASS**. Incluye saltos

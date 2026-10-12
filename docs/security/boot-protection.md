@@ -79,8 +79,15 @@ no permite cambiar frontend ni mezclar IPv4/IPv6. Solo iptables/ip6tables 1.8.10
 está evaluado automáticamente; una versión no evaluada necesita aceptación en
 mantenimiento antes del siguiente `boot-restore`, o la barrera permanece activa.
 
-La integración de reboot/arranque H3 en VM sigue pendiente. Los detalles y
-límites están en [cierre H3](closure-h3.md); las unidades son
+La integración H3 pasó en la VM desechable descrita en el [informe de cierre](closure-plan-results.md):
+fallos de restore, reboot inválido/válido y reinicio Docker con live-restore. Esa
+evidencia cubre una combinación Docker concreta; ensaya las unidades del destino.
+Los detalles están en [cierre H3](closure-h3.md); las unidades son
 [`l4d2-firewall-guard.service`](../../systemd/l4d2-firewall-guard.service),
 [`l4d2-firewall.service`](../../systemd/l4d2-firewall.service) y
 [`l4d2-firewall-ready.service`](../../systemd/l4d2-firewall-ready.service).
+
+`check --accept-version-change` solo comprueba la candidata. Para conservar la
+aceptación de una versión no evaluada, aplicar o cargar con esa opción en
+mantenimiento, confirmar y ejecutar `save`. Un check no escribe la aceptación
+persistente ni autoriza por sí solo el siguiente arranque.
