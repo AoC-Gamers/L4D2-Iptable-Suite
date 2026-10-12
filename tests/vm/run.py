@@ -160,7 +160,9 @@ tmp="$(/usr/bin/mktemp /run/.l4d2-suite-vm.XXXXXX)"
 '''
     marker_unit = '''[Unit]
 Description=Attest this runner-owned disposable QEMU guest
-Before=multi-user.target
+DefaultDependencies=no
+After=local-fs.target
+Before=network-pre.target multi-user.target
 
 [Service]
 Type=oneshot

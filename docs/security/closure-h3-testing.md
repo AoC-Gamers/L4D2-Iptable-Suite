@@ -4,6 +4,8 @@
 
 The runner installs the three production firewall units from `systemd/` before invoking the helper. The helper compares those installed files byte-for-byte with the trusted templates. It creates only uniquely named H3 fixtures, refuses to replace existing unit, Docker, nftables-sentinel, or state paths, and records the original transaction files and firewall configuration file metadata for exact cleanup checks.
 
+The guest attestation service recreates its root-owned `0600` marker after local filesystems and before `network-pre.target` on every boot. The early test network explicitly requires and follows that service, so its safety check succeeds before SSH becomes available. The helper does not bypass the attestation when the marker is missing.
+
 The host runner invokes the following guest phases in order, with external probes and reboots between selected calls:
 
 | Phase | What it proves |

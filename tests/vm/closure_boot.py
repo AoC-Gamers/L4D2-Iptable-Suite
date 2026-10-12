@@ -335,6 +335,21 @@ def install_unit(name, text):
     return hashlib.sha256(text.encode()).hexdigest()
 
 
+def network_unit_content():
+    return f'''[Unit]
+Description=Disposable H3 veth probe network
+DefaultDependencies=no
+Requires=l4d2-suite-vm-marker.service l4d2-firewall-guard.service
+After=local-fs.target l4d2-suite-vm-marker.service l4d2-firewall-guard.service
+Before=network-pre.target l4d2-firewall.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/bin/python3 -I {INSTALL / 'tests/vm/closure_boot.py'} create-probe-network
+'''
+
+
 def disable_managed_unit(unit, *, enablement_roots=SYSTEMD_ENABLEMENT_ROOTS):
     disabled = run(['systemctl', 'disable', unit], check=False)
     require(disabled.returncode == 0,
@@ -376,18 +391,7 @@ def install_production_units():
     require(not (SYSTEMD_UNIT_ROOT / NETWORK_UNIT).exists()
             and not (SYSTEMD_UNIT_ROOT / NETWORK_UNIT).is_symlink(),
             f'Refusing pre-existing H3 network unit {NETWORK_UNIT}')
-    owned[NETWORK_UNIT] = install_unit(NETWORK_UNIT, f'''[Unit]
-Description=Disposable H3 veth probe network
-DefaultDependencies=no
-Requires=l4d2-firewall-guard.service
-After=local-fs.target l4d2-firewall-guard.service
-Before=network-pre.target l4d2-firewall.service
-
-[Service]
-Type=oneshot
-RemainAfterExit=yes
-ExecStart=/usr/bin/python3 -I {INSTALL / 'tests/vm/closure_boot.py'} create-probe-network
-''')
+    owned[NETWORK_UNIT] = install_unit(NETWORK_UNIT, network_unit_content())
     owned[SOCKET_UNIT] = install_unit(SOCKET_UNIT, '''[Unit]\nDescription=H3 disposable protected socket probe\n'''
                 + protected_socket + f'''\n[Unit]
 Requires={NETWORK_UNIT}
@@ -681,14 +685,13 @@ def boot_systemd_snapshot():
     sections = []
     for unit in units:
         result = run(['systemctl', 'show', '--no-pager',
-                      '--property=Id,ActiveState,SubState,Result,ExecMainStatus,Job', unit],
+                      '--property=Id,ActiveState,SubState,Result,ConditionResult,ExecMainStatus,ExecMainCode,ExecMainStartTimestamp,Job', unit],
                      check=False, timeout=10)
         sections.append(f'[{unit}]\n{result.stdout}{result.stderr}')
     journal = run(['journalctl', '-b', '--no-pager', '--lines=100',
                    *sum((['-u', unit] for unit in units), [])],
                   check=False, timeout=20)
-    sections.append('[journal]\n' + journal.stdout + journal.stderr)
-    return '\n'.join(sections)[-18000:]
+    return '\n'.join(sections) + '\n[journal-tail]\n' + (journal.stdout + journal.stderr)[-10000:]
 
 
 def wait_for_boot_jobs(timeout=180):

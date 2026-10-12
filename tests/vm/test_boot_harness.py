@@ -180,6 +180,11 @@ class BootHarnessOwnershipTests(unittest.TestCase):
         self.assertEqual(state['network_identity'], {'ifindex': 7})
         self.assertEqual(state['owned_files'][str(boot.NETWORK_REGISTRY)], 'new-digest')
 
+    def test_early_network_unit_waits_for_per_boot_safety_marker(self):
+        content = boot.network_unit_content()
+        self.assertIn('Requires=l4d2-suite-vm-marker.service l4d2-firewall-guard.service', content)
+        self.assertIn('After=local-fs.target l4d2-suite-vm-marker.service l4d2-firewall-guard.service', content)
+
     def test_cleanup_removes_only_matching_network_and_host_first(self):
         boot.create_probe_network()
         state = boot.manifest()
