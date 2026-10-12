@@ -19,6 +19,10 @@ jobs:
       - uses: actions/checkout@v4
       - run: python3 -I tests/test_core.py
       - run: python3 -I tests/test_geoip.py
+      - run: python3 -I tests/test_transactions.py
+      - run: python3 -I tests/test_configuration_audit.py
+      - run: python3 -I tests/test_policy_audit.py
+      - run: bash tests/watcher-audit.sh
       - run: bash tests/http-https-protect.sh && bash tests/public-ip-watch.sh
   generation:
     runs-on: ubuntu-24.04
@@ -50,3 +54,7 @@ jobs:
       - run: sudo modprobe ip6_tables && sudo modprobe ip6table_nat && sudo modprobe xt_u32
       - name: Real traffic, rollback, concurrency and foreign-state preservation
         run: sudo env SUITE_TEST_FRONTEND=${{ matrix.frontend }} bash tests/isolated-run.sh --root-net tests/integration.py
+      - name: Transaction recovery regressions against real engines
+        run: sudo env SUITE_TEST_FRONTEND=${{ matrix.frontend }} bash tests/isolated-run.sh --root-net tests/transaction-flows.py
+      - name: Policy capacity and scope regressions with real traffic
+        run: sudo env SUITE_TEST_FRONTEND=${{ matrix.frontend }} bash tests/isolated-run.sh --root-net tests/policy-flows.py

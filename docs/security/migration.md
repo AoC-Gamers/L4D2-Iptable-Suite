@@ -15,6 +15,8 @@ No se atribuye propiedad a objetos preexistentes sólo por llamarse `firewall_ma
 3. Elegir perfiles y familia. Lista vacía ahora significa perfil mínimo, no todos los
    módulos. Web no carga juego/VPN. CLI reemplaza la selección del archivo. Defaults
    no rellenan vacíos intencionales; un puerto SSH vacío en un módulo activo falla.
+   Excepción explícita: `--only ''` significa sólo núcleo, aunque haya un perfil en
+   CLI/archivo. No equivale a `MODULES_ONLY=''` sin selección CLI.
 4. Traducir `TYPECHAIN=0/1/2` a host=true/false y contenedores=off/restrict. Cualquier
    combinación contradictoria falla. `TYPECHAIN` no determina permisos de enrutamiento.
    Declarar `ROUTED_POLICY` y grants; el default descarta forwarding y puede cortar
@@ -72,3 +74,8 @@ Por ejemplo, 1024 equivale a longitud UDP>=1004; no depende de la cabecera IPv6.
 No cambiar backend mientras haya política registrada. Primero desactivar/confirmar
 la suite anterior desde consola, comprobar reglas residuales y persistencia, después
 seleccionar el otro backend. No se cambia ninguna alternativa ni configuración Docker.
+
+El updater GeoIP en Compose requiere `HOST_UID`/`HOST_GID` del dueño del checkout.
+`make geoip-update` y `make geoip-check` los calculan automáticamente. Para Compose
+directo, exportarlos o pasarlos mediante `--env-file`; el `env_file` del servicio
+no suministra interpolación Compose. La identidad incorrecta falla antes de descargar.

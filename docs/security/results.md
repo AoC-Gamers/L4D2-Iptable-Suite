@@ -114,3 +114,14 @@ La entrega implementa y verifica los bloques indicados, y deja estas condiciones
 visibles para la validación final en una VM adecuada. Terminar scripts sin errores
 no constituye una certificación de seguridad ni una garantía contra saturación
 del enlace.
+
+## Auditoría iterativa posterior
+
+La ronda posterior desde `148875e`, delegada a tres agentes GPT-6 Luna con esfuerzo
+alto, corrigió **10 issues** y cerró con una revisión cruzada sin hallazgos nuevos
+confirmados. El registro, archivos, regresiones y alcance están en
+[`iterative-audit.md`](iterative-audit.md). El coordinador repitió 39 unitarias,
+8 generaciones, 10 comprobaciones de motor y 23 casos aislados, además de watcher,
+ShellCheck/sintaxis/actionlint. Estas cifras sustituyen los totales de la primera
+ejecución para el estado final de la rama; las limitaciones de aceptación anteriores
+permanecen vigentes. `/run` y su lock xtables también están aislados en el harness.

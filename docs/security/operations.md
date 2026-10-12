@@ -52,6 +52,10 @@ puede armar, no se aplica. La reversión vuelve a tomar el mismo bloqueo. Un cam
 pendiente bloquea nuevas aplicaciones. Confirmación y rollback serializan con ellas.
 El plazo usa reloj monotónico y boot ID; un journal de otro arranque expira al
 recuperarlo. No depende de que el reloj de pared se mantenga estable.
+Los comandos de aplicación usan el presupuesto monotónico restante; si se agota,
+se restaura la política previa y no se entrega un token confirmable. La espera de
+iptables por su lock también se acota a ese presupuesto. Esto no garantiza un
+tiempo máximo de restauración si el kernel o un escritor externo bloquean el motor.
 `--watchdog process` usa un proceso separado por doble fork, únicamente dentro de
 namespaces aislados de prueba. No se acepta como sustituto de systemd en el host.
 
@@ -94,6 +98,8 @@ falla. `--only`/`--skip` reemplazan las listas del archivo; no se fusionan. Sin 
 se usa `PROFILE=host-minimal`, que sólo incorpora SSH más el núcleo obligatorio.
 Perfiles combinables: `--profile web --profile games`. `chain_setup`, `finalize` y
 loopback pertenecen siempre al núcleo. `--only chain_setup,finalize` crea host cerrado.
+`--only ''` explícito también selecciona sólo el núcleo; `MODULES_ONLY=''` en el
+archivo, sin `--only`, conserva la selección por perfil.
 
 `.env` es ahora un formato declarativo KEY=VALUE con comillas opcionales y comentarios.
 No admite `export`, sustituciones, backticks, continuaciones, duplicados ni ejecución.
@@ -110,6 +116,8 @@ un timeout explícito insuficiente falla. Esto incluye SSH/web, A2S/login y UDP 
 El default efectivo de login es 4s para burst16/rate4; mantener 1s permitiría
 reiniciar el presupuesto prematuramente. Capacidad configurable: 16..65535 entradas
 por meter/hashlimit, default8192, no capacidad ilimitada por origen.
+iptables declara tanto el tamaño de tabla hash como su máximo: dejar el tamaño
+implícito permite que el kernel eleve el máximo configurado.
 
 Para operaciones privilegiadas, código, módulos, configuración, datos GeoIP y
 verificadores deben ser root y no escribibles por grupo/otros, incluidos ancestros.
@@ -133,6 +141,8 @@ sudo ./ipp.sh save
 sudo ./ipp.sh load
 sudo ./ipp.sh apply --partial --only tcp_ssh --set SSH_RATE=30/minute
 sudo ./ipp.sh apply --remove http_https_protect
+# Retirar simultáneamente los grants que referían al servicio:
+sudo ./ipp.sh apply --remove http_https_protect --set ACCESS_POLICY=/etc/l4d2-firewall/remaining.json
 sudo ./ipp.sh disable
 ```
 
@@ -141,8 +151,13 @@ una política confirmada y módulos/dependencias existentes. Se recompone una ca
 completa; no se añaden fragmentos sobre cadenas desconocidas. La eliminación de un
 módulo vuelve a comprobar dependencias y permisos de contenedores. Para retirar juego,
 retirar sus tres módulos juntos. Desactivar retira solamente objetos y hooks propios;
-no cambia políticas de terceros. La persistencia guardada permanece para restauración;
-para desinstalar definitivamente, borrar **sólo** el directorio de instalación/estado
+no cambia políticas de terceros. La persistencia guardada permanece para restauración.
+
+Desactivar no exige que Docker siga disponible. En iptables se permite deriva de
+versión para desactivar, pero se exige el mismo frontend confirmado. La carga tras
+un arranque admite ausencia total de cadenas propias; objetos parcialmente presentes
+con hooks ausentes o desplazados requieren revisión antes de aplicar.
+Para desinstalar definitivamente, borrar **sólo** el directorio de instalación/estado
 propio y la unidad de la suite, tras desactivarla y cancelar cualquier cambio pendiente.
 No se proporciona una operación de limpieza global de firewalls.
 
