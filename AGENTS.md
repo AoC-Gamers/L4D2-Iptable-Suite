@@ -38,6 +38,7 @@ Desde raíz del checkout, **sin root**, Bash y Python 3.10+:
 ```sh
 git diff --check
 python3 -I tests/check_docs.py
+python3 -I tests/test_docs.py
 bash tests/smoke-modules.sh
 bash tests/generate.sh
 ./nftables.rules.sh validate --env-file config/profiles/web.conf

@@ -25,6 +25,7 @@ Desde raíz, sin root, para documentación:
 ```sh
 git diff --check
 python3 -I tests/check_docs.py
+python3 -I tests/test_docs.py
 ```
 
 Para cambios de composición o generación (lógica/mocks, no kernel):

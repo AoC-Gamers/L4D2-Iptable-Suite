@@ -19,7 +19,8 @@ administrador VPN concreto y TCP/9100 a un monitor concreto de LAN. Los demás
 puertos/subredes no se autorizan por pertenecer al túnel. Adaptar direcciones,
 interfaces y grupos antes de aplicar. Listener publicado en Docker requiere grant
 `containers` de `service=openvpn_server`; el túnel soportado debe correr en el host.
-`OVPNSRV_DOCKER_INTERFACE` y logging VPN heredado se rechazan.
+Se rechaza `OVPNSRV_DOCKER_INTERFACE` cuando no está vacío; los flags heredados
+`OVPNSRV_LOG_ENABLED` y `OVPNS2S_LOG_ENABLED` deben permanecer en `false`.
 
 ## Site-to-site
 

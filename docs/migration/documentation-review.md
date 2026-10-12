@@ -4,7 +4,8 @@ Fecha: 12 de octubre de 2026. Partida y base aprobada:
 `93096dea2d7854a4d580a0b4922d5d1426c8149e`, `main` sin diferencia de commits.
 Rama de trabajo `docs/feature-based-documentation`. Los dos workflows tenían
 cambios locales de Node 24; se conservan sin incluirlos en commits ni publicarlos.
-No se leyó/modificó `.env` privado ni se tocaron archivos ignorados.
+No se leyó/modificó `.env` ni configuraciones privadas. Los tests pueden generar
+cachés Python y temporales de validación ignorados.
 
 Esta entrega es documental. No constituye una nueva auditoría de seguridad ni
 una nueva aceptación funcional de las reglas. [Aprobación](../security/approval.md)
@@ -56,7 +57,9 @@ Se repararon también enlaces que ya estaban rotos en los manuales anteriores:
 anclas de configuración/multiplataforma, enlaces a secciones iptables retiradas,
 `log-summary/docs/ipp.md` y `log-summary/example.env` inexistentes. Ahora apuntan a
 secciones/páginas canónicas y `.env.example`; no se reescribieron sus afirmaciones
-históricas. La advertencia de archivo dirige a la guía vigente corregida.
+históricas. Se normalizaron espacios finales de esos dos manuales para pasar
+`git diff --check`; el texto y los datos permanecen iguales. La advertencia de
+archivo dirige a la guía vigente corregida.
 
 ## Referencias fuera de Markdown y alcance
 
@@ -65,7 +68,8 @@ históricas. La advertencia de archivo dirige a la guía vigente corregida.
 - `example.env`: solo comentarios; las asignaciones efectivas permanecen idénticas.
 - `ipp.sh`: solo la ruta documental dentro de la ayuda. CLI/ejecución sin cambios.
 - Dos docstrings de arneses VM: solo ruta de diseño; AST funcional sin cambios.
-- `tests/check_docs.py`: nueva comprobación documental independiente, sin cambios
+- `tests/check_docs.py` y `tests/test_docs.py`: comprobación documental y cinco
+  regresiones de sus enlaces/anclas/navegación/avisos/unidades, sin cambios
   en las aserciones de pruebas funcionales ni workflows.
 
 Código de core/modules, perfiles/config JSON, scripts de automatización y resto de
@@ -103,7 +107,40 @@ Se documentaron; no se cambiaron ni se presentaron como diagnóstico pasivo.
 
 ## Comprobaciones de esta entrega
 
-El resultado final de las comprobaciones se registra al terminar la revisión.
-No se ejecutarán reglas, unidades ni contenedores en el anfitrión. Las pruebas
-kernel/tráfico/reboots del commit aprobado se citan como evidencia anterior, no
-como pruebas nuevas de esta rama documental.
+Entorno de esta revisión: usuario sin root en Linux, Python 3.12.3, Bash 5.2.21,
+ShellCheck 0.9.0 extraído localmente (no estaba en PATH). No se instalaron paquetes
+ni se cambiaron servicios del anfitrión. Comandos desde raíz del checkout salvo
+herramientas de comparación que solo leen archivos/Git y fuentes originales.
+
+| Comprobación | Resultado |
+|---|---|
+| `git diff --check`, staged y diff completo desde `93096de` | PASS tras normalizar espacios finales heredados al incorporar archivos nuevos |
+| `python3 -I tests/check_docs.py` | PASS: 115 páginas Markdown, 575 enlaces/anclas locales; imágenes/referencias/avisos, navegación y cuatro `Documentation=`; no ejecuta bloques ni red |
+| `python3 -I tests/test_docs.py` | 5 PASS: referencias/imágenes/anclas Unicode/duplicadas/explícitas, fallos de destino/referencia, navegación actual no exenta por mapa, avisos y referencias de unidad |
+| Smoke lógico | `bash tests/smoke-modules.sh`: 21 core + 3 GeoIP Python PASS, HTTP lógico y validación de ambos motores PASS |
+| Generación | `bash tests/generate.sh`: 8 candidatas PASS, cuatro perfiles por motor, sin kernel |
+| Documentación de CLI | Ayuda pública de ambos wrappers y runner contrastada; 9 ejemplos enumerados deliberadamente de validate/generate/plan/diff PASS, incluidos web+games, VPN y ACL contenedor; no ejecución automática desde Markdown |
+| Unitarios de referencias afectadas | `python3 -I tests/test_boot.py`: 18 PASS; `python3 -I tests/vm/test_transactions_harness.py`: 2 PASS. Mocks/lógica/proceso, no Netfilter |
+| Sintaxis y ShellCheck | `bash -n` para scripts versionados; ShellCheck 0.9.0 sobre selección CI con exclusión preexistente de venv: PASS; `py_compile` del checker y dos arneses con docstrings corregidos: PASS |
+| Sustancia histórica | Comparación con copia previa: 14 informes/manuales conservan prosa, fechas, resultados, fallos y datos; solo avisos, destinos de enlaces y espacios finales cambian |
+| Alcance de producto | Hash de archivos versionados y comparación con base: solo ocho referencias documentales existentes fuera de Markdown; AST Python sin docstring, asignaciones de example.env y directivas de unidades sin Documentation idénticas; core/modules/perfiles restantes intactos |
+| Cambios locales previos | SHA-256 de los dos workflows idénticos al inicio; excluidos de commits documentales |
+| Rutas antiguas | Cero literales de rutas anteriores en guías de uso fuera del inventario/informe/avisos/archivo clasificado; rutas operativas conservan aviso directo |
+| AGENTS | Revisión raíz/docs/tests/systemd: invariantes coincidentes; comandos ordinarios no privilegiados, casos especiales con aislamiento; sin adaptadores/symlinks |
+| Externos | 25 destinos consultados: 23 HTTP 200, dos timeout (`iptables-restore` e `iptables-extensions` de man7); segundo intento de consulta también timeout. No se marcaron rotos ni aprobados. HTTP 200 acredita respuesta, no conservación semántica de todo el contenido externo |
+| Fuentes importantes | Lectura oficial Docker iptables/nftables y manual nftables; API GitHub confirmó HEAD/conclusión de ambos runs, artifact no expirado y reporte privado desactivado. Capturas/docs Valve se conservaron con sus límites, sin nueva certificación de protocolos |
+
+En total se ejecutaron **49 casos Python unitarios/documentales/harness** en esta
+revisión (24 smoke, 18 boot, 2 TX harness, 5 checker), más generación y controles
+estáticos. Son independientes de los 118 casos históricos de la aprobación.
+
+**No ejecutado en esta rama:** checks privilegiados del motor, tráfico real,
+Docker/OpenVPN, arranque/reboots y CI remoto. El cambio es documental y no requiere
+alterar reglas/servicios del host; no se atribuye nueva evidencia kernel/tráfico.
+Los dos enlaces man7 quedan no comprobados por timeout. La validación operativa de
+cada destino y los pendientes de [limitaciones](../security/limitations.md) siguen
+vigentes. No se agregó ni modificó política de CI documental o funcional.
+
+Primer commit de reorganización: `2d85a05` (guías/instrucciones, avisos, archivo y
+checker). Este registro completa la evidencia de revisión en un commit documental
+posterior. Ninguno de los dos se mezcla automáticamente en main ni se publica.

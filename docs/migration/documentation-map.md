@@ -3,7 +3,8 @@
 Inventario previo al traslado: 12 de octubre de 2026. Rama de partida `main`,
 commit `93096dea2d7854a4d580a0b4922d5d1426c8149e`, idéntico a la base aprobada.
 Los dos workflows tenían modificaciones locales de Node 24: se conservan fuera
-de los commits documentales. No se abrió ni modificó `.env` ni archivos ignorados.
+de los commits documentales. No se abrió ni modificó `.env` ni configuraciones
+privadas; se preservó trabajo previo. Las comprobaciones pueden generar cachés Python y temporales ignorados.
 No había instrucciones `AGENTS.md`, `AGENT.md`, `CLAUDE.md` o `GEMINI.md` versionadas
 ni instrucciones de agentes en los ancestros de la instalación inspeccionados.
 
