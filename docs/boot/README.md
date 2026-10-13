@@ -150,3 +150,20 @@ implica parar sin `--now`, según los contratos de
 [systemd.service v257](https://github.com/systemd/systemd/blob/v257/man/systemd.service.xml)
 y [systemctl v257](https://github.com/systemd/systemd/blob/v257/man/systemctl.xml).
 No instales este drop-in de forma genérica en gestores compartidos.
+
+Una unidad heredada propia de la suite puede tener `PartOf=docker.service` u
+otras dependencias de reinicio. Esas dependencias no se eliminan asignando una
+lista vacía en un drop-in: para retirarlas hay que reemplazar la unidad completa
+por una definición local inerte y revisada, conservando el original en el respaldo.
+Este caso solo corresponde a una unidad exclusiva de la suite, nunca a la unidad
+Docker del proveedor. Revisa también todos sus drop-ins: se ordenan por nombre y
+uno posterior puede volver a añadir `ExecStartPost`. La anulación de comandos debe
+quedar después de esos archivos y cubrir start/pre/post, reload, stop/post y
+conditions según el inventario. Tras `daemon-reload`, comprueba `PartOf`, los
+comandos efectivos y el estado activo antes de deshabilitar sin parada.
+
+El contrato de dependencias está documentado en
+[systemd.unit v257](https://github.com/systemd/systemd/blob/v257/man/systemd.unit.xml).
+La retirada de una unidad propia acoplada se ensayó además en el guest QEMU del
+[registro de evidencia](../security/approval.md), manteniendo activo su estado
+oneshot y conservando PID/inicio de Docker; no se reinició el daemon para probarlo.
