@@ -261,3 +261,45 @@ del estado de dependencia inactiva y la idempotencia del fixture extranjero por
 propietario de cada boot. Se corrigió el arnés y luego pasaron ambos caminos; esos
 intentos fallidos no cuentan como PASS ni como defectos del producto. No hubo run
 de CI remoto ni ensayo productivo en esta evidencia.
+
+## Aceptación operativa de host web y gateway VPN del 2026-10-12
+
+Se instaló `3b1bb8a` en `main` local de un checkout root-owned en `/opt`, con el
+comportamiento de `376057c`. Configuración declarativa y ACL privadas quedan fuera
+de Git; el checkout anterior completo se conserva en un respaldo root. El destino
+usa Debian 13.6, kernel `6.12.107+deb13-amd64`, Python 3.13.5, nftables 1.1.3,
+iptables 1.8.11 (`nf_tables`) y Docker 29.7.2. No se extrapola esta aceptación a la
+suite iptables con esa versión ni a todas las capacidades de Docker 29.7.2.
+
+La candidata exacta pasó comprobación nft antes de escribir. La entrega de filtro
+más NAT se aplicó con timer independiente de 600 s y se confirmó después de tres
+sesiones SSH autenticadas nuevas: salto externo, túnel VPN y host vecino por LAN.
+El router LAN respondió por TCP/80, TCP/443 e ICMP desde el extremo VPN; aumentaron
+ambos contadores de las nuevas reglas compartidas. También respondió desde un
+cliente VPN real de escritorio, vinculando expresamente la sonda al túnel para
+evitar su ruta LAN solapada; no se cambiaron rutas del cliente. Pasaron conexiones TCP nuevas a servicios privados
+y seis recorridos internos de proxy/backend/bases de datos. Son pruebas de conexión,
+no una validación funcional exhaustiva de aplicaciones ni autenticación de BD.
+
+Tras confirmar se guardó y verificó `ready`. Se retiraron exclusivamente las dos
+reglas S2S heredadas revisadas, conservando un batch de restauración. Los demás
+objetos ajenos mantuvieron su huella; los 17 contenedores conservaron inicio,
+publicaciones e IPs, y Docker mantuvo PID/inicio. El archivo global nftables y el
+hook anterior se preservaron; sus cargadores exclusivos se retiraron sin parada.
+Dos intentos de preparación abortaron y restauraron la habilitación antigua antes
+de cambiar el firewall: orden de drop-ins y dependencia `PartOf` no reiniciable
+con asignación vacía. La adaptación final se comprobó separadamente en QEMU.
+
+Se prepararon cinco grants SSH de recuperación y se habilitaron guard/restore,
+con integración de Docker revisada y comprobación de unidades en systemd del
+destino. SSH conserva independencia de readiness. **No se reinició el destino ni
+Docker, SSH o VPN**: la carga del próximo arranque sigue pendiente de comprobación
+real allí. El ensayo guest válido/inválido anterior no se presenta como ese reboot.
+La recuperación por LAN/salto externo es necesaria si Docker no inicia el cliente
+VPN ante un restore fallido.
+
+No se ejecutó CI remoto, una prueba WAN desde origen público no autorizado ni
+tráfico IPv6 externo en el destino, que carece de conectividad global IPv6 observada.
+La denegación pública y la equivalencia IPv4/IPv6 tienen la evidencia aislada
+anterior, no una nueva certificación de toda su red. Permanecen los límites de
+carga, TLS/S2S y cambios futuros de direcciones/publicaciones indicados en las guías.
