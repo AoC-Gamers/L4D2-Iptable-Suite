@@ -24,12 +24,22 @@ def _legacy_dimensions(config):
 
 
 def migrate_policy(policy):
-    """Return a schema-2 bundle without changing its caller-owned snapshots."""
+    """Normalize a bundle without changing caller-owned snapshots.
+
+    Schema 3 explicitly requires selective shared-rule support, so older
+    releases cannot silently replay only its owned tables and lose routing.
+    """
     require(isinstance(policy, dict), 'Invalid policy state')
     result = deepcopy(policy)
     version = result.get('schema', 1)
-    require(type(version) is int and version in (1, SCHEMA_VERSION),
+    require(type(version) is int and version in (1, SCHEMA_VERSION, 3),
             f'Unsupported policy schema: {version!r}')
+    if version == 3:
+        require(result.get('backend') == 'nftables' and
+                isinstance(result.get('shared_rules'), list) and bool(result['shared_rules']),
+                'Schema 3 requires nftables selective shared rules')
+    else:
+        require(not result.get('shared_rules'), 'Selective shared rules require policy schema 3')
     config = result.get('config')
     require(isinstance(config, dict), 'Policy state has no configuration')
     config = dict(config)

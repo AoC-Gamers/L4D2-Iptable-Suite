@@ -1,5 +1,6 @@
 """Engine I/O: only registered suite objects and exact integration rules."""
 import json
+import ipaddress
 import re
 import shlex
 import subprocess
@@ -134,6 +135,17 @@ def preflight(policy, previous, live, accept_version_change=False, legacy_owned=
         for obj in policy['objects']:
             key = (obj['family'], obj['name'])
             require(key not in live['tables'] or key in registered, f"Object not owned: {key}; explicit legacy migration required")
+        shared = _shared_descriptors(*(p for p in (previous, policy) if p))
+        if shared:
+            require(policy['backend'] == 'nftables' and live.get('docker') == 'iptables'
+                    and live.get('frontend') == 'nft',
+                    'Shared routing requires Docker iptables with the nft frontend')
+            require(v.get('DOCKER_BACKEND') in ('auto', 'iptables'),
+                    'Shared routing requires DOCKER_BACKEND=iptables')
+            for family, table, chain in sorted({(x['family'], x['table'], x['chain']) for x in shared}):
+                require(_chain_exists(family, table, chain),
+                        f'Shared routing requires existing nft chain {family}/{table}/{chain}')
+                _require_docker_user_link(family)
     else:
         old = (previous or {}).get('families', {})
         for f, tables in policy['families'].items():
@@ -314,6 +326,16 @@ def snapshot(policy, live):
                 # Stateless export excludes counters/expiration values; kernel accepts it as a declaration.
                 text = command(['nft', '-s', 'list', 'table', obj['family'], obj['name']]).stdout
                 snap['objects'].append({**obj, 'text': text})
+        rules = []
+        for desc in policy.get('shared_rules', []):
+            found = _inventory_chain(desc['family'], desc['table'], desc['chain'])
+            matches = [row for row in found if row['comment'] == desc['comment']]
+            require(len(matches) <= 1, f"Ambiguous registered shared rule {desc['comment']}")
+            if matches:
+                require(_rule_semantics(matches[0]['text']) == _rule_semantics(desc['text']),
+                        f"Registered shared rule changed: {desc['comment']}")
+                rules.append({**desc, 'text': matches[0]['text']})
+        snap['shared_rules'] = rules
     else:
         snap['families'] = {}
         snap['hooks'] = policy['hooks']
@@ -331,11 +353,196 @@ def quote_args(args):
     return ' '.join('"' + a.replace('\\', '\\\\').replace('"', '\\"') + '"' if any(c.isspace() or c in '\\"' for c in a) else a for a in args)
 
 
-def nft_transaction(target, union, live):
-    keys = {(o['family'], o['name']) for p in union if p for o in p.get('objects', [])}
+def nft_transaction(target, union, live, rollback=False):
+    policies = [p for p in [*union, target] if p]
+    keys = {(o['family'], o['name']) for p in policies for o in p.get('objects', [])}
     lines = [f'delete table {f} {n}' for f,n in sorted(keys) if (f,n) in live['tables']]
     lines += [o['text'] for o in (target or {}).get('objects', [])]
+    descriptors = _shared_descriptors(*policies)
+    if descriptors:
+        registered = {(x['family'], x['table'], x['chain'], x['comment']): x
+                      for x in _shared_descriptors(union[0] if union else None)}
+        if rollback and len(union) > 1:
+            registered.update({(x['family'], x['table'], x['chain'], x['comment']): x
+                               for x in _shared_descriptors(union[1])})
+        inventory = {}
+        for key in sorted({(x['family'], x['table'], x['chain']) for x in descriptors}):
+            inventory[key] = _inventory_chain(*key)
+        for desc in descriptors:
+            key = (desc['family'], desc['table'], desc['chain'])
+            matches = [row for row in inventory[key] if row['comment'] == desc['comment']]
+            require(len(matches) <= 1, f"Ambiguous shared rule marker {desc['comment']}")
+            if matches:
+                owned = registered.get((desc['family'], desc['table'], desc['chain'], desc['comment']))
+                require(owned is not None, f"Unregistered shared rule marker collision: {desc['comment']}")
+                require(_rule_semantics(matches[0]['text']) == _rule_semantics(owned['text']),
+                        f"Registered shared rule changed: {desc['comment']}")
+                lines.append(f"delete rule {desc['family']} {desc['table']} {desc['chain']} handle {matches[0]['handle']}")
+        for desc in (target or {}).get('shared_rules', []):
+            lines.append(f"insert rule {desc['family']} {desc['table']} {desc['chain']} "
+                         f"{_canonical_shared_text(desc['text'])}")
     return '\n'.join(lines) + '\n'
+
+
+_SHARED_COMMENT = re.compile(r'l4d2-suite:s2s:[0-9a-f]{16}\Z')
+_OWN_LINE = re.compile(r'^\s*(.*?)\s+# handle ([0-9]+)\s*$')
+_SHARED_RULE = re.compile(
+    r'iifname (?:"([A-Za-z0-9_.:-]{1,15})"|([A-Za-z0-9_.:-]{1,15})) '
+    r'oifname (?:"([A-Za-z0-9_.:-]{1,15})"|([A-Za-z0-9_.:-]{1,15})) '
+    r'(ip|ip6) saddr ([0-9a-fA-F:.]+(?:/[0-9]{1,3})?) \5 daddr ([0-9a-fA-F:.]+(?:/[0-9]{1,3})?)'
+    r'( ct direction reply ct state (?:\{ established, related \}|established,related))? '
+    r'counter(?: packets [0-9]+ bytes [0-9]+)? accept comment "(l4d2-suite:s2s:[0-9a-f]{16})"\Z')
+
+
+def _rule_semantics(text):
+    """Parse only the compiler's one-rule grammar and discard kernel counters."""
+    match = _SHARED_RULE.fullmatch(text)
+    require(match is not None, 'Unsafe shared routing rule literal')
+    iif = match[1] or match[2]
+    oif = match[3] or match[4]
+    family, source, destination, reply, comment = match[5], match[6], match[7], match[8], match[9]
+    require(family == ('ip' if ':' not in source and ':' not in destination else 'ip6'),
+            'Shared routing address family differs')
+    def canonical_network(value, version):
+        if '/' not in value:
+            value += '/32' if version == 4 else '/128'
+        try:
+            net = ipaddress.ip_network(value, strict=True)
+        except ValueError as exc:
+            raise PolicyError('Invalid shared routing network literal') from exc
+        require(net.version == version, 'Shared routing address family differs')
+        return str(net)
+    version = 4 if family == 'ip' else 6
+    source = canonical_network(source, version)
+    destination = canonical_network(destination, version)
+    return (iif, oif, family, source, destination, bool(reply), comment)
+
+
+def _canonical_shared_text(text):
+    iif, oif, family, source, destination, reply, comment = _rule_semantics(text)
+    state = ' ct direction reply ct state { established, related }' if reply else ''
+    return (f'iifname "{iif}" oifname "{oif}" {family} saddr {source} '
+            f'{family} daddr {destination}{state} counter accept comment "{comment}"')
+
+
+def _shared_descriptors(*policies):
+    result = []
+    for policy in policies:
+        if not policy:
+            continue
+        for desc in policy.get('shared_rules', []):
+            require(isinstance(desc, dict) and set(desc) == {'family', 'table', 'chain', 'comment', 'text'},
+                    'Invalid shared routing descriptor')
+            require(isinstance(desc['comment'], str) and isinstance(desc['family'], str)
+                    and desc['family'] in ('ip', 'ip6') and desc['table'] == 'filter'
+                    and desc['chain'] == 'DOCKER-USER' and _SHARED_COMMENT.fullmatch(desc['comment']),
+                    'Invalid shared routing ownership descriptor')
+            text = desc['text']
+            require(isinstance(text, str) and '\n' not in text and '\r' not in text
+                    and text.endswith('comment "' + desc['comment'] + '"'),
+                    'Invalid shared routing rule literal')
+            semantics = _rule_semantics(text)
+            require(semantics[2] == desc['family'] and semantics[6] == desc['comment'],
+                    'Shared routing rule and descriptor differ')
+            result.append(desc)
+    by_marker = {}
+    for desc in result:
+        key = (desc['family'], desc['table'], desc['chain'], desc['comment'])
+        require(key not in by_marker or _rule_semantics(by_marker[key]['text']) == _rule_semantics(desc['text']),
+                f"Shared routing marker collision: {desc['comment']}")
+        by_marker[key] = desc
+    return list(by_marker.values())
+
+
+def _chain_exists(family, table, chain):
+    result = command(['nft', '-a', '-s', 'list', 'chain', family, table, chain], optional=True)
+    return result.returncode == 0
+
+
+def _require_docker_user_link(family):
+    result = command(['nft', '-j', '-s', 'list', 'chain', family, 'filter', 'FORWARD'], optional=True)
+    require(result.returncode == 0, f'Shared routing requires existing {family}/filter/FORWARD chain')
+    try:
+        entries = json.loads(result.stdout)['nftables']
+    except (ValueError, KeyError, TypeError) as exc:
+        raise PolicyError('Invalid nft FORWARD chain inventory') from exc
+    chains = [x['chain'] for x in entries if isinstance(x, dict) and 'chain' in x
+              and x['chain'].get('family') == family and x['chain'].get('table') == 'filter'
+              and x['chain'].get('name') == 'FORWARD']
+    rules = [x['rule'] for x in entries if isinstance(x, dict) and 'rule' in x
+             and x['rule'].get('family') == family and x['rule'].get('table') == 'filter'
+             and x['rule'].get('chain') == 'FORWARD']
+    require(len(chains) == 1 and rules, f'Invalid {family}/filter/FORWARD chain topology')
+    links = []
+    for index, rule in enumerate(rules):
+        expressions = rule.get('expr')
+        require(isinstance(expressions, list), 'Invalid nft FORWARD rule expression')
+        targets = []
+        for expression in expressions:
+            if isinstance(expression, dict) and set(expression) == {'counter'}:
+                counter = expression['counter']
+                require(counter is None or isinstance(counter, dict)
+                        and set(counter) <= {'packets', 'bytes'}
+                        and all(isinstance(n, int) and n >= 0 for n in counter.values()),
+                        'Invalid nft counter in FORWARD chain')
+            elif isinstance(expression, dict) and set(expression) == {'jump'}:
+                jump = expression['jump']
+                require(isinstance(jump, dict) and set(jump) == {'target'}
+                        and isinstance(jump['target'], str), 'Invalid nft jump in FORWARD chain')
+                if jump['target'] == 'DOCKER-USER':
+                    targets.append(jump['target'])
+            else:
+                targets.append(None)
+        if 'DOCKER-USER' in targets:
+            require(index == 0 and targets == ['DOCKER-USER'],
+                    f'{family}/filter/FORWARD must jump unconditionally to DOCKER-USER first')
+            links.append(index)
+    require(links == [0], f'{family}/filter/FORWARD has no unique first DOCKER-USER jump')
+
+
+def _require_shared_order(descriptors):
+    groups = {}
+    for desc in descriptors:
+        groups.setdefault((desc['family'], desc['table'], desc['chain']), set()).add(desc['comment'])
+    for (family, table, chain), expected in groups.items():
+        rows = _inventory_chain(family, table, chain)
+        positions = [row['position'] for row in rows if row['comment'] in expected]
+        require(len(positions) == len(expected), 'Readiness: shared routing ownership is ambiguous')
+        last = max(positions)
+        result = command(['nft', '-a', '-s', 'list', 'chain', family, table, chain], optional=True)
+        require(result.returncode == 0, f'Readiness: missing shared chain {family}/{table}/{chain}')
+        index = 0
+        for line in result.stdout.splitlines():
+            match = _OWN_LINE.fullmatch(line)
+            if not match:
+                continue
+            if index < last and index not in positions:
+                require(not re.search(r'(?:^|\s)(?:accept|drop|reject|return|jump|goto)(?:\s|$)', match[1]),
+                        f'Readiness: foreign terminal rule precedes shared routing in {family}/{table}/{chain}')
+            index += 1
+
+
+def _inventory_chain(family, table, chain):
+    result = command(['nft', '-a', '-s', 'list', 'chain', family, table, chain], optional=True)
+    require(result.returncode == 0, f'Missing shared routing chain {family}/{table}/{chain}')
+    rows = []
+    marker = 'l4d2-suite:s2s:'
+    position = 0
+    for line in result.stdout.splitlines():
+        if marker not in line:
+            if '# handle ' in line:
+                position += 1
+            continue
+        match = _OWN_LINE.fullmatch(line)
+        require(match is not None, 'Malformed shared routing rule inventory; refusing transaction')
+        literal, handle = match.groups()
+        comments = re.findall(r'comment\s+"([^"]*)"', literal)
+        owned = [comment for comment in comments if comment.startswith(marker)]
+        require(len(owned) == 1 and _SHARED_COMMENT.fullmatch(owned[0]),
+                'Malformed shared routing ownership comment; refusing transaction')
+        rows.append({'comment': owned[0], 'handle': int(handle), 'text': literal.strip(), 'position': position})
+        position += 1
+    return rows
 
 
 def ip_transaction(target, union, live, f):
@@ -386,10 +593,10 @@ def ip_transaction(target, union, live, f):
     return result
 
 
-def prepare(target, union, live):
+def prepare(target, union, live, *, rollback=False):
     backend = target['backend'] if target else next(p['backend'] for p in union if p)
     if backend == 'nftables':
-        return TransactionBatch([('nft', nft_transaction(target, union, live))])
+        return TransactionBatch([('nft', nft_transaction(target, union, live, rollback=rollback))])
     result = []
     for f in ('4', '6'):
         result += [(ipcmd(f, '-restore'), t) for t in ip_transaction(target, union, live, f)]
@@ -413,6 +620,13 @@ def require_owned_present(policy, live):
     """Partial operations require a complete existing managed dependency graph."""
     if policy['backend'] == 'nftables':
         require(all((o['family'],o['name']) in live['tables'] for o in policy['objects']), 'Partial operation requires all registered tables to exist')
+        for desc in _shared_descriptors(policy):
+            matches = [x for x in _inventory_chain(desc['family'], desc['table'], desc['chain'])
+                       if x['comment'] == desc['comment']]
+            require(len(matches) == 1 and _rule_semantics(matches[0]['text']) == _rule_semantics(desc['text']),
+                    f"Readiness: shared routing rule missing or changed: {desc['comment']}")
+        if policy.get('shared_rules'):
+            _require_shared_order(_shared_descriptors(policy))
     else:
         for f, tables in policy['families'].items():
             parsed = parse_save(live['iprules'][f])

@@ -72,6 +72,18 @@ class LegacyTests(unittest.TestCase):
                     legacy.prepare(item, previous, manifest, {})
             snapshot.assert_not_called()
 
+    def test_schema1_handover_accepts_new_ingress_policy(self):
+        manifest = self.inventory()
+        candidate = {'backend': 'nftables', 'config': {'HOST_SERVICES': 'true',
+                     'CONTAINER_POLICY': 'ingress', 'ROUTED_POLICY': 'unmanaged'},
+                     'objects': [{'family': 'inet', 'name': 'reviewed'}]}
+        snapshot = {'backend': 'nftables', 'objects': [
+            {'family': 'inet', 'name': 'reviewed', 'text': 'table inet reviewed { }'}]}
+        live = {'tables': {('inet', 'reviewed')}}
+        with patch.object(legacy, 'verify'), patch.object(engine, 'snapshot', return_value=snapshot), \
+                patch.object(engine, 'check'):
+            self.assertEqual(legacy.prepare(candidate, None, manifest, live), snapshot)
+
     def test_handle_deletion_is_single_transaction_and_cli_requires_ack(self):
         manifest = self.inventory()
         tx = engine.TransactionBatch([('nft', 'delete table inet reviewed\nadd table inet reviewed\n')])

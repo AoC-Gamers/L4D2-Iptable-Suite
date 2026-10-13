@@ -41,6 +41,16 @@ def fingerprint(policy, live=None):
         for obj in policy['objects']:
             raw = engine.command(['nft', '-j', '-s', 'list', 'table', obj['family'], obj['name']]).stdout
             objects.append(clean_kernel(json.loads(raw)))
+        descriptors = engine._shared_descriptors(policy)
+        shared = []
+        for desc in descriptors:
+            matches = [row for row in engine._inventory_chain(desc['family'], desc['table'], desc['chain'])
+                       if row['comment'] == desc['comment']]
+            # require_owned_present has already enforced unique ownership and exact text.
+            shared.append([desc['family'], desc['table'], desc['chain'], desc['comment'],
+                           engine._canonical_shared_text(matches[0]['text'])])
+        if descriptors:
+            objects.append({'shared_rules': shared})
         return digest(objects)
     result = {}
     for family, tables in policy['families'].items():

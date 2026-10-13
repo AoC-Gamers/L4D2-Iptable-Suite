@@ -584,6 +584,10 @@ def unit_cases() -> list[tuple[str, str]]:
         ('python3 -I tests/test_boot.py', UNIT_USER),
         ('python3 -I tests/test_isolated_runner.py', UNIT_USER),
         ('python3 -I tests/test_legacy.py', UNIT_USER),
+        ('python3 -I tests/test_legacy_nat.py', UNIT_USER),
+        ('python3 -I tests/test_container_ingress.py', UNIT_USER),
+        ('python3 -I tests/test_s2s_shared_rules.py', UNIT_USER),
+        ('python3 -I tests/test_shared_routing.py', UNIT_USER),
         ('python3 -I tests/vm/test_transactions_harness.py', UNIT_USER),
         ('python3 -I tests/vm/test_boot_harness.py', UNIT_USER),
         ('python3 -I tests/vm/test_boot_cleanup.py', UNIT_USER),
@@ -925,6 +929,10 @@ def main(argv: list[str] | None = None) -> int:
             timeout=60,
         )
         run_legacy_handover(guest, logger)
+        guest.run_guest('Docker ingress and delegated egress',
+                        f'cd {INSTALL_ROOT} && bash tests/vm/ingress.sh', timeout=600)
+        guest.run_guest('Explicit VPN to LAN routing through Docker',
+                        f'cd {INSTALL_ROOT} && bash tests/vm/s2s-routing.sh', timeout=600)
         run_tests(guest, logger)
         run_transactions(guest, logger)
         run_boot_closure(guest, logger, args.probe_port, args.udp_probe_port)

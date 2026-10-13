@@ -287,7 +287,13 @@ class Configuration:
         # ACCESS_POLICY is an input path. Persist the parsed ACL separately so
         # later partial operations never reopen a mutable file.
         v['ACCESS_POLICY'] = ''
-        require(not self.access['containers'] or v['CONTAINER_POLICY'] == 'restrict', 'Container grants require CONTAINER_POLICY=restrict')
+        require(not self.access['containers'] or v['CONTAINER_POLICY'] in ('restrict', 'ingress'),
+                'Container grants require CONTAINER_POLICY=restrict or ingress')
+        if v['CONTAINER_POLICY'] == 'ingress':
+            require(v['ROUTED_POLICY'] == 'unmanaged',
+                    'CONTAINER_POLICY=ingress requires ROUTED_POLICY=unmanaged')
+            require(bool(self.access['containers']),
+                    'CONTAINER_POLICY=ingress requires nonempty container grants')
         require(not self.access['forward'] or v['ROUTED_POLICY'] == 'drop', 'Forward grants require ROUTED_POLICY=drop')
         if v['FAMILY_POLICY'] != 'dual':
             require(all(network(g['source']).version == 4 for section in self.access.values() for g in section), 'IPv6 grants conflict with ipv4-block-ipv6')
@@ -317,11 +323,29 @@ class Configuration:
         require(v['NF_TABLE_NAME'] != BOOT_GUARD_TABLE,
                 f'NF_TABLE_NAME={BOOT_GUARD_TABLE} is reserved for the boot guard')
         require(v['ROUTED_POLICY'] in ('drop', 'unmanaged'), 'Invalid routed policy')
-        require(v['CONTAINER_POLICY'] in ('off', 'restrict'), 'Invalid container policy')
+        require(v['CONTAINER_POLICY'] in ('off', 'restrict', 'ingress'), 'Invalid container policy')
+        require(v['CONTAINER_POLICY'] != 'ingress' or self.backend == 'nftables',
+                'CONTAINER_POLICY=ingress requires the nftables backend')
         require(v['IPTABLES_FRONTEND'] in ('auto', 'legacy', 'nft'), 'IPTABLES_FRONTEND must be auto/legacy/nft')
         require(v['DOCKER_BACKEND'] in ('auto', 'iptables', 'nftables', 'none'), 'Invalid Docker backend')
         require(v['DOCKER_CHAIN_AUTORECOVER'] == 'false', 'Docker restart removed; set DOCKER_CHAIN_AUTORECOVER=false')
         require(v['DOCKER_INPUT_COMPAT'] == 'false', 'DOCKER_INPUT_COMPAT retired; use CONTAINER_POLICY explicitly')
+        require(v.get('OVPNS2S_ALLOW_LAN', 'false') in ('true', 'false'),
+                'OVPNS2S_ALLOW_LAN must be true/false')
+        if v.get('OVPNS2S_ALLOW_LAN') == 'true':
+            require(self.backend == 'nftables',
+                    'OVPNS2S_ALLOW_LAN=true requires the nftables backend')
+            require('openvpn_sitetosite' in self.names,
+                    'OVPNS2S_ALLOW_LAN=true requires openvpn_sitetosite')
+            require(v['ROUTED_POLICY'] == 'unmanaged',
+                    'OVPNS2S_ALLOW_LAN=true requires ROUTED_POLICY=unmanaged')
+            local_interface = v.get('OVPNS2S_LOCAL_INTERFACE', '')
+            require(local_interface and local_interface != v['OVPNS2S_INTERFACE'],
+                    'OVPNS2S_ALLOW_LAN=true requires OVPNS2S_LOCAL_INTERFACE distinct from OVPNS2S_INTERFACE')
+            local_families = {network(x).version for x in splitlist(v['OVPNS2S_LOCAL_SUBNETS'])}
+            remote_families = {network(x).version for x in splitlist(v['OVPNS2S_REMOTE_SUBNETS'])}
+            require(local_families and local_families == remote_families,
+                    'OVPNS2S_ALLOW_LAN requires local and remote CIDRs in the same address families')
         if self.backend == 'iptables' and self.names & GAME:
             require(v['FAMILY_POLICY'] == 'ipv4-block-ipv6', 'iptables game payload matching supports IPv4 only; choose ipv4-block-ipv6 or nftables dual')
         require(not v['BYPASS_SOURCE_IPS'] or ('whitelist' in self.names and v['PRIVILEGED_BYPASS'] == 'true'), 'BYPASS_SOURCE_IPS needs whitelist and explicit PRIVILEGED_BYPASS=true')

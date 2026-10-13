@@ -57,6 +57,7 @@ class Compiler:
         self.ip = {4: {'filter': {}}, 6: {'filter': {}}}
         self.hooks = []
         self.nf_chains = set()
+        self.shared_rules = []
 
     def chain(self, logical, family=4, table='filter', base=None):
         if self.nft:
@@ -330,6 +331,8 @@ class Compiler:
         for scope, module in (('OVPNSRV', 'openvpn_server'), ('OVPNS2S', 'openvpn_sitetosite')):
             if module not in self.c.names:
                 continue
+            if scope == 'OVPNS2S' and v.get('OVPNS2S_ALLOW_LAN') == 'true':
+                self.s2s_shared_rules()
             srcs = splitlist(v[scope + ('_SUBNET' if scope == 'OVPNSRV' else '_REMOTE_SUBNETS')])
             iface = v[scope + '_INTERFACE']
             out = v.get(scope + ('_LAN_INTERFACE' if scope == 'OVPNSRV' else '_LOCAL_INTERFACE'), '')
@@ -364,6 +367,43 @@ class Compiler:
                         if not self.nft:
                             self.hooks.append(('nat', 'POSTROUTING', short('postrouting')))
 
+    def s2s_shared_rules(self):
+        """Describe explicit site-to-site grants for the external Docker chain."""
+        v = self.v
+        tunnel = v['OVPNS2S_INTERFACE']
+        local_interface = v['OVPNS2S_LOCAL_INTERFACE']
+        remote_nets = sorted(
+            {network(x) for x in splitlist(v['OVPNS2S_REMOTE_SUBNETS'])},
+            key=lambda n: (n.version, int(n.network_address), n.prefixlen),
+        )
+        local_nets = sorted(
+            {network(x) for x in splitlist(v['OVPNS2S_LOCAL_SUBNETS'])},
+            key=lambda n: (n.version, int(n.network_address), n.prefixlen),
+        )
+        for remote in remote_nets:
+            for local in local_nets:
+                if remote.version != local.version:
+                    continue
+                family = 'ip' if remote.version == 4 else 'ip6'
+                for direction, iif, oif, source, destination, state in (
+                    ('remote-to-local', tunnel, local_interface, remote, local, ''),
+                    ('local-to-remote-reply', local_interface, tunnel, local, remote,
+                     ' ct direction reply ct state { established, related }'),
+                ):
+                    identity = '|'.join((
+                        direction, str(remote.version), tunnel, local_interface,
+                        str(remote), str(local),
+                    ))
+                    comment = 'l4d2-suite:s2s:' + hashlib.sha256(identity.encode()).hexdigest()[:16]
+                    text = (
+                        f'iifname "{iif}" oifname "{oif}" '
+                        f'{family} saddr {source} {family} daddr {destination}'
+                        f'{state} counter accept comment "{comment}"'
+                    )
+                    self.shared_rules.append({
+                        'family': family, 'table': 'filter', 'chain': 'DOCKER-USER',
+                        'comment': comment, 'text': text,
+                    })
     def containers(self):
         for index, g in enumerate(self.c.access['containers']):
             context = 'container' + str(index)
@@ -425,6 +465,21 @@ class Compiler:
         self.containers()
         if self.v['ROUTED_POLICY'] == 'drop':
             self.add('forward', 'counter drop', ['-j', 'DROP'])
+        elif self.v['CONTAINER_POLICY'] == 'ingress':
+            # Exact DNAT grants above run first. Keep same-bridge traffic and
+            # replies to container-originated flows, then deny every other
+            # packet routed toward a configured container bridge. Returning
+            # unrelated forwarding leaves later base chains (e.g. Docker's)
+            # responsible for their policy.
+            bridges = sorted({g['output'] for g in self.c.access['containers']})
+            for bridge in bridges:
+                self.add('forward',
+                         f'iifname "{bridge}" oifname "{bridge}" counter return', [])
+                self.add('forward',
+                         f'oifname "{bridge}" ct direction reply '
+                         'ct state { established, related } ct status != dnat counter return', [])
+                self.add('forward', f'oifname "{bridge}" counter drop', [])
+            self.add('forward', 'counter return', ['-j', 'RETURN'])
         else:
             # Restrict only configured container zones while other routing is delegated.
             for g in self.c.access['containers']:
@@ -437,6 +492,9 @@ class Compiler:
         else:
             result = {'backend': self.c.backend, 'families': {str(f): tables for f, tables in self.ip.items()}, 'hooks': [list(h) for h in sorted(set(self.hooks))]}
         result.update({'config': self.v, 'selected': self.c.selected, 'access': self.c.access, 'schema': 2})
+        if self.shared_rules:
+            result['shared_rules'] = self.shared_rules
+            result['schema'] = 3
         return result
 
 

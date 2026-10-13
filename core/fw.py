@@ -59,9 +59,11 @@ def parser():
     p.add_argument('--accept-version-change', action='store_true', help='Explicit maintenance acceptance of unevaluated iptables version, never frontend changes')
     p.add_argument('--recovery-file', help='Root-owned scoped SSH recovery grants for boot-prepare; absent means console recovery')
     p.add_argument('--legacy-table', help='Explicit inet table for passive legacy-inventory')
+    p.add_argument('--legacy-nat-table', action='append', default=[], metavar='ip:NAME|ip6:NAME',
+                   help='Explicit ip/ip6 NAT table for schema-2 passive legacy-inventory; repeatable')
     p.add_argument('--legacy-manifest', help='Reviewed root-owned legacy inventory for check/apply handover')
     p.add_argument('--acknowledge-legacy-ownership', action='store_true',
-                   help='Operator attests exclusive suite ownership of every object in the reviewed table')
+                   help='Operator attests exclusive suite ownership of every reviewed table and its objects')
     return p
 
 
@@ -151,6 +153,10 @@ def show(policy, args):
         for obj in policy['objects']:
             print(obj['family'], obj['name'])
             print(obj['text'])
+        for rule in policy.get('shared_rules', []):
+            print('PRIVILEGED VPN TO LAN ROUTING (all protocols within declared networks/interfaces):')
+            print('Selective shared rule:', rule['family'], rule['table'], rule['chain'], rule['comment'])
+            print(rule['text'])
     else:
         print('Objects replaced per table and family (--noflush; shared hook inserted first on initial installation):')
         print(json.dumps(policy['families'], sort_keys=True, indent=2))
@@ -178,6 +184,8 @@ def main(argv=None):
     require(not args.accept_version_change or args.operation in ('check', 'apply', 'load'), 'Version acceptance is only available during check/apply/load maintenance')
     require(not args.recovery_file or args.operation == 'boot-prepare', '--recovery-file is only accepted by boot-prepare')
     require(not args.legacy_table or args.operation == 'legacy-inventory', '--legacy-table requires legacy-inventory')
+    require(not args.legacy_nat_table or args.operation == 'legacy-inventory',
+            '--legacy-nat-table requires legacy-inventory')
     require(not args.legacy_manifest or (args.operation in ('check', 'apply') and
             args.acknowledge_legacy_ownership and not args.partial and not args.remove and not args.local),
             'Legacy manifest requires check/apply, explicit ownership acknowledgement and timed rollback')
@@ -203,7 +211,15 @@ def main(argv=None):
         require(not args.env_file and not args.set and not args.partial and not args.remove and
                 args.only is None and args.skip is None and args.profile is None,
                 'legacy-inventory does not load policy configuration or state')
-        print(json.dumps(legacy.inventory(args.legacy_table), sort_keys=True, indent=2))
+        nat_tables = []
+        require(len(args.legacy_nat_table) <= 7, 'Legacy inventory supports at most eight tables')
+        for value in args.legacy_nat_table:
+            require(isinstance(value, str) and value.count(':') == 1,
+                    '--legacy-nat-table must be ip:NAME or ip6:NAME')
+            family, name = value.split(':', 1)
+            require(family in ('ip', 'ip6'), '--legacy-nat-table must be ip:NAME or ip6:NAME')
+            nat_tables.append((family, name))
+        print(json.dumps(legacy.inventory(args.legacy_table, nat_tables), sort_keys=True, indent=2))
         return
     if args.operation == 'diagnose':
         require(os.geteuid() == 0, 'Passive kernel diagnosis requires root')
@@ -284,17 +300,18 @@ def main(argv=None):
         if args.operation == 'check':
             live = engine.inspect(candidate['backend'], candidate['config'].get('IPTABLES_FRONTEND', 'auto'))
             legacy_owned = ()
+            legacy_snapshot = None
             if args.legacy_manifest:
                 from core import legacy
                 require(not store.get('boot-policy'), 'Legacy handover cannot replace a prepared boot policy')
                 manifest = legacy.load(args.legacy_manifest)
-                legacy.prepare(candidate, previous, manifest, live)
-                legacy_owned = (('inet', manifest['name']),)
+                legacy_snapshot = legacy.prepare(candidate, previous, manifest, live)
+                legacy_owned = legacy.owned_keys(manifest)
             engine.preflight(candidate, previous, live, accept_version_change=args.accept_version_change,
                              legacy_owned=legacy_owned)
             if candidate['backend'] == 'iptables':
                 candidate['hooks'] = engine.actual_hooks(candidate, live)
-            tx = engine.prepare(candidate, [previous, candidate], live)
+            tx = engine.prepare(candidate, [previous, candidate, legacy_snapshot], live)
             if args.legacy_manifest:
                 legacy.pin_transaction(tx, manifest)
             engine.check(tx)

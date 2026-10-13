@@ -117,7 +117,10 @@ class Store:
         if expired_only and remaining(pending) > 0:
             return False
         live = engine.inspect(pending['candidate']['backend'], pending['candidate']['config'].get('IPTABLES_FRONTEND', 'auto'))
-        tx = engine.prepare(pending['snapshot'], [pending['previous'], pending['candidate']], live)
+        # Include the actual snapshot for renamed legacy tables and selectively
+        # managed shared rules, including recovery repeated after interruption.
+        union = [pending['previous'], pending['candidate'], pending['snapshot']]
+        tx = engine.prepare(pending['snapshot'], union, live, rollback=True)
         engine.check(tx)
         boot.invalidate(self)
         engine.execute(tx)
@@ -169,7 +172,7 @@ class Store:
             require(not local, 'Legacy handover requires independent timed rollback')
             require(not self.get('boot-policy'), 'Legacy handover cannot replace a prepared boot policy')
             legacy_snapshot = legacy.prepare(candidate, previous, legacy_manifest, live)
-            legacy_owned = (('inet', legacy_manifest['name']),)
+            legacy_owned = legacy.owned_keys(legacy_manifest)
         engine.preflight(candidate, previous, live, accept_version_change=accept_version_change,
                          legacy_owned=legacy_owned)
         if candidate['backend'] == 'iptables':
@@ -184,7 +187,10 @@ class Store:
                     else decision)
             candidate['versions'] = live['versions']
         snap = legacy_snapshot if legacy_manifest is not None else engine.snapshot(previous, live)
-        tx = engine.prepare(None if candidate.get('disabled') else candidate, [previous, candidate], live)
+        union = [previous, candidate]
+        if legacy_manifest is not None:
+            union.append(legacy_snapshot)
+        tx = engine.prepare(None if candidate.get('disabled') else candidate, union, live)
         if legacy_manifest is not None:
             legacy.pin_transaction(tx, legacy_manifest)
         engine.check(tx)  # Nothing active changes before every table/family has checked.
