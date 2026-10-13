@@ -59,3 +59,49 @@ Pruebas: [clients.py](../../tests/vm/clients.py), [check-engine.py](../../tests/
 
 Usa únicamente `real;alias,real;alias`, no `|`: aunque el validador interno lo
 admite, la generación lo rechaza. Discrepancia de separadores: [incidencia documentalmente detectada](../security/limitations.md#incidencias-funcionales-pendientes).
+
+## Gateway S2S junto a Docker iptables-nft
+
+`OVPNS2S_ALLOW_LAN=true` es un permiso privilegiado **explícito**, independiente
+de `OVPNS2S_ENABLE_NAT`. Autoriza todos los protocolos desde cada prefijo remoto
+por el túnel hacia cada prefijo local por la interfaz LAN declarada; el retorno
+solo corresponde a conexiones establecidas/relacionadas en dirección reply.
+No concede un bypass al host ni acceso a otras subredes. Exige nftables nativo,
+`openvpn_sitetosite`, `ROUTED_POLICY=unmanaged`, interfaces distintas y Docker
+iptables con frontend nft. Otras combinaciones se rechazan antes de aplicar.
+El modo sirve cuando el operador quiere conservar un gateway a la LAN completa,
+incluido su router; para permisos más estrechos usa grants de routing en una
+combinación soportada en [capacidades](../firewall/backends.md).
+
+El escritor común inserta solamente sus reglas identificadas en DOCKER-USER y
+las conserva en el journal de confirmación/rollback. La cadena debe existir:
+no se crea ni se repara Docker. El reemplazo de tablas propias y de esas reglas
+ocurre en un solo batch nftables. Readiness incluye su contenido. Desactivar o
+revertir retira exclusivamente reglas registradas de la suite, sin vaciar la
+cadena compartida ni modificar su política. Los bundles que las requieren usan
+schema 3: versiones anteriores deben rechazarlos, no cargar solo las tablas.
+
+El arranque necesita Docker antes del restore y los drop-ins de guard/restore
+indicados en [arranque](../boot/README.md). Guardar el bundle no instala unidades.
+Las reglas heredadas deben revisarse/retirarse explícitamente y el cargador antiguo
+debe respaldarse y retirarse según su propiedad; no lo ejecutes junto al nuevo.
+NAT sigue limitado a prefijos e interfaz declarados. Listas NAT mixtas IPv4/IPv6
+siguen rechazadas; el opt-in no añade soporte a esa combinación.
+
+Ensayo de gateway y NAT, solo root en la VM QEMU desechable preparada por el
+[runner](../testing/vm.md), desde `/opt/l4d2-firewall`:
+
+```sh
+bash tests/vm/s2s-routing.sh
+```
+
+Prueba Docker iptables-nft real, TCP/retorno y masquerade VPN→LAN, ICMP al peer LAN,
+denegación de destino fuera de LAN y de conexiones nuevas LAN→VPN, conservación
+de reglas ajenas y retirada selectiva. No acredita túneles TLS ni el router real.
+
+Ejemplo declarativo ficticio: [vpn-lan-docker.conf](../../config/profiles/vpn-lan-docker.conf).
+Desde la raíz del checkout, sin root, `./nftables.rules.sh validate --env-file
+config/profiles/vpn-lan-docker.conf` comprueba lógica y genera; no prueba el túnel
+ni el motor. Reemplaza interfaces y prefijos antes de comprobar/aplicar. Este
+ejemplo delega el tráfico de contenedores a Docker (`CONTAINER_POLICY=off`); combina
+`ingress` y grants DNAT explícitos si también quieres restringir publicaciones.

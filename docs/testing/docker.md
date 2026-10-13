@@ -48,6 +48,21 @@ puerto IPv4 concedido y bloquearon un listener activo en el puerto adyacente.
 En suite nftables / Docker iptables, el egress quedó delegado a Docker, tal
 como indica el preflight del producto.
 
+La regresión focalizada de `CONTAINER_POLICY=ingress` tiene evidencia aprobada
+aparte en la misma VM: suite nftables con Docker Engine `29.8.2` y frontend
+iptables-nft, con publicaciones y clientes IPv4/IPv6. Comprueba permisos de
+entrada explícitos, retorno, aislamiento de flujos no concedidos, egreso delegado,
+conservación e idempotencia. Este resultado no amplía los cinco PASS de la matriz
+anterior a otros backends/frontends.
+
+La integración `OVPNS2S_ALLOW_LAN` también pasó una regresión aparte con suite
+nftables y Docker iptables-nft real en la VM: tráfico IPv4 TCP de extremo a extremo,
+masquerade VPN→LAN, ICMP al peer LAN, denegación de destinos fuera de LAN y de
+conexiones nuevas LAN→VPN, además de rollback, idempotencia y conservación de reglas
+ajenas. Es evidencia de ese flujo acotado; no valida TLS, un router real ni las otras
+combinaciones de la matriz Docker. La evidencia por commit registra el entorno y
+separa este ensayo de la matriz normal.
+
 Las salidas completas están en `tmp/vm/docker-*.log` en el workspace de
 validación.
 

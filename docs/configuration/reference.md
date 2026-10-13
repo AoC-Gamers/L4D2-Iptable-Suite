@@ -43,7 +43,7 @@ No existe compatibilidad shell ni fallback automático.
 | `NF_TABLE_FAMILY` | enum | `inet` | solo inet |
 | `HOST_SERVICES` | booleano | `true` | servicios del host, independiente de routing |
 | `ROUTED_POLICY` | enum | `drop` | drop / unmanaged; grants forward requieren drop |
-| `CONTAINER_POLICY` | enum | `off` | off / restrict; grants containers requieren restrict |
+| `CONTAINER_POLICY` | enum | `off` | off / restrict / ingress; ingress solo nftables, routing unmanaged y grants no vacíos |
 | `DOCKER_BACKEND` | enum | `auto` | auto / iptables / nftables / none; expectativa diagnóstico |
 | `IPTABLES_FRONTEND` | enum | `auto` | auto / nft / legacy; selecciona binarios, no alternativas |
 | `ACCESS_POLICY` | ruta JSON | `` (vacío) | se parsea y vacía ruta en estado schema 2; ACL por separado |
@@ -128,6 +128,7 @@ La traducción input 0/1/2 ocurre una vez; no se usa en partial/remove.
 | `OVPNS2S_LOCAL_SUBNETS` | IP/CIDR/lista | ausente | ausente | `openvpn_sitetosite` |
 | `OVPNS2S_LOG_ENABLED` | booleano | ausente | `false` | `openvpn_sitetosite`; true rechazado |
 | `OVPNS2S_LOG_PREFIX` | prefijo log | ausente | `VPN_S2S_TRAFFIC:` | `openvpn_sitetosite` |
+| `OVPNS2S_ALLOW_LAN` | booleano | `false` | `false` | opt-in privilegiado; solo nftables + Docker iptables-nft + routing unmanaged; ver VPN |
 | `OVPNS2S_REMOTE_SUBNETS` | IP/CIDR/lista | ausente | ausente | `openvpn_sitetosite` |
 | `OVPNS2S_ROUTER_ALIAS` | pares IPv4 | vacío | vacío | `openvpn_sitetosite` |
 | `OVPNS2S_ROUTER_ALIAS_IP` | IPv4 | vacío | vacío | `openvpn_sitetosite` |

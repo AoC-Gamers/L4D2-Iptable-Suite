@@ -2,8 +2,10 @@
 
 El flujo opt-in sustituye una tabla `inet` de filtrado **íntegramente propiedad
 de la suite** por una política nueva del mismo nombre. Exige servicios del host,
-contenedores desactivados, `ROUTED_POLICY=unmanaged`, sin NAT y sin política actual
-ni barrera registrada. No importa iptables ni layouts compartidos/ambiguos.
+contenedores `off` o `ingress`, `ROUTED_POLICY=unmanaged` y ausencia de política actual
+y barrera registrada. Schema 1 conserva la entrega de una sola tabla sin NAT.
+Schema 2 permite revisar además hasta siete tablas NAT `ip`/`ip6` de la suite,
+incluido sustituir sus nombres por los generados por el núcleo. No importa iptables ni layouts compartidos/ambiguos.
 `--acknowledge-legacy-ownership` declara la revisión y propiedad exclusiva de
 **todos** los objetos; el manifiesto identifica contenido y handle, no prueba
 propiedad. La aplicación ordinaria sigue rechazando objetos sin registro.
@@ -42,7 +44,7 @@ eliminación por handle invalida la caché de evaluación de nft: permite reempl
 medidores homónimos con otra capacidad. Un handle obsoleto hace fallar todo el
 lote, incluido ese `destroy`; no se divide la operación. Requiere que el motor
 acepte esa sintaxis en `check`; se ensaya con nftables 1.0.9 y 1.1.3.
-El fallo/expiración restaura exclusivamente esa tabla y deja `current`
+El fallo/expiración restaura exclusivamente las tablas revisadas y deja `current`
 vacío como antes. No se permite `--local`. Tras una reversión se recrea la tabla:
 el manifiesto anterior deja de ser válido, aunque las reglas coincidan.
 
@@ -80,3 +82,23 @@ Código: [legacy.py](../../core/legacy.py), [escritor](../../core/store.py).
 Regresiones: [unitarias](../../tests/test_legacy.py),
 [kernel/tráfico aislado](../../tests/legacy-flows.py),
 [systemd y SSH nuevo en QEMU](../../tests/vm/legacy_handover.py).
+
+## Entrega conjunta con NAT
+
+Para una instalación heredada con NAT de la suite, el inventario pasivo root
+admite `--legacy-nat-table ip:nombre` o `ip6:nombre`, repetible. Por ejemplo,
+desde una instalación confiable, tras revisar propiedad exclusiva:
+
+```sh
+sudo sh -c 'umask 077; /opt/l4d2-firewall/ipp.sh legacy-inventory --legacy-table firewall_main --legacy-nat-table ip:vpn_s2s_nat > /root/legacy-reviewed.json'
+```
+
+Solo admite hooks NAT prerouting/postrouting en esas tablas. Cada entrada tiene
+handle y fingerprint; cualquier cambio aborta la entrega. Check verifica tanto
+candidata como snapshot restaurable. El mismo batch elimina las tablas anteriores
+y crea las nuevas; rollback restaura los nombres anteriores y retira las nuevas,
+sin sustituir tablas de Docker ni reglas ajenas. Las reglas compartidas de routing
+[opt-in S2S](../vpn/README.md#gateway-s2s-junto-a-docker-iptables-nft) tienen registro
+selectivo separado: el manifiesto de tablas no concede propiedad de DOCKER-USER.
+Las reglas S2S antiguas no se adoptan por comentario o apariencia: conservadas
+hasta una retirada explícita revisada, no son la fuente de arranque de la política nueva.

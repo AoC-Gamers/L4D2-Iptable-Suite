@@ -95,6 +95,32 @@ con manifiesto revisado, propiedad exclusiva acreditada y rollback independiente
 no amplía la aplicación ordinaria ni importa layouts ambiguos.
 `NF_TABLE_NAME` se respeta; las tablas NAT derivan de ese nombre (`_nat4`/`_nat6`).
 
+Para el paso S2S explícito hacia LAN, nftables registra además los descriptores
+`shared_rules` del bundle. El inventario de `DOCKER-USER` acepta únicamente reglas
+con comentario exacto `l4d2-suite:s2s:<id>` cuya forma y semántica coinciden con el
+descriptor registrado; consulta handles y aborta ante comentarios no registrados,
+semántica alterada o handles ambiguos. No adopta reglas por nombre/comentario. El
+batch elimina las reglas propias reconocidas por handle e inserta las candidatas
+junto con el reemplazo de tablas. El snapshot registra solo reglas compartidas
+reconocidas, y rollback restaura esas reglas previas y elimina las candidatas
+reconocidas por la suite. Reglas ajenas quedan fuera de la transacción. Esta
+extensión produce bundle de política schema 3 solo cuando hay `shared_rules`;
+schemas 1 y 2 sin esas reglas conservan el flujo previo.
+
+La [entrega heredada](../migration/legacy-handover.md) también admite un manifiesto
+explícito schema 2 con una tabla `inet` de filtro y tablas NAT `ip`/`ip6` revisadas.
+El inventario admite hasta ocho tablas totales (una `inet` y hasta siete NAT); las
+tablas NAT deben limitarse a hooks `prerouting`/`postrouting`.
+El snapshot incluye todas las tablas del manifiesto, incluso los nombres NAT
+anteriores cuando la candidata use nombres nuevos. Un único batch elimina por
+handle las tablas revisadas, las destruye por nombre y crea la candidata. Así se
+reemplaza la NAT heredada (por ejemplo `ip vpn_s2s_nat`) en el mismo commit. La
+expiración o el fallo restaura todas las tablas anteriores y elimina solo los
+objetos candidatos de la suite; la recuperación es idempotente. Schema 1 sigue
+siendo compatible para la entrega de una única tabla `inet` sin NAT. Ninguno de
+estos flujos autoriza tocar `ip filter`, Docker-USER por herencia ni objetos sin
+identidad revisada.
+
 iptables usa cadenas `L4S_…` deterministas y una regla con comentario
 `l4d2-suite:integration` por punto de integración. `iptables-restore --noflush`
 **sí puede vaciar cadenas declaradas**: se declaran/vacían solamente las propias.

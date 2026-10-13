@@ -83,6 +83,8 @@ systemd de producción. Tres conexiones SSH separadas arman el cambio, comprueba
 acceso nuevo y observan la expiración sin invocar recuperación. Se exige restaurar
 la tabla anterior y dejar el registro vacío. El caso cambia la capacidad de un
 medidor homónimo para comprobar la sustitución atómica; no usa reglas privadas.
+Este caso histórico cubre una tabla `inet` y manifiesto schema 1; por sí solo no
+valida schema 2 ni sustitución/restauración conjunta de tablas NAT `ip`/`ip6`.
 
 El runner falla ante cualquier salida distinta de cero, incluyendo el código
 `77` que un harness usa para indicar `SKIP`; esta matriz no puede reportar
@@ -143,3 +145,29 @@ horas para permitir TCG cuando KVM no está disponible. El reporte demuestra só
 imagen/Docker, kernel, systemd y backends ejercitados; no sustituye una prueba
 de firewall en el host del desarrollador ni afirma que la sonda UDP sintética
 sea un cliente L4D2 real.
+
+La evidencia aprobada de ingreso de contenedores se limita al caso dual-stack de
+suite nftables con Docker `29.8.2`/iptables-nft descrito en
+[Docker real](docker.md). No se debe inferir de esa corrida evidencia de tráfico
+para otros backends o frontends. En un ensayo separado de `OVPNS2S_ALLOW_LAN`, la
+suite nftables con Docker iptables-nft real pasó tráfico IPv4 TCP, masquerade
+VPN→LAN e ICMP al peer LAN, y rechazó destinos fuera de LAN y conexiones nuevas
+LAN→VPN; también pasó rollback, idempotencia y conservación de reglas ajenas.
+Esto no acredita TLS ni topología de router real.
+
+Las nueve pruebas nuevas de `tests/legacy-flows.py` pasaron en kernel nftables y
+cubren el handover schema 2 de la tabla de filtro más tablas NAT IPv4/IPv6:
+fallo de candidata y handle NAT obsoleto sin cambios parciales, reemplazo en un
+solo batch, expiración tras matar al aplicador con restauración de filtro/NAT y
+preservación de objetos ajenos, confirmación, reapply e `disable` selectivo. Estas
+pruebas verifican ciclo de vida de objetos; no prueban traducción de paquetes NAT.
+El ensayo focalizado `valpo1-a6e1fe2bf5` cerró con **dos reboots guest PASS**.
+El reboot válido comprobó `ready`, TCP/masquerade/ICMP y el orden de dos reglas
+compartidas S2S antes de la regla ajena. El reboot inválido rechazó schema `999`
+en `ExecStartPost` de Docker, dejó inactiva la dependencia `l4d2-firewall.service` y `ready` falló con
+guard-drop; luego se recuperó SSH nuevo, se restauró exactamente la política
+persistida buena y el reinicio de Docker del guest recuperó el flujo y la regla
+ajena. El helper usado es privado/operacional, no un nuevo gate de CI. Los intentos
+previos fallaron por fixtures del arnés corregidas después y no se cuentan como
+PASS ni como defectos del producto. No hubo CI remoto ni ensayo productivo.
+Entorno y límites por revisión en [aprobación](../security/approval.md).

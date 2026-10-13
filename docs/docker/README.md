@@ -55,3 +55,36 @@ comandos del proveedor. La aplicación ordinaria no reinicia servicios.
 
 Código: [engine.py](../../core/engine.py). Pruebas: [topología](../../tests/docker-topology-flows.py),
 [daemon real](../../tests/vm/docker.py), [H3](../../tests/vm/closure_boot.py).
+
+## Ingreso filtrado y egreso delegado
+
+`CONTAINER_POLICY=ingress` es un modo explícito de nftables nativo que exige
+`ROUTED_POLICY=unmanaged` y grants `containers` no vacíos. Conserva los permisos
+DNAT con tuple original/interno, protocolo, fuente e interfaces. En cada bridge
+nombrado por esos grants descarta el ingreso restante, incluso conexiones
+establecidas en dirección original. Permite retornar a las reglas externas para
+tráfico del mismo bridge y respuestas establecidas a egreso sin DNAT; no acepta
+anticipadamente conexiones entrantes solo por estar establecidas. El egreso y
+las rutas que no llegan a esos bridges siguen bajo Docker/otros administradores.
+No equivale a controlar su política de salida. `restrict` conserva su alcance
+anterior en ambas direcciones; iptables rechaza `ingress` expresamente.
+
+El alcance son los bridges declarados, no todos los contenedores presentes o
+futuros. Actualiza y confirma ACL antes de publicar en otra red o cambiar IPs,
+interfaces o puertos internos. El tráfico originado en el propio host usa OUTPUT,
+y una publicación entregada por docker-proxy puede recorrer INPUT: configura
+también los servicios del host y no presupongas que el grant FORWARD cubre ese
+camino. Las publicaciones IPv6 requieren esa revisión incluso con contenedores
+que solo tengan IPv4. No se modifican tablas ni cadenas propiedad de Docker.
+
+Ensayo reproducible, **solo como root dentro de la VM desechable** ya preparada
+por el [runner](../testing/vm.md), desde `/opt/l4d2-firewall`:
+
+```sh
+bash tests/vm/ingress.sh
+```
+
+El wrapper exige marcador QEMU y crea namespaces de red/mount y `/run` privados;
+prueba daemon Docker real, DNAT/retorno dual, independencia UDP/TCP, revocación de
+flujo establecido, egreso delegado, tráfico local del bridge e idempotencia.
+No lo ejecutes contra el anfitrión ni contabilices dependencias ausentes como PASS.

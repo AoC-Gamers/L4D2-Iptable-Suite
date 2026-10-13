@@ -228,3 +228,36 @@ requieren reevaluar el alcance afectado. `--accept-version-change` registra una
 decisión explícita de mantenimiento; no sustituye pruebas ni migra frontend.
 Equivalencia documental se revisa aparte mediante diff y checks; no vuelve a
 etiquetar un run histórico como ejecución de otro HEAD.
+
+## Evidencia adicional del commit `376057ce33d0ff1fc577bf01d71d72724cc08168`
+
+Este registro cubre las funciones añadidas en ese commit y sus regresiones. No
+reemplaza la aceptación del commit `93096dea…`, no reetiqueta sus corridas y no
+constituye validación de CI remoto ni de un entorno productivo.
+
+| Capa | Resultado observado | Alcance y límite |
+|---|---|---|
+| Estática y composición | **170 tests unitarios**, **8 casos de generación**; ShellCheck 0.9.0, sintaxis Bash/Python y checks documentales pasaron | No acredita kernel ni tráfico por sí sola |
+| QEMU, kernel y Docker | Ubuntu Noble `20260926`, kernel `6.8.0-142`, nftables 1.0.9, iptables 1.8.10 (`nf_tables` y legacy), Docker 29.8.2; **20 checks de motor** y **58 métodos de regresión** con ambos frontends | Ensayos aislados en guest QEMU; no amplían cada combinación del histórico Docker |
+| Ingreso Docker | `CONTAINER_POLICY=ingress` pasó con Docker real, IPv4 e IPv6 ([caso](../../tests/vm/ingress.py)) | Suite nftables + Docker iptables-nft; no generaliza a otros backends/frontends |
+| Gateway S2S + Docker | **PASS** ([caso](../../tests/vm/s2s-routing.py)): Docker real, IPv4 TCP, masquerade VPN→LAN, ICMP al peer LAN, negativos de destino/conexiones nuevas, rollback, idempotencia y conservación de reglas ajenas | Suite nftables + Docker iptables-nft; no valida TLS ni un router real |
+| Handover heredado NAT | **9 pruebas** nuevas de [`tests/legacy-flows.py`](../../tests/legacy-flows.py) pasaron con nftables: candidatas inválidas, handle NAT obsoleto, batch único, expiración tras SIGKILL/restauración de filtro y NAT, objetos ajenos, confirmación, reapply y disable | Verifica transacción/schema 2 en IPv4/IPv6; no prueba traducción de paquetes NAT |
+| Kernel objetivo aislado | Candidata exacta validada y aplicada en Debian 13.6, kernel `6.12.107`, Python 3.13.5, nftables 1.1.3 e iptables 1.8.11 (`nf_tables`); política de servicios de host pasó IPv4/IPv6 | Docker se representó con fixture estructural; no fue un ensayo con daemon Docker real |
+| Reboots S2S | **PASS**, ambos caminos: reboot válido y reboot inválido con recuperación | Guest desechable; helper operacional privado en `valpo1-a6e1fe2bf5`, fuera del árbol y no es un nuevo gate CI |
+
+Las corridas QEMU y el ensayo aislado del kernel objetivo no tocan el firewall,
+servicios ni persistencia global del host. La corrida S2S con Docker real acredita
+solo los casos listados; el fixture Docker del ensayo Debian valida estructura,
+no el plano de datos Docker. En el reboot válido, `ready` y las sondas TCP,
+masquerade e ICMP pasaron; antes de la regla ajena se observaron las dos reglas
+compartidas S2S esperadas. En el reboot inválido, el schema `999` fue rechazado
+desde `ExecStartPost` de Docker, la dependencia `l4d2-firewall.service` quedó inactiva, `ready` falló
+con guard-drop y se recuperó acceso SSH nuevo. Se restauró exactamente la política
+persistida buena; al reiniciar Docker en el guest se recuperaron el flujo y la regla
+ajena.
+
+Los intentos previos de este ensayo fallaron por fixtures del arnés: la expectativa
+del estado de dependencia inactiva y la idempotencia del fixture extranjero por
+propietario de cada boot. Se corrigió el arnés y luego pasaron ambos caminos; esos
+intentos fallidos no cuentan como PASS ni como defectos del producto. No hubo run
+de CI remoto ni ensayo productivo en esta evidencia.

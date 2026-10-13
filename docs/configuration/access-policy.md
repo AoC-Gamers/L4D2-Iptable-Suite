@@ -14,7 +14,7 @@ y ancestros root, sin escritura de grupo/otros ni symlinks.
 |---|---|---|
 | `host` | `group`, `source`, `destination`, `input`, `protocol`, `ports` | Acceso acotado al host, anterior a controles públicos; puede omitir límites de ese servicio |
 | `forward` | Los de host + `output` | Flujo direccional enrutado, exige `ROUTED_POLICY=drop` |
-| `containers` | Los de forward + `public_destination`, `public_ports`, `service` | Exige `CONTAINER_POLICY=restrict` y módulo de servicio seleccionado; diferencia tuple público/interno DNAT |
+| `containers` | Los de forward + `public_destination`, `public_ports`, `service` | Exige `CONTAINER_POLICY=restrict|ingress` y módulo de servicio seleccionado; diferencia tuple público/interno DNAT |
 | Juego en contenedor | Los de containers + `role` | `service=l4d2_udp_base`; `role=gameserver` o `sourcetv`; protocolo UDP |
 
 Todos los valores son strings; máximo 256 grants por sección. Grupo es etiqueta,
@@ -55,3 +55,7 @@ el flujo temporizado de [aplicación/rollback](../firewall/transactions.md).
 
 Código: [config.py](../../core/config.py), [schema.py](../../core/schema.py).
 Pruebas: [test_h2.py](../../tests/test_h2.py), [h2-flows.py](../../tests/h2-flows.py).
+
+`ingress` requiere nftables y routing delegado. Protege solo el ingreso a los
+bridges declarados; [Docker](../docker/README.md#ingreso-filtrado-y-egreso-delegado)
+detalla el camino de retorno, egreso y limitaciones de publicaciones por proxy.

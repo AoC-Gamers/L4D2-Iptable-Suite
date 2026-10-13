@@ -22,6 +22,8 @@ según su documentación oficial. Versiones y límites en [aprobación y evidenc
 | Reenvío nativo / VPN sin Docker | Grants v4/v6 probados con tráfico | Grants v4/v6 probados con tráfico | Grants v4/v6 probados con tráfico en VM |
 | OpenVPN server NAT / DNAT | NAT con tráfico de integración; TLS/alias en VM | NAT con tráfico de integración; TLS/alias en VM | NAT con tráfico de integración; alias candidata kernel; TLS legacy no ensayado |
 | OpenVPN S2S NAT / alias / SNAT | Ruta S2S/alias/TLS con tráfico; SNAT candidata kernel | Ruta S2S/alias/TLS con tráfico; SNAT candidata kernel | DNAT/SNAT candidata kernel; tráfico S2S/TLS legacy no ensayado |
+| Ingreso publicado a contenedores (`CONTAINER_POLICY=ingress`) | Sólo nftables; grants explícitos por publicación | No soportado | No soportado |
+| Paso S2S explícito a LAN (`OVPNS2S_ALLOW_LAN=true`) | Compartido selectivo vía DOCKER-USER de iptables-nft | La opción exige backend nftables | La opción exige backend nftables |
 | NAT concede permiso de filtrado | Nunca | Nunca | Nunca |
 | Puertos públicos frente a internos | Tuple original + DNAT + destino/interfaces + puerto interno | Igual, conntrack explícito | Igual; tráfico DNAT real en VM |
 | SSH_DOCKER / TCP_DOCKER / UDP_DOCKER | Rechazo con migración a grants | Mismo rechazo | Mismo rechazo |
@@ -49,6 +51,21 @@ el reenvío se descarta. Un host web junto a Docker debe declarar grants de cont
 y egreso que necesita, o elegir explícitamente `ROUTED_POLICY=unmanaged` y delegar
 las otras rutas en otro administrador. `unmanaged` no inserta ACCEPT global; retorna
 a las demás reglas. No confundir ese modo con protección del reenvío por la suite.
+
+`CONTAINER_POLICY=ingress` es una modalidad exclusiva del backend nftables y exige
+grants de contenedor y `ROUTED_POLICY=unmanaged`. Aplica permisos de entrada
+publicada a las interfaces/puentes declarados, conserva el egreso delegado y no
+crea un permiso general de forwarding. La política `restrict` sigue disponible;
+iptables rechaza `ingress`.
+
+`OVPNS2S_ALLOW_LAN=true` es una decisión explícita y separada para una instancia
+`openvpn_sitetosite`: requiere nftables, `ROUTED_POLICY=unmanaged`, Docker con
+backend iptables y frontend efectivo nft (`iptables-nft`), y los objetos existentes
+`DOCKER-USER` para cada familia utilizada. Inserta permisos acotados por prefijos
+remoto/local e interfaces S2S; el retorno admite solo tráfico establecido/de
+respuesta. No crea ni repara cadenas Docker, no da acceso a otras redes y no añade
+un ACCEPT general. Es independiente de `OVPNS2S_ENABLE_NAT`; el permiso no deduce
+ni concede por sí mismo NAT.
 
 ## Docker
 

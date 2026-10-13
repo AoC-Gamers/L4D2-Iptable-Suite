@@ -75,6 +75,14 @@ sudo /opt/l4d2-firewall/ipp.sh apply --remove http_https_protect \
 Las dependencias deben permanecer completas. Para quitar juego, elimina juntos
 sus módulos de validación, A2S y UDP. Para retirar toda la suite usa `disable`.
 
+Los bundles de política habituales usan schema 1 o 2. El compilador emite schema 3
+solo si la política nftables incluye `shared_rules`, actualmente para la concesión
+explícita S2S hacia LAN junto a Docker iptables-nft. Schema 3 requiere backend
+nftables y descriptores compartidos no vacíos; versiones que solo entienden schemas
+1/2 deben rechazarlo, no cargarlo omitiendo esas reglas. `save`, `load`, `disable`,
+rollback y readiness conservan y verifican la propiedad selectiva de esos descriptores
+con el mismo lock y journal que las tablas nftables.
+
 La persistencia pertenece solo a la suite. `save` y `load` no escriben
 `/etc/nftables.conf`, `/etc/iptables/rules.v4` ni `rules.v6`, no adoptan objetos por
 nombre y no restauran un ruleset global. La unidad
