@@ -356,14 +356,17 @@ class Compiler:
                             self.hooks.append(('nat', 'POSTROUTING', short('postrouting')))
                 for real, alias in aliases:
                     require(f == 4 and network(real).version == 4 and network(alias).version == 4, 'Router aliases support IPv4 only')
+                    tcp_ports = v.get('OVPNS2S_ROUTER_ALIAS_TCP_PORTS', '') if scope == 'OVPNS2S' else ''
+                    nf_selector = f' tcp dport {nfports(tcp_ports)}' if tcp_ports else ''
+                    ip_selector = ['-p', 'tcp', '-m', 'multiport', '--dports', tcp_ports] if tcp_ports else []
                     self.chain('prerouting', f, 'nat', 'prerouting')
-                    self.add('prerouting', f'iifname "{iface}" ip saddr {src} ip daddr {alias} counter dnat to {real}', ['-i', iface, '-s', src, '-d', alias, '-j', 'DNAT', '--to-destination', real], f, 'nat')
+                    self.add('prerouting', f'iifname "{iface}" ip saddr {src} ip daddr {alias}{nf_selector} counter dnat to {real}', ['-i', iface, '-s', src, '-d', alias, *ip_selector, '-j', 'DNAT', '--to-destination', real], f, 'nat')
                     if not self.nft:
                         self.hooks.append(('nat', 'PREROUTING', short('prerouting')))
                     if v.get(scope + '_ROUTER_ALIAS_SNAT') == 'true':
                         require(out, 'Alias SNAT needs output interface')
                         self.chain('postrouting', f, 'nat', 'postrouting')
-                        self.add('postrouting', f'ip saddr {src} ip daddr {real} oifname "{out}" counter masquerade', ['-s', src, '-d', real, '-o', out, '-j', 'MASQUERADE'], f, 'nat')
+                        self.add('postrouting', f'ip saddr {src} ip daddr {real} oifname "{out}"{nf_selector} counter masquerade', ['-s', src, '-d', real, '-o', out, *ip_selector, '-j', 'MASQUERADE'], f, 'nat')
                         if not self.nft:
                             self.hooks.append(('nat', 'POSTROUTING', short('postrouting')))
 

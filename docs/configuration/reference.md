@@ -133,6 +133,7 @@ La traducción input 0/1/2 ocurre una vez; no se usa en partial/remove.
 | `OVPNS2S_ROUTER_ALIAS` | pares IPv4 | vacío | vacío | `openvpn_sitetosite` |
 | `OVPNS2S_ROUTER_ALIAS_IP` | IPv4 | vacío | vacío | `openvpn_sitetosite` |
 | `OVPNS2S_ROUTER_ALIAS_SNAT` | booleano | `false` | `false` | `openvpn_sitetosite` |
+| `OVPNS2S_ROUTER_ALIAS_TCP_PORTS` | puertos TCP | vacío | vacío | `openvpn_sitetosite` |
 | `OVPNS2S_ROUTER_REAL_IP` | IPv4 | vacío | vacío | `openvpn_sitetosite` |
 | `OVPNSRV_DOCKER_INTERFACE` | interfaz | ausente | vacío | `openvpn_server`; valor no vacío rechazado |
 | `OVPNSRV_ENABLE_NAT` | booleano | ausente | `false` | `openvpn_server` |

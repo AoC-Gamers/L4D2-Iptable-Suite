@@ -434,6 +434,19 @@ class Configuration:
             if v.get(scope + '_ENABLE_NAT') == 'true':
                 require(v.get(scope + ('_LAN_INTERFACE' if scope == 'OVPNSRV' else '_LOCAL_INTERFACE')), 'NAT requires explicit output interface')
         alias = v.get('OVPNS2S_ROUTER_ALIAS', '')
+        alias_tcp_ports = v.get('OVPNS2S_ROUTER_ALIAS_TCP_PORTS', '')
+        if alias_tcp_ports:
+            require('openvpn_sitetosite' in self.names,
+                    'OVPNS2S_ROUTER_ALIAS_TCP_PORTS requires openvpn_sitetosite')
+            pair = (v.get('OVPNS2S_ROUTER_REAL_IP', ''),
+                    v.get('OVPNS2S_ROUTER_ALIAS_IP', ''))
+            require(alias or all(pair), 'Router alias TCP ports require a router alias')
+            for address in pair:
+                if address:
+                    require(network(address).version == 4 and network(address).num_addresses == 1,
+                            'Router alias TCP ports require individual IPv4 addresses')
+            require(all(network(x).version == 4 for x in splitlist(v['OVPNS2S_REMOTE_SUBNETS'])),
+                    'Router alias TCP ports require IPv4 remote subnets')
         for pair in splitlist(alias.replace(';', '|')):
             fields = pair.split('|')
             require(len(fields) == 2 and all('/' not in x and network(x).version == 4 and network(x).num_addresses == 1 for x in fields), 'Invalid router alias pair')

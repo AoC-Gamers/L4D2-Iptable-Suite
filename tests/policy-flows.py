@@ -50,6 +50,43 @@ class PolicyFlowTests(unittest.TestCase):
         for suffix in range(4, 28):
             self.fixture.peer.cmd('ip', 'addr', 'add', f'10.20.0.{suffix}/24', 'dev', 'wan0p')
 
+    def test_router_alias_tcp_scope_snat_and_rollback(self):
+        alias = '203.0.113.200'
+        values = {
+            'OVPNS2S_INTERFACE': 'wan0', 'OVPNS2S_LOCAL_INTERFACE': 'lan0',
+            'OVPNS2S_LOCAL_SUBNETS': '10.30.0.0/24',
+            'OVPNS2S_REMOTE_SUBNETS': '10.20.0.2/32',
+            'OVPNS2S_ENABLE_NAT': 'true', 'ROUTED_POLICY': 'unmanaged',
+        }
+        before = self.apply('nftables', ['openvpn_sitetosite'], **values)
+        candidate = generate(self.configuration('nftables', ['openvpn_sitetosite'], **values,
+            OVPNS2S_ROUTER_REAL_IP='10.30.0.2', OVPNS2S_ROUTER_ALIAS_IP=alias,
+            OVPNS2S_ROUTER_ALIAS_TCP_PORTS='18443'))
+        with self.fixture.store.lock():
+            token = self.fixture.store.apply_locked(candidate, timeout=120, watchdog='process')
+        self.assertTrue(self.fixture.peer.tcp(18443, dest=alias))
+        self.assertFalse(self.fixture.peer.tcp(18444, dest=alias))
+        self.assertFalse(self.fixture.peer.tcp(18443, source='10.20.0.3', dest=alias))
+        self.assertFalse(self.fixture.lan.tcp(18443, dest=alias))
+        source = self.fixture.peer.python(
+            "import socket; s=socket.socket(); s.settimeout(2); "
+            "s.connect(('203.0.113.200',18443)); print(s.recv(128).decode()); s.close()"
+        ).strip()
+        self.assertEqual(source, '10.30.0.1')
+        udp = self.fixture.peer.python(
+            "import socket; s=socket.socket(socket.AF_INET,socket.SOCK_DGRAM); "
+            "s.settimeout(.35); s.sendto(b'fixture',('203.0.113.200',18443)); "
+            "\ntry: s.recvfrom(128); print('OPEN')"
+            "\nexcept OSError: print('BLOCK')"
+            "\nfinally: s.close()"
+        ).strip()
+        self.assertEqual(udp, 'BLOCK')
+        with self.fixture.store.lock():
+            self.assertTrue(self.fixture.store.rollback_locked(token))
+        self.assertEqual(self.fixture.store.get('current'), before)
+        self.assertNotIn('dnat', integration.run('nft','list','table','ip','firewall_main_nat4'))
+        self.assertFalse(self.fixture.peer.tcp(18443, dest=alias))
+
     def test_hashlimit_capacity_blocks_new_sources_at_configured_limit(self):
         self.add_source_addresses()
         for backend in ('nftables', 'iptables'):

@@ -22,3 +22,7 @@ for backend in ('iptables','nftables'):
     policy=generate(Configuration(backend,only=['openvpn_sitetosite'],overrides=values,privileged=True))
     engine.check(engine.prepare(policy,[policy],live))
     print('KERNEL CHECK PASS',backend,frontend,'VPN S2S DNAT/SNAT',flush=True)
+    values['OVPNS2S_ROUTER_ALIAS_TCP_PORTS']='80'
+    policy=generate(Configuration(backend,only=['openvpn_sitetosite'],overrides=values,privileged=True))
+    engine.check(engine.prepare(policy,[policy],live))
+    print('KERNEL CHECK PASS',backend,frontend,'VPN S2S TCP-only alias DNAT/SNAT',flush=True)

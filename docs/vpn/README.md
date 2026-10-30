@@ -34,6 +34,26 @@ usada por ese modo también debe ser solo IPv4; una lista con IPv6 falla al gene
 Redes de una adaptación NAT deben ser de igual familia,
 no listas mixtas. Los permisos direccionales siguen declarándose aparte.
 
+
+### Alias S2S limitado a TCP
+
+`OVPNS2S_ROUTER_ALIAS_TCP_PORTS` restringe el DNAT de los alias S2S y su
+SNAT opcional al protocolo TCP y a esos puertos. Requiere un alias IPv4 y
+subredes remotas IPv4. Vacío conserva la traducción por dirección anterior;
+no cambia los alias del módulo servidor ni el NAT general hacia la LAN.
+
+Por ejemplo, con direcciones ficticias, `OVPNS2S_ROUTER_REAL_IP=192.0.2.1`,
+`OVPNS2S_ROUTER_ALIAS_IP=198.51.100.200` y
+`OVPNS2S_ROUTER_ALIAS_TCP_PORTS=80` solo traducen TCP/80 desde la interfaz
+VPN y las fuentes remotas declaradas. NAT no concede filtrado: un gateway
+VPN anterior necesita permitir el destino alias antes del DNAT y el host
+traductor necesita el permiso de forwarding y retorno correspondiente.
+No hace falta anunciar el alias por ARP si llega en tránsito por el túnel.
+
+Validar/generar en aislamiento y aplicar mediante el núcleo transaccional,
+con conexión administrativa nueva antes de confirmar. HTTP puede devolver
+redirects al destino real; NAT no reescribe Host, Location ni cookies.
+
 ## Revisión y recuperación
 
 Desde la raíz del checkout, sin root, el siguiente comando genera un plan con
